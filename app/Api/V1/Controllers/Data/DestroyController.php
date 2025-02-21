@@ -66,8 +66,7 @@ class DestroyController extends Controller
         $objects         = $request->getObjects();
         $this->unused    = $request->boolean('unused', false);
 
-        $allExceptAssets = [AccountTypeEnum::BENEFICIARY->value, AccountTypeEnum::CASH->value, AccountTypeEnum::CREDITCARD->value, AccountTypeEnum::DEFAULT->value, AccountTypeEnum::EXPENSE->value, AccountTypeEnum::IMPORT->value, AccountTypeEnum::INITIAL_BALANCE->value, AccountTypeEnum::LIABILITY_CREDIT->value, AccountTypeEnum::RECONCILIATION->value, AccountTypeEnum::REVENUE->value];
-        $all             = [AccountTypeEnum::ASSET->value, AccountTypeEnum::BENEFICIARY->value, AccountTypeEnum::CASH->value, AccountTypeEnum::CREDITCARD->value, AccountTypeEnum::DEBT->value, AccountTypeEnum::DEFAULT->value, AccountTypeEnum::EXPENSE->value, AccountTypeEnum::IMPORT->value, AccountTypeEnum::INITIAL_BALANCE->value, AccountTypeEnum::LIABILITY_CREDIT->value, AccountTypeEnum::LOAN->value, AccountTypeEnum::MORTGAGE->value, AccountTypeEnum::RECONCILIATION->value];
+        $all = array_map(fn($enum) => $enum->value, AccountTypeEnum::cases());
         $liabilities     = [AccountTypeEnum::DEBT->value, AccountTypeEnum::LOAN->value, AccountTypeEnum::MORTGAGE->value, AccountTypeEnum::CREDITCARD->value];
         $transactions    = [TransactionTypeEnum::WITHDRAWAL->value, TransactionTypeEnum::DEPOSIT->value, TransactionTypeEnum::TRANSFER->value, TransactionTypeEnum::RECONCILIATION->value];
 
@@ -80,7 +79,6 @@ class DestroyController extends Controller
             'categories'             => $this->destroyCategories(),
             'tags'                   => $this->destroyTags(),
             'object_groups'          => $this->destroyObjectGroups(),
-            'not_assets_liabilities' => $this->destroyAccounts($allExceptAssets),
             'accounts'               => $this->destroyAccounts($all),
             'asset_accounts'         => $this->destroyAccounts([AccountTypeEnum::ASSET->value, AccountTypeEnum::DEFAULT->value]),
             'expense_accounts'       => $this->destroyAccounts([AccountTypeEnum::BENEFICIARY->value, AccountTypeEnum::EXPENSE->value]),
