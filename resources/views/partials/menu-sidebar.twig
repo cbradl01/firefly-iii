@@ -31,7 +31,7 @@
 
     <li class="header text-uppercase">{{ 'accounting'|_ }}</li>
 
-    <li class="{{ activeRoutePartial('transactions') }} treeview" id="transaction-menu">
+    <li class="{{ activeRoutePartial('transactions') }} treeview menu-open active" id="transaction-menu">
         <a href="#">
             <em class="fa fa-exchange fa-fw"></em>
             <span>{{ 'transactions'|_ }}</span>
@@ -62,7 +62,7 @@
         </ul>
     </li>
 
-    <li class="{{ activeRoutePartial('recurring') }} {{ activeRoutePartial('rules') }} treeview">
+    <li class="{{ activeRoutePartial('recurring') }} {{ activeRoutePartial('rules') }} treeview menu-open active">
         <a href="#">
             <em class="fa fa-microchip fa-fw"></em>
             <span>{{ 'automation'|_ }}</span>
@@ -104,7 +104,7 @@
 
     <li class="header text-uppercase">{{ 'others'|_ }}</li>
 
-    <li class="{{ activeRoutePartial('accounts') }} treeview" id="account-menu">
+    <li class="{{ activeRoutePartial('accounts') }} treeview menu-open active" id="account-menu">
         <a href="#">
             <em class="fa fa-credit-card fa-fw"></em>
             <span>{{ 'accounts'|_ }}</span>
@@ -141,7 +141,7 @@
         </ul>
     </li>
 
-    <li class="{{ activeRoutePartial('categories') }} {{ activeRoutePartial('tags') }} {{ activeRoutePartial('groups') }} treeview">
+    <li class="{{ activeRoutePartial('categories') }} {{ activeRoutePartial('tags') }} {{ activeRoutePartial('groups') }} treeview menu-open active">
         <a href="#">
             <em class="fa fa-tags fa-fw"></em>
             <span>{{ 'classification'|_ }}</span>
@@ -189,7 +189,7 @@
         </li>
     {% endif %}
 
-    <li class="{{ activeRoutePartial('administrations') }} {{ activeRoutePartial('setting') }} {{ activeRoutePartial('profile') }} {{ activeRoutePartial('preferences') }} {{ activeRoutePartial('currencies') }} {{ activeRoutePartial('exchange-rates') }} treeview"
+    <li class="{{ activeRoutePartial('administrations') }} {{ activeRoutePartial('setting') }} {{ activeRoutePartial('profile') }} {{ activeRoutePartial('preferences') }} {{ activeRoutePartial('currencies') }} {{ activeRoutePartial('exchange-rates') }} treeview menu-open active"
         id="option-menu">
         <a href="#">
             <em class="fa fa-sliders fa-fw"></em>
