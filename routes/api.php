@@ -500,6 +500,24 @@ Route::group(
     }
 );
 
+// PFinance integration routes:
+Route::group(
+    [
+        'namespace' => 'FireflyIII\Api\V1\Controllers\Models\Account',
+        'prefix'    => 'v1/pfinance',
+        'as'        => 'api.v1.pfinance.',
+    ],
+    static function (): void {
+        Route::post('consolidate-transactions', ['uses' => 'PfinanceController@consolidateTransactions', 'as' => 'consolidate-transactions']);
+        Route::post('generate-firefly-transactions', ['uses' => 'PfinanceController@generateFireflyTransactions', 'as' => 'generate-firefly-transactions']);
+        Route::post('import-firefly-transactions', ['uses' => 'PfinanceController@importFireflyTransactions', 'as' => 'import-firefly-transactions']);
+        Route::post('push-to-google', ['uses' => 'PfinanceController@pushToGoogle', 'as' => 'push-to-google']);
+        Route::post('get-google-transactions', ['uses' => 'PfinanceController@getGoogleTransactions', 'as' => 'get-google-transactions']);
+        Route::post('reset-db', ['uses' => 'PfinanceController@resetDb', 'as' => 'reset-db']);
+        Route::get('status', ['uses' => 'PfinanceController@getStatus', 'as' => 'status']);
+    }
+);
+
 // Attachment API routes:
 Route::group(
     [
