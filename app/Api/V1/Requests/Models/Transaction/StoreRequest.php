@@ -54,6 +54,11 @@ class StoreRequest extends FormRequest
     use TransactionValidation;
 
     /**
+     * @var array
+     */
+    private $transactions = [];
+
+    /**
      * Get all data. Is pretty complex because of all the ??-statements.
      */
     public function getAll(): array
@@ -270,6 +275,9 @@ class StoreRequest extends FormRequest
      */
     public function withValidator(Validator $validator): void
     {
+        // Calculate transactions array once and store it
+        $this->transactions = $this->getTransactionsArray($validator);
+
         $validator->after(
             function (Validator $validator): void {
                 // must be valid array.

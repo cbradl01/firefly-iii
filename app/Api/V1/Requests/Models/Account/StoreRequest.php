@@ -58,7 +58,7 @@ class StoreRequest extends FormRequest
             'active'                  => $active,
             'include_net_worth'       => $includeNetWorth,
             'account_type_name'       => $this->convertString('type'),
-            'account_type_id'         => null,
+            'account_type_id'         => $this->has('account_type_id') ? $this->convertInteger('account_type_id') : null,
             'currency_id'             => $this->convertInteger('currency_id'),
             'order'                   => $this->convertInteger('order'),
             'currency_code'           => $this->convertString('currency_code'),

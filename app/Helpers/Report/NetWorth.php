@@ -189,7 +189,7 @@ class NetWorth implements NetWorthInterface
     private function getAccounts(): Collection
     {
         $accounts = $this->getRepository()->getAccountsByType(
-            [AccountTypeEnum::ASSET->value, AccountTypeEnum::DEFAULT->value, AccountTypeEnum::LOAN->value, AccountTypeEnum::DEBT->value, AccountTypeEnum::MORTGAGE->value]
+            [AccountTypeEnum::ASSET->value, AccountTypeEnum::DEFAULT->value, AccountTypeEnum::LOAN->value, AccountTypeEnum::DEBT->value, AccountTypeEnum::MORTGAGE->value, AccountTypeEnum::BROKERAGE->value]
         );
         $filtered = new Collection();
 
