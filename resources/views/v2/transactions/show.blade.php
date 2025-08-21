@@ -100,7 +100,7 @@
                                     </th>
                                     <td>
                                         <template x-for="entry in entries">
-                                            <a :href="'./accounts/show/' + entry.source_account.id"
+                                            <a :href="'./accounts/show/' + entry.source_account.id + 'test'"
                                                :title="entry.source_account.name"
                                                x-text="entry.source_account.name"></a>
                                         </template>
@@ -113,7 +113,7 @@
                                     </th>
                                     <td>
                                         <template x-for="entry in entries">
-                                            <a :href="'./accounts/show/' + entry.destination_account.id"
+                                            <a :href="'./accounts/show/' + entry.destination_account.id + 'test'"
                                                :title="entry.destination_account.name"
                                                x-text="entry.destination_account.name"></a>
                                         </template>

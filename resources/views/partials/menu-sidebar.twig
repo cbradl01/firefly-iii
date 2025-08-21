@@ -138,6 +138,12 @@
                     <span>{{ 'liabilities_accounts'|_ }}</span>
                 </a>
             </li>
+                <li class="{{ activeRoutePartialObjectType('accounts', 'holding') }}">
+                <a href="{{ route('accounts.index', ['holding']) }}">
+                    <span class="fa fa-angle-right fa-fw"></span>
+                    <span>{{ 'holding_accounts'|_ }}</span>
+                </a>
+            </li>
         </ul>
     </li>
 

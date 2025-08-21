@@ -129,13 +129,13 @@
                                         </template>
                                         <template x-if="tableColumns.source.enabled">
                                             <td>
-                                                <a :href="'./accounts/show/' + transaction.source_id"
+                                                <a :href="'./accounts/show/' + transaction.source_id + 'test'"
                                                    x-text="transaction.source_name"></a>
                                             </td>
                                         </template>
                                         <template x-if="tableColumns.destination.enabled">
                                             <td>
-                                                <a :href="'./accounts/show/' + transaction.destination_id"
+                                                <a :href="'./accounts/show/' + transaction.destination_id + 'test'"
                                                    x-text="transaction.destination_name"></a>
                                             </td>
                                         </template>
