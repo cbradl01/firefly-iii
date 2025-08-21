@@ -43,4 +43,7 @@ enum AccountTypeEnum: string
     case MORTGAGE         = 'Mortgage';
     case RECONCILIATION   = 'Reconciliation account';
     case REVENUE          = 'Revenue account';
+    case HOLDING          = 'Holding account';
+    case STOCK_MARKET     = 'Stock market account';
+    case BROKERAGE        = 'Brokerage account';
 }

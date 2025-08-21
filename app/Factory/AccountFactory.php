@@ -134,7 +134,7 @@ class AccountFactory
         if ($accountTypeId > 0) {
             $result = AccountType::find($accountTypeId);
         }
-        if (null !== $accountTypeName) {
+        if (null === $result && null !== $accountTypeName) {
             $result = $this->accountRepository->getAccountTypeByType($accountTypeName);
         }
 

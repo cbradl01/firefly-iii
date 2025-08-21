@@ -45,6 +45,8 @@ use Illuminate\Database\Query\JoinClause;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * Class GroupCollector
@@ -461,43 +463,363 @@ class GroupCollector implements GroupCollectorInterface
      */
     public function getGroups(): Collection
     {
+        // Generate a cache key based on query parameters
+        $cacheKey = $this->generateCacheKey();
+        
+        // Try to get from cache first
+        // if (Cache::has($cacheKey)) {
+        //     $cached = Cache::get($cacheKey);
+        //     $this->total = $cached['total']; // Restore the total count
+        //     return $cached['collection'];
+        // }
+
+        // if ($this->expandGroupSearch) {
+        //     $groupIds = $this->getCollectedGroupIds();
+            
+        //     // Create temporary table
+        //     DB::statement('CREATE TEMPORARY TABLE IF NOT EXISTS temp_group_ids (id bigint)');
+            
+        //     // Clear any existing data
+        //     DB::table('temp_group_ids')->truncate();
+            
+        //     // Insert IDs in batches
+        //     foreach (array_chunk($groupIds, 5000) as $batch) {
+        //         DB::table('temp_group_ids')->insert(
+        //             array_map(function($id) { return ['id' => $id]; }, $batch)
+        //         );
+        //     }
+            
+        //     // Join with temporary table instead of using whereIn
+        //     $this->query->leftJoin('temp_group_ids', 'transaction_journals.transaction_group_id', '=', 'temp_group_ids.id');
+        //     $this->query->where(function($query) {
+        //         $query->whereNotNull('temp_group_ids.id')
+        //               ->orWhere(function($q) {
+        //                   $q->whereNull('temp_group_ids.id');
+        //               });
+        //     });
+        // }
+
         if ($this->expandGroupSearch) {
-            // get group ID's for the query:
-            $groupIds = $this->getCollectedGroupIds();
-            // add to query:
-            $this->query->orWhereIn('transaction_journals.transaction_group_id', $groupIds);
+            $this->getCollectedGroupIds(); // Now just creates and populates the temp table
+            
+            // Join with temporary table instead of using whereIn
+            $this->query->leftJoin('temp_group_ids', 'transaction_journals.transaction_group_id', '=', 'temp_group_ids.id');
+            $this->query->where(function($query) {
+                $query->whereNotNull('temp_group_ids.id')
+                      ->orWhere(function($q) {
+                          $q->whereNull('temp_group_ids.id');
+                      });
+            });
         }
-        $result      = $this->query->get($this->fields);
-        // now to parse this into an array.
-        $collection  = $this->parseArray($result);
 
-        // filter the array using all available post filters:
-        $collection  = $this->postFilterCollection($collection);
+        // Apply sorting
+        foreach ($this->sorting as $field => $direction) {
+            if ($field === 'description') {
+                $this->query->orderByRaw('
+                    CASE 
+                        WHEN COUNT(transaction_journals.id) OVER (PARTITION BY transaction_groups.id) = 1 
+                        THEN transaction_journals.description 
+                        ELSE transaction_groups.title 
+                    END ' . $direction
+                );
+            } else {
+                $this->query->orderBy($field, $direction);
+            }
+        }
 
-        // sort the collection, if sort instructions are present.
-        $collection  = $this->sortCollection($collection);
+        // Get total count before pagination
+        $this->total = $this->query->count();
 
-        // count it and continue:
-        $this->total = $collection->count();
-
-        // now filter the array according to the page and the limit (if necessary)
+        // Apply pagination/limits
         if (null !== $this->limit && null !== $this->page) {
             $offset = ($this->page - 1) * $this->limit;
+            $this->query->offset($offset)->limit($this->limit);
+        } elseif (null !== $this->startRow && null !== $this->endRow) {
+            $this->query->offset($this->startRow)->limit($this->endRow - $this->startRow);
+        }
 
-            return $collection->slice($offset, $this->limit);
-        }
-        // OR filter the array according to the start and end row variable
-        if (null !== $this->startRow && null !== $this->endRow) {
-            return $collection->slice($this->startRow, $this->endRow);
-        }
+        // Get the paginated results
+        $result = $this->query->get($this->fields);
+
+        // Parse results and apply post-processing filters
+        ini_set('memory_limit', '1024M');
+        $collection = $this->parseArray($result);
+        $collection = $this->postFilterCollection($collection);
+
+        // Cache both the collection and the total count
+        Cache::put($cacheKey, [
+            'collection' => $collection,
+            'total' => $this->total
+        ], now()->addMinutes(60));
 
         return $collection;
     }
 
+    private function generateCacheKey(): string
+    {
+        $params = [
+            'user_id' => $this->user?->id,
+            'user_group_id' => $this->userGroup?->id,
+            'expand_search' => $this->expandGroupSearch,
+            'limit' => $this->limit,
+            'page' => $this->page,
+            'start_row' => $this->startRow,
+            'end_row' => $this->endRow,
+            'sorting' => $this->sorting,
+            'account_ids' => $this->accountIds,
+        ];
+
+        // Also include a timestamp of the latest transaction/journal update
+        $latestUpdate = DB::table('transaction_journals')
+            ->select(DB::raw('MAX(updated_at) as last_update'))
+            ->first()
+            ->last_update;
+
+        $params['latest_update'] = $latestUpdate;
+
+        return 'group_collector:' . md5(serialize($params));
+    }
+
+    // public function getGroups(): Collection
+    // {
+    //     // if ($this->expandGroupSearch) {
+    //     //     // // get group ID's for the query:
+    //     //     // $groupIds = $this->getCollectedGroupIds();
+    //     //     // // add to query:
+    //     //     // // $this->query->orWhereIn('transaction_journals.transaction_group_id', $groupIds);
+    //     //     // // Process the group IDs in batches
+    //     //     // $batchSize = 10000;
+    //     //     // $this->query->where(function (EloquentBuilder $query) use ($groupIds, $batchSize) {
+    //     //     //     foreach (array_chunk($groupIds, $batchSize) as $groupIdsBatch) {
+    //     //     //         $query->orWhereIn('transaction_journals.transaction_group_id', $groupIdsBatch);
+    //     //     //     }
+    //     //     // });
+
+    //     //     $result = $this->getCollectedJournals();
+    //     // }
+
+
+    //     // if ($this->expandGroupSearch) {
+    //     //     $result = collect(); // Initialize an empty collection to store results
+    //     //     $groupIds = $this->getCollectedGroupIds();
+    //     //     $batchSize = 10000; 
+
+    //     //     $count = 0;
+    //     //     foreach (array_chunk($groupIds, $batchSize) as $groupIdsBatch) {
+    //     //         app('log')->debug('GroupIdBatch', ['count' => $count]);
+            
+    //     //         // Clone the base query to ensure each batch is independent
+    //     //         $batchQuery = clone $this->query;
+    //     //         $batchResult = $batchQuery->whereIn('transaction_journals.transaction_group_id', $groupIdsBatch)
+    //     //                                   ->get($this->fields);
+            
+    //     //         $result = $result->merge($batchResult); 
+    //     //         $count++;
+    //     //     }
+    //     //     // app('log')->debug('Result', $result);
+    //     // } else {
+    //         // }
+
+
+
+    //     // if ($this->expandGroupSearch) {
+    //     //     $groupIds = $this->getCollectedGroupIds();
+            
+    //     //     // Process in batches of 1000 IDs
+    //     //     $result = new \Illuminate\Database\Eloquent\Collection();
+    //     //     $batchSize = 1000;
+            
+    //     //     foreach (array_chunk($groupIds, $batchSize) as $groupIdsBatch) {
+    //     //         // Clone the base query
+    //     //         $batchQuery = clone $this->query;
+                
+    //     //         // Add batch of group IDs
+    //     //         $batchQuery->orWhereIn('transaction_journals.transaction_group_id', $groupIdsBatch);
+                
+    //     //         // Get results and merge them
+    //     //         $batchResults = $batchQuery->get($this->fields);
+    //     //         $result = $result->merge($batchResults);
+    //     //     }
+    //     // } else {
+    //         $result = $this->query->get($this->fields);
+    //     // }
+
+
+    //     // if ($this->expandGroupSearch) {
+    //     //     // get group ID's for the query:
+    //     //     $groupIds = $this->getCollectedGroupIds();
+            
+    //     //     $result = new Collection();
+    //     //     $batchSize = 1000;
+            
+    //     //     foreach (array_chunk($groupIds, $batchSize) as $groupIdsBatch) {
+    //     //         // Clone the base query
+    //     //         $batchQuery = clone $this->query;
+                
+    //     //         // Add batch of group IDs
+    //     //         $batchQuery->orWhereIn('transaction_journals.transaction_group_id', $groupIdsBatch);
+                
+    //     //         // Use cursor() for memory-efficient processing
+    //     //         foreach ($batchQuery->cursor($this->fields) as $record) {
+    //     //             $result->push($record);
+    //     //         }
+    //     //     }
+    //     // } else {
+    //     //     $result = $this->query->get($this->fields);
+    //     // }
+
+
+    //     if ($this->expandGroupSearch) {
+    //         // get group ID's for the query:
+    //         $groupIds = $this->getCollectedGroupIds();
+    //         // add to query:
+    //         $this->query->orWhereIn('transaction_journals.transaction_group_id', $groupIds);
+    //     }
+    //     $result      = $this->query->get($this->fields);
+
+
+    //     // now to parse this into an array.
+    //     ini_set('memory_limit', '1024M');
+    //     $collection  = $this->parseArray($result);
+
+    //     // filter the array using all available post filters:
+    //     $collection  = $this->postFilterCollection($collection);
+
+    //     // sort the collection, if sort instructions are present.
+    //     $collection  = $this->sortCollection($collection);
+
+    //     // count it and continue:
+    //     $this->total = $collection->count();
+
+    //     // now filter the array according to the page and the limit (if necessary)
+    //     if (null !== $this->limit && null !== $this->page) {
+    //         $offset = ($this->page - 1) * $this->limit;
+
+    //         return $collection->slice($offset, $this->limit);
+    //     }
+    //     // OR filter the array according to the start and end row variable
+    //     if (null !== $this->startRow && null !== $this->endRow) {
+    //         return $collection->slice($this->startRow, $this->endRow);
+    //     }
+
+    //     return $collection;
+    // }
+
+
+    // private function getCollectedJournals(): Collection
+    // {
+    //     // When an account has many transaction_group_ids, the query can error out due to
+    //     // limitation on max number of query parameters (e.g., 65,000 for postgres). To
+    //     // solve this, we fetch the transaction_group_ids in batches.
+    //     $batchSize = 10000;
+    //     $offset = 0;
+    //     $collection = new \Illuminate\Database\Eloquent\Collection();
+    //     do {
+    //         // Fetch a batch of transaction group IDs
+    //         $groupIdsBatch = $this->query
+    //             ->select('transaction_journals.transaction_group_id')
+    //             ->offset($offset)
+    //             ->limit($batchSize)
+    //             ->pluck('transaction_group_id')
+    //             ->toArray();
+
+    //         if (empty($groupIdsBatch)) {
+    //             break;
+    //         }
+
+    //         // Execute the main query for the current batch of group IDs
+    //         $batchResult = $this->query
+    //             ->orWhereIn('transaction_journals.transaction_group_id', $groupIdsBatch)
+    //             ->get($this->fields);
+
+    //         // Merge the batch result into the main collection
+    //         $collection = $collection->merge($batchResult);
+
+    //         // Increase the offset for the next batch
+    //         $offset += $batchSize;
+    //     } while (count($groupIdsBatch) === $batchSize); // Continue if the batch is full
+
+    //     return $collection;
+    // }
+
+    private function batchQuery(string $field, int $batchSize = 10000): array
+    {
+        $offset = 0;
+        $groupIds = [];
+
+        do {
+            // Fetch a batch of transaction group IDs
+            $batch = $this->query->get($this->fields)
+                ->offset($offset)
+                ->limit($batchSize)
+                ->toArray();
+
+            // Merge the batch into the main array
+            $groupIds = array_merge($groupIds, $batch);
+
+            // Increase the offset for the next batch
+            $offset += $batchSize;
+        } while (count($batch) === $batchSize); // Continue if the batch is full
+
+        return $groupIds;
+    }
+
     private function getCollectedGroupIds(): array
     {
-        return $this->query->get(['transaction_journals.transaction_group_id'])->pluck('transaction_group_id')->toArray();
+        // Create a clone of the query to avoid modifying the original
+        $groupQuery = clone $this->query;
+        
+        // Create temporary table and populate it directly from the query
+        DB::statement('CREATE TEMPORARY TABLE IF NOT EXISTS temp_group_ids (id bigint)');
+        DB::table('temp_group_ids')->truncate();
+        
+        // Insert IDs directly from the query into the temporary table
+        DB::statement("
+            INSERT INTO temp_group_ids (id)
+            SELECT DISTINCT subquery.transaction_group_id 
+            FROM ({$groupQuery->select('transaction_journals.transaction_group_id')->toSql()}) AS subquery(transaction_group_id)
+        ", $groupQuery->getBindings());
+    
+        // Return the IDs (if needed)
+        return DB::table('temp_group_ids')->pluck('id')->toArray();
     }
+
+    // private function getCollectedGroupIds(): array
+    // {
+    //     // When an account has many transaction_group_ids, the query can error out due to
+    //     // limitation on max number of query parameters (e.g., 65,000 for postgres). To
+    //     // solve this, we fetch the transaction_group_ids in batches.
+        
+    //     // Create a clone of the query to avoid modifying the original
+    //     $groupQuery = clone $this->query;
+        
+    //     $batchSize = 10000;
+    //     $offset = 0;
+    //     $groupIds = [];
+
+    //     do {
+    //         // Fetch a batch of transaction group IDs
+    //         $batch = $groupQuery
+    //             ->select('transaction_journals.transaction_group_id')
+    //             ->offset($offset)
+    //             ->limit($batchSize)
+    //             ->pluck('transaction_group_id')
+    //             ->toArray();
+
+    //         // Merge the batch into the main array
+    //         $groupIds = array_merge($groupIds, $batch);
+
+    //         // Increase the offset for the next batch
+    //         $offset += $batchSize;
+    //     } while (count($batch) === $batchSize); // Continue if the batch is full
+
+    //     return $groupIds;
+    // }
+
+    // private function getCollectedGroupIds(): array
+    // {
+    //     return $this->query->get(['transaction_journals.transaction_group_id'])->pluck('transaction_group_id')->toArray();
+    // }
 
     /**
      * @throws FireflyException

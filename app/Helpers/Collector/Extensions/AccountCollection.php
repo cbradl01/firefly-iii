@@ -36,6 +36,8 @@ use Illuminate\Support\Facades\Log;
  */
 trait AccountCollection
 {
+    private ?array $accountIds = null;
+
     /**
      * These accounts must not be included.
      */
@@ -89,6 +91,10 @@ trait AccountCollection
     {
         if ($accounts->count() > 0) {
             $accountIds = $accounts->pluck('id')->toArray();
+
+            // Store the accounts for cache key generation
+            $this->accountIds = $accountIds;
+
             $this->query->where(
                 static function (EloquentBuilder $query) use ($accountIds): void { // @phpstan-ignore-line
                     $query->whereIn('source.account_id', $accountIds);
