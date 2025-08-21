@@ -69,7 +69,7 @@ class AccountValidator
         $this->createMode                 = false;
         $this->destError                  = 'No error yet.';
         $this->sourceError                = 'No error yet.';
-        $this->combinations               = config('firefly.source_dests');
+        $this->combinations               = config('firefly.source_dests'); // TODO: get the cache to update on save
         $this->source                     = null;
         $this->destination                = null;
         $this->accountRepository          = app(AccountRepositoryInterface::class);
@@ -265,6 +265,8 @@ class AccountValidator
 
         // find by ID
         if (null !== $accountId && $accountId > 0) {
+            app('log')->debug(sprintf('Searching for account ID %d', $accountId));
+            app('log')->debug(sprintf('Valid types: %s', implode(', ', $validTypes)));
             $first       = $this->getRepository()->find($accountId);
             $accountType = null === $first ? 'invalid' : $first->accountType->type;
             $check       = in_array($accountType, $validTypes, true);

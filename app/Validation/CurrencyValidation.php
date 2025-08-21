@@ -45,9 +45,9 @@ trait CurrencyValidation
             return;
         }
         app('log')->debug('Now in validateForeignCurrencyInformation()');
-        $transactions = $this->getTransactionsArray($validator);
+        // $transactions = $this->getTransactionsArray($validator);
 
-        foreach ($transactions as $index => $transaction) {
+        foreach ($this->transactions as $index => $transaction) {
             if (!is_array($transaction)) {
                 continue;
             }

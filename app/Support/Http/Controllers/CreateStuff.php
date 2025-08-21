@@ -64,6 +64,31 @@ trait CreateStuff
     }
 
     /**
+     * Creates a brokerage account.
+     */
+    protected function createBrokerageAccount(NewUserFormRequest $request, TransactionCurrency $currency): bool // create stuff
+    {
+        /** @var AccountRepositoryInterface $repository */
+        $repository   = app(AccountRepositoryInterface::class);
+        $assetAccount = [
+            'name'                 => $request->get('bank_name'),
+            'iban'                 => null,
+            'account_type_name'    => 'asset',
+            'virtual_balance'      => 0,
+            'account_type_id'      => null,
+            'active'               => true,
+            'account_role'         => 'brokerageAsset',
+            'opening_balance'      => $request->input('bank_balance'),
+            'opening_balance_date' => new Carbon(),
+            'currency_id'          => $currency->id,
+        ];
+
+        $repository->store($assetAccount);
+
+        return true;
+    }
+
+    /**
      * Creates a cash wallet.
      */
     protected function createCashWalletAccount(TransactionCurrency $currency, string $language): bool // create stuff

@@ -60,7 +60,7 @@ trait UserNavigation
      */
     final protected function isEditableAccount(Account $account): bool
     {
-        $editable = [AccountTypeEnum::EXPENSE->value, AccountTypeEnum::REVENUE->value, AccountTypeEnum::ASSET->value, AccountTypeEnum::LOAN->value, AccountTypeEnum::DEBT->value, AccountTypeEnum::MORTGAGE->value];
+        $editable = [AccountTypeEnum::EXPENSE->value, AccountTypeEnum::REVENUE->value, AccountTypeEnum::ASSET->value, AccountTypeEnum::BROKERAGE->value, AccountTypeEnum::HOLDING->value, AccountTypeEnum::LOAN->value, AccountTypeEnum::DEBT->value, AccountTypeEnum::MORTGAGE->value];
         $type     = $account->accountType->type;
 
         return in_array($type, $editable, true);

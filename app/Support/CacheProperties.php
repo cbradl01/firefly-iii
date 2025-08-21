@@ -30,7 +30,7 @@ use Illuminate\Support\Collection;
  */
 class CacheProperties
 {
-    protected string     $hash = '';
+    public string     $hash = '';
     protected Collection $properties;
 
     public function __construct()
@@ -73,7 +73,17 @@ class CacheProperties
         return \Cache::has($this->hash);
     }
 
-    private function hash(): void
+    public function delete(): void
+    {
+        // if ('testing' === config('app.env')) {
+        //     return;
+        // }
+        $this->hash();
+
+        \Cache::forget($this->hash);
+    }
+
+    public function hash(): void
     {
         $content    = '';
         foreach ($this->properties as $property) {

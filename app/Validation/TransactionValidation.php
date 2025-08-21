@@ -54,7 +54,7 @@ trait TransactionValidation
             return;
         }
         Log::debug('Now in validateAccountInformation (TransactionValidation) ()');
-        $transactions    = $this->getTransactionsArray($validator);
+        $transactions    = $this->transactions; // $this->getTransactionsArray($validator);
         $data            = $validator->getData();
         $transactionType = $data['type'] ?? 'invalid';
 
@@ -507,9 +507,9 @@ trait TransactionValidation
 
             return;
         }
-        $transactions = $this->getTransactionsArray($validator);
+        // $transactions = $this->getTransactionsArray($validator);
         // need at least one transaction
-        if (0 === count($transactions)) {
+        if (0 === count($this->transactions)) {
             $validator->errors()->add('transactions.0.description', (string) trans('validation.at_least_one_transaction'));
             Log::debug('Added error: at_least_one_transaction.');
 
@@ -523,8 +523,8 @@ trait TransactionValidation
         if ($validator->errors()->count() > 0) {
             return;
         }
-        $transactions = $this->getTransactionsArray($validator);
-        foreach (array_keys($transactions) as $key) {
+        // $transactions = $this->getTransactionsArray($validator);
+        foreach (array_keys($this->transactions) as $key) {
             if (!is_int($key)) {
                 $validator->errors()->add('transactions.0.description', (string) trans('validation.at_least_one_transaction'));
                 Log::debug('Added error: at_least_one_transaction.');
@@ -543,10 +543,10 @@ trait TransactionValidation
             return;
         }
         Log::debug('Now in validateTransactionTypes()');
-        $transactions = $this->getTransactionsArray($validator);
+        // $transactions = $this->getTransactionsArray($validator);
 
         $types        = [];
-        foreach ($transactions as $transaction) {
+        foreach ($this->transactions as $transaction) {
             $types[] = $transaction['type'] ?? 'invalid';
         }
         $unique       = array_unique($types);
@@ -605,7 +605,7 @@ trait TransactionValidation
             return;
         }
         Log::debug('Now in validateEqualAccounts()');
-        $transactions = $this->getTransactionsArray($validator);
+        $transactions = $this->transactions; // $this->getTransactionsArray($validator);
 
         // needs to be split
         if (count($transactions) < 2) {

@@ -39,7 +39,7 @@ trait WithdrawalValidation
         $accountIban = array_key_exists('iban', $array) ? $array['iban'] : null;
         app('log')->debug('Now in validateGenericSource', $array);
         // source can be any of the following types.
-        $validTypes  = [AccountTypeEnum::ASSET->value, AccountTypeEnum::REVENUE->value, AccountTypeEnum::LOAN->value, AccountTypeEnum::DEBT->value, AccountTypeEnum::MORTGAGE->value];
+        $validTypes  = [AccountTypeEnum::ASSET->value, AccountTypeEnum::REVENUE->value, AccountTypeEnum::LOAN->value, AccountTypeEnum::DEBT->value, AccountTypeEnum::MORTGAGE->value, AccountTypeEnum::HOLDING->value];
         if (null === $accountId && null === $accountName && null === $accountIban && false === $this->canCreateTypes($validTypes)) {
             // if both values are NULL we return TRUE
             // because we assume the user doesn't want to submit / change anything.
