@@ -49,7 +49,7 @@ class DestroyRequest extends FormRequest
      */
     public function rules(): array
     {
-        $valid = 'budgets,bills,piggy_banks,rules,recurring,categories,tags,object_groups'.
+        $valid = 'all,budgets,bills,piggy_banks,rules,recurring,categories,tags,object_groups'.
                  ',accounts,asset_accounts,expense_accounts,revenue_accounts,liabilities,transactions,withdrawals,deposits,transfers';
 
         return [

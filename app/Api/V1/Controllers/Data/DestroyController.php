@@ -30,6 +30,14 @@ use FireflyIII\Enums\AccountTypeEnum;
 use FireflyIII\Enums\TransactionTypeEnum;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Models\Account;
+use FireflyIII\Models\Bill;
+use FireflyIII\Models\Budget;
+use FireflyIII\Models\Category;
+use FireflyIII\Models\Recurrence;
+use FireflyIII\Models\Rule;
+use FireflyIII\Models\RuleGroup;
+use FireflyIII\Models\Tag;
+use FireflyIII\Models\TransactionGroup;
 use FireflyIII\Models\TransactionJournal;
 use FireflyIII\Repositories\Account\AccountRepositoryInterface;
 use FireflyIII\Repositories\Bill\BillRepositoryInterface;
@@ -71,6 +79,7 @@ class DestroyController extends Controller
         $transactions    = [TransactionTypeEnum::WITHDRAWAL->value, TransactionTypeEnum::DEPOSIT->value, TransactionTypeEnum::TRANSFER->value, TransactionTypeEnum::RECONCILIATION->value];
 
         match ($objects) {
+            'all'              => $this->purgeAllFinancialData(), 
             'budgets'                => $this->destroyBudgets(),
             'bills'                  => $this->destroyBills(),
             'piggy_banks'            => $this->destroyPiggyBanks(),
@@ -202,5 +211,50 @@ class DestroyController extends Controller
         foreach ($journals as $journal) {
             $service->destroy($journal);
         }
+    }
+
+    /**
+     * Completely purges all financial data for the authenticated user
+     */
+    private function purgeAllFinancialData(): void
+    {
+        $user = auth()->user();
+
+        // Force delete all transactions and related data
+        TransactionJournal::where('user_id', $user->id)
+            ->withTrashed()  // Include soft-deleted records
+            ->each(function ($journal) {
+                $journal->transactions()->forceDelete();
+                $journal->forceDelete();
+            });
+
+        // Force delete all accounts and related data
+        Account::where('user_id', $user->id)
+            ->withTrashed()
+            ->each(function ($account) {
+                $account->piggyBanks()->forceDelete();
+                $account->forceDelete();
+            });
+
+        // Force delete all other financial data with cleanup of soft-deleted records
+        Budget::whereUserId($user->id)->onlyTrashed()->forceDelete();
+        Bill::whereUserId($user->id)->onlyTrashed()->forceDelete();
+        app(PiggyBankRepositoryInterface::class)->purgeAll();  // Using purgeAll() from repository
+        RuleGroup::whereUserId($user->id)->onlyTrashed()->forceDelete();
+        Rule::whereUserId($user->id)->onlyTrashed()->forceDelete();
+        Recurrence::whereUserId($user->id)->onlyTrashed()->forceDelete();
+        Category::whereUserId($user->id)->onlyTrashed()->forceDelete();
+        Tag::whereUserId($user->id)->onlyTrashed()->forceDelete();
+        TransactionGroup::whereUserId($user->id)->onlyTrashed()->forceDelete();
+
+        // Reset auto-increment sequences if needed
+        if (Account::count() === 0) {
+            \DB::statement('ALTER SEQUENCE accounts_id_seq RESTART WITH 1');
+            \DB::statement('ALTER SEQUENCE transactions_id_seq RESTART WITH 1');
+            \DB::statement('ALTER SEQUENCE transaction_journals_id_seq RESTART WITH 1');
+        }
+
+        app('log')->info('Completed forced deletion and purge of all financial data');
+        Log::channel('audit')->warning('User initiated complete forced deletion and purge of all financial data');
     }
 }

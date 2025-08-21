@@ -93,6 +93,11 @@ class PurgeController extends Controller
         // accounts
         Account::whereUserId($user->id)->onlyTrashed()->forceDelete();
 
+        if (Account::count() === 0) {
+            // Reset the auto-increment value for the accounts table
+            \DB::statement('ALTER SEQUENCE accounts_id_seq RESTART WITH 1');
+        }
+
         // transaction groups
         TransactionGroup::whereUserId($user->id)->onlyTrashed()->forceDelete();
 
