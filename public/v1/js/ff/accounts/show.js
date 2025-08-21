@@ -40,6 +40,9 @@ $(function () {
         multiCurrencyPieChart(expenseBudgetUrl, 'account-budget-out');
     }
 
+    // Initialize consolidation button functionality
+    initializeConsolidationButton();
+
     console.log("Checking if sortable is defined:", $(".sortable-table tbody").sortable);
 
     // sortable!
@@ -109,4 +112,112 @@ function sortStop(event, ui) {
         return undefined;
     });
     return undefined;
+}
+
+/**
+ * Initialize the consolidation button functionality
+ */
+function initializeConsolidationButton() {
+    "use strict";
+    
+    console.log('Initializing consolidation button...');
+    
+    // Use event delegation to handle clicks on the consolidation button
+    $(document).on('click', '#consolidate-transactions-btn', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('Consolidation button clicked!');
+        
+        var accountId = $(this).data('account-id');
+        var button = $(this);
+        var originalText = button.html();
+        
+        console.log('Account ID:', accountId);
+        console.log('CSRF Token:', $('meta[name="csrf-token"]').attr('content'));
+        
+        // Show loading state
+        button.html('<span class="fa fa-fw fa-spinner fa-spin"></span> Consolidating...');
+        button.prop('disabled', true);
+        
+        // Make API call to consolidate transactions
+        $.ajax({
+            url: '/api/v1/pfinance/consolidate-transactions-for-account',
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+            },
+            data: JSON.stringify({
+                account_id: accountId.toString()
+            }),
+            success: function(response) {
+                console.log('Consolidation success:', response);
+                // Show success message
+                showAlert('success', 'Transactions consolidated successfully!', 'The account transactions have been processed and consolidated.');
+                
+                // Reload the page to show updated data
+                setTimeout(function() {
+                    window.location.reload();
+                }, 2000);
+            },
+            error: function(xhr, status, error) {
+                console.error('Consolidation error:', xhr.responseText);
+                console.error('Status:', status);
+                console.error('Error:', error);
+                
+                var errorMessage = 'An error occurred while consolidating transactions.';
+                if (xhr.responseJSON && xhr.responseJSON.message) {
+                    errorMessage = xhr.responseJSON.message;
+                }
+                
+                showAlert('danger', 'Consolidation Failed', errorMessage);
+            },
+            complete: function() {
+                // Restore button state
+                button.html(originalText);
+                button.prop('disabled', false);
+            }
+        });
+    });
+    
+    // Also check if button exists for debugging
+    var button = $('#consolidate-transactions-btn');
+    if (button.length === 0) {
+        console.error('Consolidation button not found!');
+    } else {
+        console.log('Consolidation button found, account ID:', button.data('account-id'));
+        
+        // Test if button is clickable by adding a simple click handler
+        button.on('click.test', function() {
+            console.log('Direct button click test successful!');
+        });
+        
+        // Trigger a test click
+        setTimeout(function() {
+            console.log('Testing button click...');
+            button.trigger('click.test');
+        }, 1000);
+    }
+}
+
+/**
+ * Show alert message to user
+ */
+function showAlert(type, title, message) {
+    "use strict";
+    
+    var alertHtml = '<div class="alert alert-' + type + ' alert-dismissible">' +
+        '<button type="button" class="close" data-dismiss="alert" aria-label="Close">' +
+        '<span aria-hidden="true">&times;</span></button>' +
+        '<strong>' + title + '</strong> ' + message +
+        '</div>';
+    
+    // Insert alert at the top of the content area
+    $('.row').first().before(alertHtml);
+    
+    // Auto-dismiss after 5 seconds
+    setTimeout(function() {
+        $('.alert').fadeOut();
+    }, 5000);
 }

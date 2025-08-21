@@ -33,6 +33,12 @@
                                 <li>
                                     <a href="{{ route('accounts.reconcile',account.id) }}"><span class="fa fa-fw fa-check"></span> {{ 'reconcile_this_account'|_ }}</a>
                                 </li>
+                                <li class="divider"></li>
+                                <li>
+                                    <a href="#" id="consolidate-transactions-btn" data-account-id="{{ account.id }}">
+                                        <span class="fa fa-fw fa-compress"></span> Consolidate Transactions
+                                    </a>
+                                </li>
                             </ul>
                         </div>
                     </div>
@@ -152,6 +158,11 @@
                             ({{ formatAmountBySymbol(balances.native_balance, defaultCurrency.symbol, defaultCurrency.decimal_places, true)|raw }})
                         {% endif %}
                     </h3>
+                    <div class="box-tools pull-right">
+                        <button class="btn btn-primary btn-sm" id="consolidate-transactions-btn" data-account-id="{{ account.id }}">
+                            <span class="fa fa-compress"></span> Consolidate Transactions
+                        </button>
+                    </div>
                 </div>
                 <div class="box-body">
                     {% if account.accountType.type == 'Asset account' %}
