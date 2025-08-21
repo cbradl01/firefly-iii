@@ -60,7 +60,7 @@ return [
     |
     */
 
-    'default'  => envNonEmpty('LOG_CHANNEL', 'stack'),
+    'default'  => 'stdout',
     'level'    => envNonEmpty('APP_LOG_LEVEL', 'info'),
     /*
     |--------------------------------------------------------------------------

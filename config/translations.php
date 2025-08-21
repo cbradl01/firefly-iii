@@ -120,6 +120,7 @@ return [
                 'account_role_savingAsset',
                 'account_role_ccAsset',
                 'account_role_cashWalletAsset',
+                'account_role_brokerageAsset',
                 //                'account_column_opt_drag_and_drop',
                 //                'account_column_opt_active',
                 //                'account_column_opt_name',
