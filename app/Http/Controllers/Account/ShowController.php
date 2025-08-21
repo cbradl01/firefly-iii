@@ -25,6 +25,7 @@ declare(strict_types=1);
 namespace FireflyIII\Http\Controllers\Account;
 
 use Carbon\Carbon;
+use FireflyIII\Enums\AccountTypeEnum;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Helpers\Collector\GroupCollectorInterface;
 use FireflyIII\Http\Controllers\Controller;
@@ -122,8 +123,21 @@ class ShowController extends Controller
         }
 
         /** @var GroupCollectorInterface $collector */
-        $collector        = app(GroupCollectorInterface::class);
-        $collector->setAccounts(new Collection([$account]))->setLimit($pageSize)->setPage($page)->withAccountInformation()->withCategoryInformation()->setRange($start, $end);
+        if ($account->accountType->type == AccountTypeEnum::BROKERAGE->value) {
+            $collector        = app(GroupCollectorInterface::class);
+            $anotherAccounts = Account::where('name', "Stock Market")->get();
+            $accountsCollection = (new Collection([$account]))->merge($anotherAccounts);
+        } else {
+            $collector = app(GroupCollectorInterface::class);
+            $accountsCollection = (new Collection([$account]));
+        }
+
+        $collector
+            ->setAccounts($accountsCollection)
+            ->setLimit($pageSize)
+            ->setPage($page)->withAccountInformation()->withCategoryInformation()
+            ->setRange($start, $end)
+        ;
 
         // this search will not include transaction groups where this asset account (or liability)
         // is just part of ONE of the journals. To force this:
@@ -194,9 +208,16 @@ class ShowController extends Controller
         $end->endOfDay();
 
         /** @var GroupCollectorInterface $collector */
-        $collector       = app(GroupCollectorInterface::class);
-        $collector->setAccounts(new Collection([$account]))->setLimit($pageSize)->setPage($page)->withAccountInformation()->withCategoryInformation();
-
+        if ($account->accountType->type == AccountTypeEnum::BROKERAGE->value) {
+            $collector       = app(GroupCollectorInterface::class);
+            $anotherAccounts = Account::where('name', "Stock Market")->get();
+            $accountsCollection = (new Collection([$account]))->merge($anotherAccounts);
+            $collector->setAccounts($accountsCollection)->setLimit($pageSize)->setPage($page)->withAccountInformation()->withCategoryInformation();
+        } else {
+            $collector = app(GroupCollectorInterface::class);
+            $collector->setAccounts(new Collection([$account]))->setLimit($pageSize)->setPage($page)->withAccountInformation()->withCategoryInformation();
+        }
+        
         // this search will not include transaction groups where this asset account (or liability)
         // is just part of ONE of the journals. To force this:
         $collector->setExpandGroupSearch(true);

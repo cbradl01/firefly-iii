@@ -43,6 +43,7 @@ use FireflyIII\Support\Http\Controllers\DateCalculation;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Class AccountController.
@@ -287,13 +288,19 @@ class AccountController extends Controller
         $cache->addProperty($start);
         $cache->addProperty($end);
         $cache->addProperty('chart.account.expense-category');
-        if ($cache->has()) {
-            return response()->json($cache->get());
-        }
+        // if ($cache->has()) {
+        //     return response()->json($cache->get());
+        // }
 
         /** @var GroupCollectorInterface $collector */
         $collector = app(GroupCollectorInterface::class);
-        $collector->setAccounts(new Collection([$account]))->setRange($start, $end)->withCategoryInformation()->setTypes([TransactionTypeEnum::WITHDRAWAL->value]);
+        if ($account->account == AccountTypeEnum::BROKERAGE->value) {
+            $anotherAccounts = Account::where('name', "Stock Market")->get();
+            $accountsCollection = (new Collection([$account]))->merge($anotherAccounts);
+        } else {
+            $accountsCollection = new Collection([$account]);
+        }   
+        $collector->setAccounts($accountsCollection)->setRange($start, $end)->withCategoryInformation()->setTypes([TransactionTypeEnum::WITHDRAWAL->value]);
         $journals  = $collector->getExtractedJournals();
         $result    = [];
         $chartData = [];
@@ -374,15 +381,21 @@ class AccountController extends Controller
         $cache->addProperty($start);
         $cache->addProperty($end);
         $cache->addProperty('chart.account.income-category');
-        if ($cache->has()) {
-            return response()->json($cache->get());
-        }
+        // if ($cache->has()) {
+        //     return response()->json($cache->get());
+        // }
 
         // grab all journals:
         /** @var GroupCollectorInterface $collector */
         $collector = app(GroupCollectorInterface::class);
+        if ($account->accountType->type == AccountTypeEnum::BROKERAGE->value) {
+            $anotherAccounts = Account::where('name', "Stock Market")->get();
+            $accountsCollection = (new Collection([$account]))->merge($anotherAccounts);
+        } else {
+            $accountsCollection = new Collection([$account]);
+        }   
 
-        $collector->setAccounts(new Collection([$account]))->setRange($start, $end)->withCategoryInformation()->setTypes([TransactionTypeEnum::DEPOSIT->value]);
+        $collector->setAccounts($accountsCollection)->setRange($start, $end)->withCategoryInformation()->setTypes([TransactionTypeEnum::DEPOSIT->value]);
         $journals  = $collector->getExtractedJournals();
         $result    = [];
         $chartData = [];
@@ -424,17 +437,43 @@ class AccountController extends Controller
     {
         $start->startOfDay();
         $end->endOfDay();
+
+
+        // $newCache             = new CacheProperties();
+        // $newCache->addProperty($account->id);
+        // $newCache->addProperty("dailyBalances");
+        // $newCache->delete();
+        // if ($newCache->has()) {
+        //     $needsRecalculation = DB::table('account_balance_flags')
+        //         ->where('account_id', $account->id)
+        //         ->value('needs_recalculation');
+
+        //     return response()->json($newCache->get());
+        // }
+
+
         // TODO not sure if these date ranges will work as expected.
         Log::debug(sprintf('Now in period("%s", "%s")', $start->format('Y-m-d H:i:s'), $end->format('Y-m-d H:i:s')));
         $cache           = new CacheProperties();
         $cache->addProperty('chart.account.period');
-        $cache->addProperty($start);
-        $cache->addProperty($end);
+        $cache->addProperty($start); # TODO: we shouldn't need to cache for each period, just cache the cumulative daily balances
+        $cache->addProperty($end); # TODO: we shouldn't need to cache for each period, just cache the cumulative daily balances
         $cache->addProperty($this->convertToNative);
         $cache->addProperty($account->id);
+        $cache->delete();
         if ($cache->has()) {
             return response()->json($cache->get());
         }
+
+        //     $needsRecalculation = DB::table('account_balance_flags')
+        //         ->where('account_id', $account->id)
+        //         ->value('needs_recalculation');
+
+        //     if (!$needsRecalculation) {
+        //         Log::debug(sprintf('CACHED period(#%d, %s)', $account->id, $start->format('Y-m-d H:i:s')));
+        //         return response()->json($cache->get());
+        //     }
+        // }
 
         // collect and filter balances for the entire period.
         $step            = $this->calculateStep($start, $end);
@@ -451,7 +490,15 @@ class AccountController extends Controller
         $accountCurrency = $this->accountRepository->getAccountCurrency($account);
 
         $range           = Steam::finalAccountBalanceInRange($account, $start, $end, $this->convertToNative);
-        $range           = Steam::filterAccountBalances($range, $account, $this->convertToNative, $accountCurrency);
+
+        $range = array_map(function ($balance) {
+            # TODO: remove this if we can avoid the db returning USD. Need to figure out
+           # how the currency conversions work. They seem slow and the process can be improved.  
+            unset($balance['USD']);
+            return $balance;
+        }, $range);
+        # TODO: this is the slow bit that used to do this:
+        # $range           = Steam::filterAccountBalances($range, $account, $this->convertToNative, $accountCurrency);
 
         // temp, get end balance.
         Log::debug(sprintf('period: Call finalAccountBalance with date/time "%s"', $end->toIso8601String()));
