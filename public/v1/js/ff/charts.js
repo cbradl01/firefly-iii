@@ -352,6 +352,7 @@ function drawAChart(URL, container, chartType, options, colorData) {
     }
 
     $.getJSON(URL).done(function (data) {
+        console.log("HERE")
         containerObj.removeClass('general-chart-error');
 
         // if result is empty array, or the labels array is empty, show error.

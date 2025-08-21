@@ -34,6 +34,7 @@ const app = new Vue({
     i18n,
     el: "#webhooks_show",
     render: (createElement) => {
+        console.log('show.js test');
         return createElement(Show, {props: props})
     },
 });

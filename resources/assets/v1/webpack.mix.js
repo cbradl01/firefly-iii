@@ -40,6 +40,9 @@ mix.js('src/app_vue.js', 'build').vue({version: 2});
 mix.js('src/create_transaction.js', 'build').vue({version: 2});
 mix.js('src/edit_transaction.js', 'build').vue({version: 2});
 mix.js('src/profile.js', 'build').vue({version: 2});
+
+
+
 //
 // // webhooks
 mix.js('src/webhooks/index.js', 'build/webhooks').vue({version: 2});
@@ -54,3 +57,10 @@ mix.js('src/exchange-rates/rates.js', 'build/exchange-rates').vue({version: 2});
 // administrations
 mix.js('src/administrations/index.js', 'build/administrations').vue({version: 2});
 mix.js('src/administrations/edit.js', 'build/administrations').vue({version: 2});
+
+mix.options({
+    hmrOptions: {
+        host: 'localhost', // or the Docker host IP if needed
+        port: 8081
+    }
+});

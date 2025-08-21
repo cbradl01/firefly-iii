@@ -26,6 +26,7 @@ var fixHelper = function (e, tr) {
         // Set helper cell sizes to match the original sizes
         $(this).width($originals.eq(index).width());
     });
+    console.log('fixHelper')
     return $helper;
 };
 
@@ -39,8 +40,11 @@ $(function () {
         multiCurrencyPieChart(expenseBudgetUrl, 'account-budget-out');
     }
 
+    console.log("Checking if sortable is defined:", $(".sortable-table tbody").sortable);
+
     // sortable!
     if (typeof $(".sortable-table tbody").sortable !== "undefined") {
+        console.log('Initializing sortable');
         $(".sortable-table tbody").sortable(
             {
                 helper: fixHelper,
@@ -48,6 +52,7 @@ $(function () {
                 stop: sortStop,
                 handle: '.handle',
                 start: function (event, ui) {
+                    console.log('Drag started');
                     // Build a placeholder cell that spans all the cells in the row
                     var cellCount = 0;
                     $('td, th', ui.helper).each(function () {
@@ -65,8 +70,9 @@ $(function () {
                 }
             }
         );
+    } else {
+        console.error('Sortable is not defined. Ensure jQuery UI is loaded.');
     }
-
 });
 
 function sortStop(event, ui) {

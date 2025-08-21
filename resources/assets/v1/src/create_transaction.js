@@ -69,12 +69,14 @@ Vue.component('account-select', AccountSelect);
 Vue.component('create-transaction', CreateTransaction);
 
 const i18n = require('./i18n');
-
+console.log('create_transaction.js end');
 let props = {};
 const app = new Vue({
     i18n,
     el: "#create_transaction",
     render: (createElement) => {
+        console.log('create_transaction.js');
         return createElement(CreateTransaction, {props: props});
     },
 });
+

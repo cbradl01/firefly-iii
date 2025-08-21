@@ -30,3 +30,5 @@ window.uiv = uiv;
 Vue.use(vuei18n);
 Vue.use(uiv);
 window.Vue = Vue;
+
+console.log('app_vue.js');

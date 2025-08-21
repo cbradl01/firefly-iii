@@ -25,7 +25,7 @@
 
 try {
     window.$ = window.jQuery = require('jquery');
-
+    console.log('foo bar');
     require('bootstrap-sass');
 } catch (e) {
 }

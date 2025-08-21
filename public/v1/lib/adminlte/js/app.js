@@ -316,7 +316,7 @@ function _init() {
             //Enable sidebar toggle
             $(document).on('click', toggleBtn, function (e) {
                 e.preventDefault();
-
+                console.log('toggleBtn clicked test');
                 //Enable sidebar push menu
                 if ($(window).width() > (screenSizes.sm - 1)) {
                     if ($("body").hasClass('sidebar-collapse')) {

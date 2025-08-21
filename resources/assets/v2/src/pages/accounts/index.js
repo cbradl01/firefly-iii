@@ -184,6 +184,7 @@ let index = function () {
             document.getElementById('filterInput').focus();
         },
         accountRole(roleName) {
+            console.log('accountRole', roleName);
             return i18next.t('firefly.account_role_' + roleName);
         },
         getPreferenceKey(name) {
