@@ -509,6 +509,7 @@ Route::group(
     ],
     static function (): void {
         Route::post('consolidate-transactions', ['uses' => 'PfinanceController@consolidateTransactions', 'as' => 'consolidate-transactions']);
+        Route::post('consolidate-transactions-for-account', ['uses' => 'PfinanceController@consolidateTransactionsForAccount', 'as' => 'consolidate-transactions-for-account']);
         Route::post('generate-firefly-transactions', ['uses' => 'PfinanceController@generateFireflyTransactions', 'as' => 'generate-firefly-transactions']);
         Route::post('import-firefly-transactions', ['uses' => 'PfinanceController@importFireflyTransactions', 'as' => 'import-firefly-transactions']);
         Route::post('push-to-google', ['uses' => 'PfinanceController@pushToGoogle', 'as' => 'push-to-google']);

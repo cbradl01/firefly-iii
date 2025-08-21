@@ -58,6 +58,39 @@ class PfinanceController extends Controller
     }
 
     /**
+     * Consolidate transactions for a specific account.
+     */
+    public function consolidateTransactionsForAccount(PfinanceRequest $request): JsonResponse
+    {
+        try {
+            $accountId = $request->get('account_id');
+            
+            $response = Http::post($this->pfinanceServiceUrl . '/api/v1/accounts/consolidate-transactions/' . $accountId);
+            
+            if ($response->successful()) {
+                return response()->json($response->json());
+            }
+            
+            Log::error('PFinance service error', [
+                'status' => $response->status(),
+                'body' => $response->body()
+            ]);
+            
+            return response()->json([
+                'message' => 'Error consolidating transactions for account',
+                'category' => 'error'
+            ], 500);
+            
+        } catch (\Exception $e) {
+            Log::error('PFinance service exception', ['error' => $e->getMessage()]);
+            return response()->json([
+                'message' => 'Service unavailable',
+                'category' => 'error'
+            ], 503);
+        }
+    }
+
+    /**
      * Generate Firefly-III transactions.
      */
     public function generateFireflyTransactions(Request $request): JsonResponse

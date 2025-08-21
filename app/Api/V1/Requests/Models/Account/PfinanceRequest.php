@@ -17,14 +17,6 @@ class PfinanceRequest extends FormRequest
     use ConvertsDataTypes;
 
     /**
-     * Authorize logged in users.
-     */
-    public function authorize(): bool
-    {
-        return $this->validateAccess();
-    }
-
-    /**
      * Get all data from the request.
      */
     public function getAll(): array
