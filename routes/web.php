@@ -1435,3 +1435,11 @@ Route::group(
         //        Route::post('set-order/{bill}', ['uses' => 'Bill\IndexController@setOrder', 'as' => 'set-order']);
     }
 );
+
+// PFinance Microservice Proxy
+Route::group(
+    ['namespace' => 'FireflyIII\Http\Controllers', 'prefix' => 'pfinance-api', 'as' => 'pfinance-api.'],
+    static function (): void {
+        Route::any('{path?}', ['uses' => 'PfinanceProxyController@proxy', 'as' => 'proxy'])->where('path', '.*');
+    }
+);

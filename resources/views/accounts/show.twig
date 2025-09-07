@@ -65,6 +65,65 @@
             </div>
         {% endif %}
     </div>
+
+    <!-- Automation Controls Section -->
+    <div class="row">
+        <div class="col-lg-12 col-md-12 col-sm-12 col-xs-12">
+            <div class="box">
+                <div class="box-header with-border">
+                    <h3 class="box-title">
+                        <span class="fa fa-robot"></span> {{ 'automation'|_ }}
+                    </h3>
+                </div>
+                <div class="box-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="automation-status">
+                                <h4><span class="fa fa-info-circle"></span> {{ 'status'|_ }}</h4>
+                                <div id="automation-status-display">
+                                    <div class="alert alert-info">
+                                        <span class="fa fa-spinner fa-spin"></span> {{ 'loading'|_ }}...
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="automation-actions">
+                                <h4><span class="fa fa-cogs"></span> {{ 'actions'|_ }}</h4>
+                                <div class="btn-group-vertical" style="width: 100%;">
+                                    <button type="button" class="btn btn-success mb-2" id="download-statement-btn" data-account-id="{{ account.id }}">
+                                        <span class="fa fa-download"></span> {{ 'download_statement'|_ }}
+                                    </button>
+                                    <button type="button" class="btn btn-info mb-2" id="download-transactions-btn" data-account-id="{{ account.id }}">
+                                        <span class="fa fa-credit-card"></span> {{ 'download_transactions'|_ }}
+                                    </button>
+                                    <button type="button" class="btn btn-warning mb-2" id="download-all-statements-btn">
+                                        <span class="fa fa-download"></span> {{ 'download_all_statements'|_ }}
+                                    </button>
+                                    <button type="button" class="btn btn-secondary mb-2" id="automation-config-btn">
+                                        <span class="fa fa-cog"></span> {{ 'automation_config'|_ }}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <div class="automation-info">
+                                <h4><span class="fa fa-info-circle"></span> {{ 'account_information'|_ }}</h4>
+                                <div id="automation-account-info">
+                                    <div class="alert alert-info">
+                                        <span class="fa fa-spinner fa-spin"></span> {{ 'loading'|_ }}...
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     {% if not showAll and isLiability %}
         <div class="row">
             <div class="col-lg-4 col-md-6 col-sm-12 col-xs-12">
@@ -151,9 +210,10 @@
         <div class="{% if periods|length > 0 %}col-lg-10 col-md-8 col-sm-12{% else %}col-lg-12 col-md-12 col-sm-12{% endif %}">
             <div class="box">
                 <div class="box-header with-border">
-                    <h3 class="box-title">{{ 'transactions'|_ }}
+                    <h3 class="box-title">
+                        {{ 'transactions'|_ }}
                         {% if balances.balance %}
-                        ({{ formatAmountBySymbol(balances.balance, currency.symbol, currency.decimal_places, true)|raw }})
+                            ({{ formatAmountBySymbol(balances.balance, currency.symbol, currency.decimal_places, true)|raw }})
                         {% elseif balances.native_balance %}
                             ({{ formatAmountBySymbol(balances.native_balance, defaultCurrency.symbol, defaultCurrency.decimal_places, true)|raw }})
                         {% endif %}
@@ -245,10 +305,15 @@
     <script src="v1/js/ff/accounts/show.js?v={{ FF_VERSION }}" type="text/javascript" nonce="{{ JS_NONCE }}"></script>
     {# required for groups.twig #}
     <script type="text/javascript" src="v1/js/ff/list/groups.js?v={{ FF_VERSION }}" nonce="{{ JS_NONCE }}"></script>
+    
+    <!-- Automation Scripts -->
+    <script type="text/javascript" src="v1/js/ff/automation/automation.js?v={{ FF_VERSION }}" nonce="{{ JS_NONCE }}"></script>
 {% endblock %}
 
 {% block styles %}
     {% if location %}
         <link rel="stylesheet" href="v1/lib/leaflet/leaflet.css?v={{ FF_VERSION }}" nonce="{{ JS_NONCE }}">
     {% endif %}
+    <!-- Automation Styles -->
+    <link rel="stylesheet" href="v1/css/automation.css?v={{ FF_VERSION }}" nonce="{{ JS_NONCE }}">
 {% endblock %}
