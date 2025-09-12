@@ -26,6 +26,9 @@ if (!defined('DATEFORMAT')) {
     define('DATEFORMAT', '(19|20)[0-9]{2}-?[0-9]{2}-?[0-9]{2}');
 }
 
+// Include Plaid routes
+require_once __DIR__ . "/../plugins/PFinance/routes.php";
+
 // laravel passport routes
 Route::group(
     [
@@ -1436,10 +1439,5 @@ Route::group(
     }
 );
 
-// PFinance Microservice Proxy
-Route::group(
-    ['namespace' => 'FireflyIII\Http\Controllers', 'prefix' => 'pfinance-api', 'as' => 'pfinance-api.'],
-    static function (): void {
-        Route::any('{path?}', ['uses' => 'PfinanceProxyController@proxy', 'as' => 'proxy'])->where('path', '.*');
-    }
-);
+// PFinance Plugin Routes are loaded via ServiceProvider from plugins/PFinance/routes.php
+
