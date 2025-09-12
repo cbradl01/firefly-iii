@@ -112,6 +112,7 @@ use PragmaRX\Google2FALaravel\Facade;
 use Spatie\Html\Facades\Html;
 use TwigBridge\Facade\Twig;
 use TwigBridge\ServiceProvider;
+use FireflyIII\Providers\PFinanceServiceProvider;
 
 return [
     'name'            => envNonEmpty('APP_NAME', 'Firefly III'),
@@ -160,7 +161,7 @@ return [
         // own stuff:
         PragmaRX\Google2FALaravel\ServiceProvider::class,
         ServiceProvider::class,
-
+        
         // More service providers.
         AccountServiceProvider::class,
         AttachmentServiceProvider::class,
@@ -177,6 +178,9 @@ return [
         TagServiceProvider::class,
         AdminServiceProvider::class,
         RecurringServiceProvider::class,
+        
+        // Plugin Service Providers:
+        PFinanceServiceProvider::class,
     ],
     'aliases'         => [
         'App'           => App::class,
