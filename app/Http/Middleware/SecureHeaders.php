@@ -59,7 +59,7 @@ class SecureHeaders
             "style-src 'unsafe-inline' 'self'",
             "base-uri 'self'",
             "font-src 'self' data:",
-            sprintf("connect-src 'self' %s", $trackingScriptSrc),
+            sprintf("connect-src 'self' %s http://localhost:5001 ws://localhost:5001", $trackingScriptSrc),
             sprintf("img-src 'self' data: 'nonce-%1s' ", $nonce),
             "manifest-src 'self'",
         ];
@@ -73,7 +73,7 @@ class SecureHeaders
                 "style-src 'unsafe-inline' 'self' https://10.0.0.15:5173/",
                 "base-uri 'self'",
                 "font-src 'self' data: https://10.0.0.15:5173/",
-                sprintf("connect-src 'self' %s https://10.0.0.15:5173/ wss://10.0.0.15:5173/", $trackingScriptSrc),
+                sprintf("connect-src 'self' %s https://10.0.0.15:5173/ wss://10.0.0.15:5173/ http://localhost:5001 ws://localhost:5001", $trackingScriptSrc),
                 sprintf("img-src 'self' data: 'nonce-%1s'", $nonce),
                 "manifest-src 'self'",
             ];
