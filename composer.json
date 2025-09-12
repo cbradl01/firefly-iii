@@ -129,6 +129,7 @@
     "autoload": {
         "psr-4": {
             "FireflyIII\\": "app/",
+            "FireflyIII\\Plugins\\": "plugins/",
             "Domain\\": "domain/",
             "Database\\Factories\\": "database/factories/",
             "Database\\Seeders\\": "database/seeders/"
