@@ -128,7 +128,7 @@ class ShowController extends Controller
             $anotherAccounts = Account::where('name', "Stock Market")->get();
             $accountsCollection = (new Collection([$account]))->merge($anotherAccounts);
         } else {
-            $collector = app(GroupCollectorInterface::class);
+            $collector = app(GroupCollectorInterface::class); 
             $accountsCollection = (new Collection([$account]));
         }
 
