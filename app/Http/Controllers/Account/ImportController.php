@@ -1,0 +1,293 @@
+<?php
+
+/**
+ * ImportController.php
+ * Copyright (c) 2024 james@firefly-iii.org
+ *
+ * This file is part of Firefly III (https://github.com/firefly-iii).
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+declare(strict_types=1);
+
+namespace FireflyIII\Http\Controllers\Account;
+
+use FireflyIII\Exceptions\FireflyException;
+use FireflyIII\Http\Controllers\Controller;
+use FireflyIII\Repositories\Account\AccountRepositoryInterface;
+use FireflyIII\Support\Http\Controllers\BasicDataSupport;
+use Illuminate\Contracts\View\Factory;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Routing\Redirector;
+use Illuminate\Support\Facades\Log;
+use Illuminate\View\View;
+// use PhpOffice\PhpSpreadsheet\IOFactory;
+
+/**
+ * Class ImportController
+ */
+class ImportController extends Controller
+{
+    use BasicDataSupport;
+
+    private AccountRepositoryInterface $repository;
+
+    /**
+     * ImportController constructor.
+     */
+    public function __construct()
+    {
+        parent::__construct();
+
+        // translations:
+        $this->middleware(
+            function ($request, $next) {
+                app('view')->share('mainTitleIcon', 'fa-credit-card');
+                app('view')->share('title', (string) trans('firefly.accounts'));
+
+                $this->repository = app(AccountRepositoryInterface::class);
+
+                return $next($request);
+            }
+        );
+    }
+
+    /**
+     * Show the import form.
+     *
+     * @return Factory|View
+     */
+    public function importCsv(Request $request, string $objectType)
+    {
+        $subTitleIcon = 'fa-file-text-o';
+        $subTitle = 'Import ' . ucfirst($objectType) . ' Accounts from CSV';
+
+        return view('accounts.import-csv', compact('subTitleIcon', 'subTitle', 'objectType'));
+    }
+
+    /**
+     * Process the CSV import.
+     *
+     * @return Redirector|RedirectResponse
+     *
+     * @throws FireflyException
+     */
+    public function processCsv(Request $request, string $objectType)
+    {
+        $request->validate([
+            'csv_file' => 'required|file|mimes:csv,txt|max:10240', // 10MB max
+        ]);
+
+        $file = $request->file('csv_file');
+        $filePath = $file->getPathname();
+
+        try {
+            // Load the CSV file
+            $rows = [];
+            if (($handle = fopen($filePath, 'r')) !== false) {
+                while (($data = fgetcsv($handle, 1000, ',')) !== false) {
+                    $rows[] = $data;
+                }
+                fclose($handle);
+            }
+
+            if (empty($rows)) {
+                return redirect()->back()->withErrors(['csv_file' => 'The CSV file is empty.']);
+            }
+
+            // Get header row
+            $headers = array_shift($rows);
+            $headers = array_map('strtolower', array_map('trim', $headers));
+            
+            Log::info('CSV Import - Headers found', ['headers' => $headers]);
+            Log::info('CSV Import - Processing ' . count($rows) . ' data rows');
+
+            // Find required columns
+            $nameIndex = array_search('name', $headers);
+            $accountNameIndex = array_search('account_name', $headers);
+            $institutionIndex = array_search('institution', $headers);
+            $accountTypeIndex = array_search('account_type', $headers);
+            $openingBalanceIndex = array_search('opening_balance', $headers);
+            $openingBalanceDateIndex = array_search('opening_balance_date', $headers);
+            $currencyCodeIndex = array_search('currency_code', $headers);
+            $ibanIndex = array_search('iban', $headers);
+            $accountNumberIndex = array_search('account_number', $headers);
+            $notesIndex = array_search('notes', $headers);
+            $activeIndex = array_search('active', $headers);
+            
+            Log::info('CSV Import - Column indices', [
+                'name_index' => $nameIndex,
+                'account_name_index' => $accountNameIndex,
+                'institution_index' => $institutionIndex,
+                'opening_balance_index' => $openingBalanceIndex,
+            ]);
+
+            if ($nameIndex === false && $accountNameIndex === false) {
+                return redirect()->back()->withErrors(['csv_file' => 'Required column "name" or "account_name" not found.']);
+            }
+
+            $createdCount = 0;
+            $skippedCount = 0;
+            $errors = [];
+            $skippedReasons = [];
+
+            foreach ($rows as $rowIndex => $row) {
+                try {
+                    // Skip empty rows
+                    if (empty(array_filter($row))) {
+                        continue;
+                    }
+                    
+                    // Log first few rows for debugging
+                    if ($rowIndex < 3) {
+                        Log::info('CSV Import - Processing row ' . ($rowIndex + 2), ['row_data' => $row]);
+                    }
+
+                    // Get account name (prefer 'name' over 'account_name')
+                    $accountName = '';
+                    if ($nameIndex !== false && isset($row[$nameIndex])) {
+                        $accountName = trim($row[$nameIndex]);
+                    } elseif ($accountNameIndex !== false && isset($row[$accountNameIndex])) {
+                        $accountName = trim($row[$accountNameIndex]);
+                    }
+
+                    if (empty($accountName)) {
+                        $skippedCount++;
+                        $skippedReasons[] = "Row " . ($rowIndex + 2) . ": Empty account name";
+                        continue;
+                    }
+
+                    // Check if account already exists
+                    $types = config(sprintf('firefly.accountTypesByIdentifier.%s', $objectType));
+                    $existingAccount = $this->repository->findByName($accountName, $types);
+                    if ($existingAccount) {
+                        $skippedCount++;
+                        $skippedReasons[] = "Row " . ($rowIndex + 2) . ": Account '$accountName' already exists";
+                        continue;
+                    }
+
+                    // Prepare account data
+                    $accountData = [
+                        'name' => $accountName,
+                        'active' => true,
+                        'account_type_name' => $objectType,
+                        'currency_id' => $this->defaultCurrency->id,
+                        'virtual_balance' => '',
+                        'iban' => ($ibanIndex !== false && isset($row[$ibanIndex])) ? trim($row[$ibanIndex]) : '',
+                        'BIC' => '',
+                        'account_number' => ($accountNumberIndex !== false && isset($row[$accountNumberIndex])) ? trim($row[$accountNumberIndex]) : '',
+                        'account_role' => 'defaultAsset',
+                        'opening_balance' => '',
+                        'opening_balance_date' => null,
+                        'cc_type' => '',
+                        'cc_monthly_payment_date' => '',
+                        'notes' => ($notesIndex !== false && isset($row[$notesIndex])) ? trim($row[$notesIndex]) : '',
+                        'interest' => '',
+                        'interest_period' => 'monthly',
+                        'include_net_worth' => '1',
+                        'liability_direction' => '',
+                    ];
+
+                    // Set opening balance if provided
+                    if ($openingBalanceIndex !== false && isset($row[$openingBalanceIndex]) && !empty(trim($row[$openingBalanceIndex]))) {
+                        $openingBalance = trim($row[$openingBalanceIndex]);
+                        // Clean and validate the opening balance
+                        $openingBalance = preg_replace('/[^0-9.-]/', '', $openingBalance);
+                        if (is_numeric($openingBalance)) {
+                            $accountData['opening_balance'] = $openingBalance;
+                            if ($openingBalanceDateIndex !== false && isset($row[$openingBalanceDateIndex]) && !empty(trim($row[$openingBalanceDateIndex]))) {
+                                try {
+                                    $accountData['opening_balance_date'] = \Carbon\Carbon::parse(trim($row[$openingBalanceDateIndex]));
+                                } catch (\Exception $e) {
+                                    // Use today's date if parsing fails
+                                    $accountData['opening_balance_date'] = today();
+                                }
+                            } else {
+                                $accountData['opening_balance_date'] = today();
+                            }
+                        }
+                    }
+
+                    // Set active status if provided
+                    if ($activeIndex !== false && isset($row[$activeIndex])) {
+                        $activeValue = strtolower(trim($row[$activeIndex]));
+                        $accountData['active'] = in_array($activeValue, ['1', 'true', 'yes', 'active']);
+                    }
+
+                    // Create the account
+                    try {
+                        $account = $this->repository->store($accountData);
+                        $createdCount++;
+
+                        Log::channel('audit')->info('Imported account from CSV.', [
+                            'account_id' => $account->id,
+                            'account_name' => $account->name,
+                            'row_index' => $rowIndex + 2, // +2 because we removed header and arrays are 0-indexed
+                        ]);
+                    } catch (\Exception $e) {
+                        $skippedCount++;
+                        $skippedReasons[] = "Row " . ($rowIndex + 2) . ": Failed to create account '$accountName' - " . $e->getMessage();
+                        Log::error('Error creating account from CSV row ' . ($rowIndex + 2), [
+                            'error' => $e->getMessage(),
+                            'account_data' => $accountData,
+                        ]);
+                    }
+
+                } catch (\Exception $e) {
+                    $skippedCount++;
+                    $skippedReasons[] = "Row " . ($rowIndex + 2) . ": Processing error - " . $e->getMessage();
+                    Log::error('Error importing account from CSV row ' . ($rowIndex + 2), [
+                        'error' => $e->getMessage(),
+                        'row_data' => $row,
+                    ]);
+                }
+            }
+
+            // Prepare success message
+            $message = sprintf(
+                'Successfully imported %d accounts from CSV. %d accounts were skipped.',
+                $createdCount,
+                $skippedCount
+            );
+
+            // Add detailed reasons for skipped accounts
+            if (!empty($skippedReasons)) {
+                $message .= "\n\nSkipped accounts:\n" . implode("\n", array_slice($skippedReasons, 0, 10));
+                if (count($skippedReasons) > 10) {
+                    $message .= "\n(and " . (count($skippedReasons) - 10) . " more skipped accounts)";
+                }
+            }
+
+            if (!empty($errors)) {
+                $message .= "\n\nOther errors: " . implode('; ', array_slice($errors, 0, 5));
+                if (count($errors) > 5) {
+                    $message .= ' (and ' . (count($errors) - 5) . ' more errors)';
+                }
+            }
+
+            return redirect()->route('accounts.index', [$objectType])
+                ->with('success', $message);
+
+        } catch (\Exception $e) {
+            Log::error('Error processing CSV file', [
+                'error' => $e->getMessage(),
+                'file' => $file->getClientOriginalName(),
+            ]);
+
+            return redirect()->back()->withErrors(['csv_file' => 'Error processing CSV file: ' . $e->getMessage()]);
+        }
+    }
+}
