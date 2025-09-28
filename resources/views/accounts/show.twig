@@ -39,6 +39,11 @@
                                         <span class="fa fa-fw fa-compress"></span> Consolidate Transactions
                                     </a>
                                 </li>
+                                <li>
+                                    <a href="#" id="generate-firefly-transactions-btn" data-account-id="{{ account.id }}">
+                                        <span class="fa fa-fw fa-fire"></span> Generate Firefly Transactions
+                                    </a>
+                                </li>
                             </ul>
                         </div>
                     </div>
@@ -167,6 +172,12 @@
                         <button class="btn btn-primary btn-sm" id="consolidate-transactions-btn" data-account-id="{{ account.id }}">
                             <span class="fa fa-compress"></span> Consolidate Transactions
                         </button>
+                        <button class="btn btn-success btn-sm" id="generate-firefly-transactions-btn" data-account-id="{{ account.id }}">
+                            <span class="fa fa-fire"></span> Generate Firefly Transactions
+                        </button>
+                        <button class="btn btn-warning btn-sm" id="consolidate-and-generate-btn" data-account-id="{{ account.id }}" title="Consolidate & Generate Transactions">
+                            <span class="fa fa-refresh"></span>
+                        </button>
                     </div>
                 </div>
                 <div class="box-body">
@@ -280,6 +291,7 @@
                             });
                             console.log('Plaid Link functionality bound to download button');
                         }
+                        
                     }
                 })
                 .catch(error => console.error('Error loading automation template:', error));

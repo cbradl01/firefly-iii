@@ -122,6 +122,98 @@ class PfinanceController extends Controller
     }
 
     /**
+     * Generate Firefly-III transactions for a specific account.
+     */
+    public function generateFireflyTransactionsForAccount(PfinanceRequest $request): JsonResponse
+    {
+        try {
+            $accountId = $request->get('account_id');
+            
+            $response = Http::post($this->pfinanceServiceUrl . '/api/v1/accounts/generate-firefly-transactions/' . $accountId);
+            
+            if ($response->successful()) {
+                return response()->json($response->json());
+            }
+            
+            Log::error('PFinance service error', [
+                'status' => $response->status(),
+                'body' => $response->body()
+            ]);
+            
+            return response()->json([
+                'message' => 'Error generating Firefly transactions',
+                'category' => 'error'
+            ], 500);
+            
+        } catch (\Exception $e) {
+            Log::error('Error generating Firefly transactions', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return response()->json([
+                'message' => 'Service unavailable',
+                'category' => 'error'
+            ], 503);
+        }
+    }
+
+    /**
+     * Consolidate and generate Firefly-III transactions for a specific account.
+     */
+    public function consolidateAndGenerateTransactionsForAccount(PfinanceRequest $request): JsonResponse
+    {
+        try {
+            $accountId = $request->get('account_id');
+            
+            // First, consolidate transactions
+            $consolidateResponse = Http::post($this->pfinanceServiceUrl . '/api/v1/accounts/consolidate-transactions/' . $accountId);
+            
+            if (!$consolidateResponse->successful()) {
+                Log::error('PFinance consolidation service error', [
+                    'status' => $consolidateResponse->status(),
+                    'body' => $consolidateResponse->body()
+                ]);
+                
+                return response()->json([
+                    'message' => 'Error consolidating transactions for account',
+                    'category' => 'error'
+                ], 500);
+            }
+            
+            // Then, generate Firefly transactions
+            $generateResponse = Http::post($this->pfinanceServiceUrl . '/api/v1/accounts/generate-firefly-transactions/' . $accountId);
+            
+            if (!$generateResponse->successful()) {
+                Log::error('PFinance generation service error', [
+                    'status' => $generateResponse->status(),
+                    'body' => $generateResponse->body()
+                ]);
+                
+                return response()->json([
+                    'message' => 'Error generating Firefly transactions for account',
+                    'category' => 'error'
+                ], 500);
+            }
+            
+            // Return combined success response
+            return response()->json([
+                'message' => 'Transactions consolidated and Firefly transactions generated successfully',
+                'category' => 'success',
+                'consolidation_result' => $consolidateResponse->json(),
+                'generation_result' => $generateResponse->json()
+            ]);
+            
+        } catch (\Exception $e) {
+            Log::error('PFinance service exception', ['error' => $e->getMessage()]);
+            return response()->json([
+                'message' => 'Service unavailable',
+                'category' => 'error'
+            ], 503);
+        }
+    }
+
+    /**
      * Import Firefly-III transactions for a specific account.
      */
     public function importFireflyTransactions(PfinanceRequest $request): JsonResponse

@@ -42,6 +42,12 @@ $(function () {
 
     // Initialize consolidation button functionality
     initializeConsolidationButton();
+    
+    // Initialize generate firefly transactions button functionality
+    initializeGenerateFireflyTransactionsButton();
+    
+    // Initialize consolidate and generate button functionality
+    initializeConsolidateAndGenerateButton();
 
     console.log("Checking if sortable is defined:", $(".sortable-table tbody").sortable);
 
@@ -220,4 +226,156 @@ function showAlert(type, title, message) {
     setTimeout(function() {
         $('.alert').fadeOut();
     }, 5000);
+}
+
+/**
+ * Initialize the generate firefly transactions button functionality
+ */
+function initializeGenerateFireflyTransactionsButton() {
+    "use strict";
+    
+    console.log('Initializing generate firefly transactions button...');
+    
+    // Use event delegation to handle clicks on the generate firefly transactions button
+    $(document).on('click', '#generate-firefly-transactions-btn', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('Generate Firefly Transactions button clicked!');
+        
+        var accountId = $(this).data('account-id');
+        var button = $(this);
+        var originalText = button.html();
+        
+        console.log('Account ID:', accountId);
+        console.log('CSRF Token:', $('meta[name="csrf-token"]').attr('content'));
+        
+        // Show loading state
+        button.html('<span class="fa fa-fw fa-spinner fa-spin"></span> Generating...');
+        button.prop('disabled', true);
+        
+        // Make API call to generate firefly transactions
+        $.ajax({
+            url: '/api/v1/pfinance/generate-firefly-transactions-for-account',
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+            },
+            data: JSON.stringify({
+                account_id: accountId.toString()
+            }),
+            success: function(response) {
+                console.log('Generate Firefly Transactions success:', response);
+                // Show success message
+                showAlert('success', 'Firefly Transactions Generated!', 'The account transactions have been converted to Firefly III format. You can now import them using the import button.');
+                
+                // Reload the page to show updated data
+                setTimeout(function() {
+                    window.location.reload();
+                }, 2000);
+            },
+            error: function(xhr, status, error) {
+                console.error('Generate Firefly Transactions error:', xhr.responseText);
+                console.error('Status:', status);
+                console.error('Error:', error);
+                
+                var errorMessage = 'An error occurred while generating Firefly transactions.';
+                if (xhr.responseJSON && xhr.responseJSON.message) {
+                    errorMessage = xhr.responseJSON.message;
+                }
+                
+                showAlert('danger', 'Generation Failed', errorMessage);
+            },
+            complete: function() {
+                // Restore button state
+                button.html(originalText);
+                button.prop('disabled', false);
+            }
+        });
+    });
+    
+    // Also check if button exists for debugging
+    var button = $('#generate-firefly-transactions-btn');
+    if (button.length === 0) {
+        console.error('Generate Firefly Transactions button not found!');
+    } else {
+        console.log('Generate Firefly Transactions button found, account ID:', button.data('account-id'));
+    }
+}
+
+/**
+ * Initialize the consolidate and generate button functionality
+ */
+function initializeConsolidateAndGenerateButton() {
+    "use strict";
+    
+    console.log('Initializing consolidate and generate button...');
+    
+    // Use event delegation to handle clicks on the consolidate and generate button
+    $(document).on('click', '#consolidate-and-generate-btn', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('Consolidate and Generate button clicked!');
+        
+        var accountId = $(this).data('account-id');
+        var button = $(this);
+        var originalText = button.html();
+        
+        console.log('Account ID:', accountId);
+        console.log('CSRF Token:', $('meta[name="csrf-token"]').attr('content'));
+        
+        // Show loading state
+        button.html('<span class="fa fa-fw fa-spinner fa-spin"></span> Processing...');
+        button.prop('disabled', true);
+        
+        // Make API call to consolidate and generate transactions
+        $.ajax({
+            url: '/api/v1/pfinance/consolidate-and-generate-transactions-for-account',
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+            },
+            data: JSON.stringify({
+                account_id: accountId.toString()
+            }),
+            success: function(response) {
+                console.log('Consolidate and Generate success:', response);
+                // Show success message
+                showAlert('success', 'Transactions Processed Successfully!', 'The account transactions have been consolidated and converted to Firefly III format. You can now import them using the import button.');
+                
+                // Reload the page to show updated data
+                setTimeout(function() {
+                    window.location.reload();
+                }, 2000);
+            },
+            error: function(xhr, status, error) {
+                console.error('Consolidate and Generate error:', xhr.responseText);
+                console.error('Status:', status);
+                console.error('Error:', error);
+                
+                var errorMessage = 'An error occurred while processing transactions.';
+                if (xhr.responseJSON && xhr.responseJSON.message) {
+                    errorMessage = xhr.responseJSON.message;
+                }
+                
+                showAlert('danger', 'Processing Failed', errorMessage);
+            },
+            complete: function() {
+                // Restore button state
+                button.html(originalText);
+                button.prop('disabled', false);
+            }
+        });
+    });
+    
+    // Also check if button exists for debugging
+    var button = $('#consolidate-and-generate-btn');
+    if (button.length === 0) {
+        console.error('Consolidate and Generate button not found!');
+    } else {
+        console.log('Consolidate and Generate button found, account ID:', button.data('account-id'));
+    }
 }
