@@ -129,6 +129,11 @@
             </td>
             <td class="hidden-sm hidden-xs">
                 <div class="btn-group btn-group-xs pull-right">
+                    {% if objectType == 'asset' %}
+                    <button type="button" class="btn btn-warning btn-xs consolidate-and-generate-btn" data-account-id="{{ account.id }}" title="Consolidate & Generate Transactions">
+                        <span class="fa fa-refresh"></span>
+                    </button>
+                    {% endif %}
                     <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
                         {{ 'actions'|_ }} <span class="caret"></span></button>
                     <ul class="dropdown-menu dropdown-menu-right" role="menu">
