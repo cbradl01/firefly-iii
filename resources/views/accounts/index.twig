@@ -14,6 +14,11 @@
                             {{ subTitle }}
                         </h3>
                         <div class="box-tools pull-right">
+                            {% if objectType == 'asset' %}
+                            <button type="button" class="btn btn-warning btn-sm" id="sync-all-accounts-btn" title="Sync All Accounts">
+                                <span class="fa fa-refresh"></span> Sync All
+                            </button>
+                            {% endif %}
                             <div class="btn-group">
                                 <button class="btn btn-box-tool dropdown-toggle" data-toggle="dropdown"><span class="fa fa-ellipsis-v"></span></button>
                                 <ul class="dropdown-menu" role="menu">
@@ -94,5 +99,6 @@
         var objectType = '{{ objectType|escape }}';
     </script>
     <script src="v1/js/lib/jquery-ui.min.js?v={{ FF_VERSION }}" type="text/javascript" nonce="{{ JS_NONCE }}"></script>
+    <script src="v1/js/ff/shared/consolidate-and-generate.js?v={{ FF_VERSION }}" type="text/javascript" nonce="{{ JS_NONCE }}"></script>
     <script type="text/javascript" nonce="{{ JS_NONCE }}" src="v1/js/ff/accounts/index.js?v={{ FF_VERSION }}"></script>
 {% endblock %}
