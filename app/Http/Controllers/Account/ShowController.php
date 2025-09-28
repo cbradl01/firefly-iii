@@ -110,6 +110,24 @@ class ShowController extends Controller
         $pageSize         = (int) app('preferences')->get('listPageSize', 50)->data;
         $accountCurrency  = $this->repository->getAccountCurrency($account);
         $currency         = $accountCurrency ?? $this->defaultCurrency;
+        
+        // Handle sorting parameters
+        $sortField        = $request->get('sort', 'date');
+        $sortDirection    = $request->get('direction', 'desc');
+        
+        // Map frontend field names to database field names
+        $fieldMapping = [
+            'description' => 'description',
+            'amount' => 'amount',
+            'date' => 'date',
+            'source_account' => 'source_account_name',
+            'destination_account' => 'destination_account_name',
+            'category' => 'category_name',
+            'budget' => 'budget_name'
+        ];
+        
+        $dbSortField = $fieldMapping[$sortField] ?? 'date';
+        $sorting     = [$dbSortField => $sortDirection];
         $fStart           = $start->isoFormat($this->monthAndDayFormat);
         $fEnd             = $end->isoFormat($this->monthAndDayFormat);
         $subTitle         = (string) trans('firefly.journals_in_period_for_account', ['name' => $account->name, 'start' => $fStart, 'end' => $fEnd]);
@@ -137,6 +155,7 @@ class ShowController extends Controller
             ->setLimit($pageSize)
             ->setPage($page)->withAccountInformation()->withCategoryInformation()
             ->setRange($start, $end)
+            ->setSorting($sorting)
         ;
 
         // this search will not include transaction groups where this asset account (or liability)
@@ -145,7 +164,12 @@ class ShowController extends Controller
 
         $groups           = $collector->getPaginatedGroups();
 
-        $groups->setPath(route('accounts.show', [$account->id, $start->format('Y-m-d'), $end->format('Y-m-d')]));
+        // Build pagination URL with sorting parameters
+        $paginationUrl = route('accounts.show', [$account->id, $start->format('Y-m-d'), $end->format('Y-m-d')]);
+        if ($sortField !== 'date' || $sortDirection !== 'desc') {
+            $paginationUrl .= '?sort=' . $sortField . '&direction=' . $sortDirection;
+        }
+        $groups->setPath($paginationUrl);
         $showAll          = false;
         // correct
         $now              = today()->endOfDay();
@@ -173,7 +197,9 @@ class ShowController extends Controller
                 'end',
                 'chartUrl',
                 'location',
-                'balances'
+                'balances',
+                'sortField',
+                'sortDirection'
             )
         );
     }
@@ -202,6 +228,24 @@ class ShowController extends Controller
         $page            = (int) $request->get('page');
         $pageSize        = (int) app('preferences')->get('listPageSize', 50)->data;
         $currency        = $this->repository->getAccountCurrency($account) ?? $this->defaultCurrency;
+        
+        // Handle sorting parameters
+        $sortField       = $request->get('sort', 'date');
+        $sortDirection   = $request->get('direction', 'desc');
+        
+        // Map frontend field names to database field names
+        $fieldMapping = [
+            'description' => 'description',
+            'amount' => 'amount',
+            'date' => 'date',
+            'source_account' => 'source_account_name',
+            'destination_account' => 'destination_account_name',
+            'category' => 'category_name',
+            'budget' => 'budget_name'
+        ];
+        
+        $dbSortField = $fieldMapping[$sortField] ?? 'date';
+        $sorting     = [$dbSortField => $sortDirection];
         $subTitle        = (string) trans('firefly.all_journals_for_account', ['name' => $account->name]);
         $periods         = new Collection();
 
@@ -212,10 +256,10 @@ class ShowController extends Controller
             $collector       = app(GroupCollectorInterface::class);
             $anotherAccounts = Account::where('name', "Stock Market")->get();
             $accountsCollection = (new Collection([$account]))->merge($anotherAccounts);
-            $collector->setAccounts($accountsCollection)->setLimit($pageSize)->setPage($page)->withAccountInformation()->withCategoryInformation();
+            $collector->setAccounts($accountsCollection)->setLimit($pageSize)->setPage($page)->withAccountInformation()->withCategoryInformation()->setSorting($sorting);
         } else {
             $collector = app(GroupCollectorInterface::class);
-            $collector->setAccounts(new Collection([$account]))->setLimit($pageSize)->setPage($page)->withAccountInformation()->withCategoryInformation();
+            $collector->setAccounts(new Collection([$account]))->setLimit($pageSize)->setPage($page)->withAccountInformation()->withCategoryInformation()->setSorting($sorting);
         }
         
         // this search will not include transaction groups where this asset account (or liability)
@@ -223,7 +267,13 @@ class ShowController extends Controller
         $collector->setExpandGroupSearch(true);
 
         $groups          = $collector->getPaginatedGroups();
-        $groups->setPath(route('accounts.show.all', [$account->id]));
+        
+        // Build pagination URL with sorting parameters
+        $paginationUrl = route('accounts.show.all', [$account->id]);
+        if ($sortField !== 'date' || $sortDirection !== 'desc') {
+            $paginationUrl .= '?sort=' . $sortField . '&direction=' . $sortDirection;
+        }
+        $groups->setPath($paginationUrl);
         $chartUrl        = route('chart.account.period', [$account->id, $start->format('Y-m-d'), $end->format('Y-m-d')]);
         $showAll         = true;
         // correct
@@ -248,7 +298,9 @@ class ShowController extends Controller
                 'subTitle',
                 'start',
                 'end',
-                'balances'
+                'balances',
+                'sortField',
+                'sortDirection'
             )
         );
     }

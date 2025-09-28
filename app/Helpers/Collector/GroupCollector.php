@@ -513,17 +513,40 @@ class GroupCollector implements GroupCollectorInterface
         }
 
         // Apply sorting
-        foreach ($this->sorting as $field => $direction) {
-            if ($field === 'description') {
-                $this->query->orderByRaw('
-                    CASE 
-                        WHEN COUNT(transaction_journals.id) OVER (PARTITION BY transaction_groups.id) = 1 
-                        THEN transaction_journals.description 
-                        ELSE transaction_groups.title 
-                    END ' . $direction
-                );
-            } else {
-                $this->query->orderBy($field, $direction);
+        if (empty($this->sorting)) {
+            // Apply default sorting when no custom sorting is provided
+            $this->query->orderBy('transaction_journals.date', 'DESC')
+                ->orderBy('transaction_journals.order', 'ASC')
+                ->orderBy('transaction_journals.id', 'DESC')
+                ->orderBy('transaction_journals.description', 'DESC')
+                ->orderBy('source.amount', 'DESC');
+        } else {
+            // Apply custom sorting
+            foreach ($this->sorting as $field => $direction) {
+                if ($field === 'description') {
+                    $this->query->orderByRaw('
+                        CASE 
+                            WHEN COUNT(transaction_journals.id) OVER (PARTITION BY transaction_groups.id) = 1 
+                            THEN transaction_journals.description 
+                            ELSE transaction_groups.title 
+                        END ' . $direction
+                    );
+                } elseif ($field === 'amount') {
+                    // Sort by the amount of the transaction that matches the account being viewed
+                    // Each journal has two transactions (source/destination) - use the one matching our account
+                    $this->query->orderByRaw('
+                        CASE 
+                            WHEN source.account_id = ' . $this->accountIds[0] . ' THEN source.amount
+                            WHEN destination.account_id = ' . $this->accountIds[0] . ' THEN destination.amount
+                        END ' . $direction)
+                        ->orderBy('transaction_journals.date', 'DESC')
+                        ->orderBy('transaction_journals.id', 'DESC');
+                } else {
+                    // For other fields, add date as secondary sort for tie-breaking
+                    $this->query->orderBy($field, $direction)
+                        ->orderBy('transaction_journals.date', 'DESC')
+                        ->orderBy('transaction_journals.id', 'DESC');
+                }
             }
         }
 
@@ -1397,11 +1420,6 @@ class GroupCollector implements GroupCollectorInterface
             ->whereNull('source.deleted_at')
             ->whereNotNull('transaction_groups.id')
             ->whereNull('destination.deleted_at')
-            ->orderBy('transaction_journals.date', 'DESC')
-            ->orderBy('transaction_journals.order', 'ASC')
-            ->orderBy('transaction_journals.id', 'DESC')
-            ->orderBy('transaction_journals.description', 'DESC')
-            ->orderBy('source.amount', 'DESC')
         ;
     }
 
@@ -1454,11 +1472,6 @@ class GroupCollector implements GroupCollectorInterface
             ->whereNull('transaction_journals.deleted_at')
             ->whereNull('source.deleted_at')
             ->whereNull('destination.deleted_at')
-            ->orderBy('transaction_journals.date', 'DESC')
-            ->orderBy('transaction_journals.order', 'ASC')
-            ->orderBy('transaction_journals.id', 'DESC')
-            ->orderBy('transaction_journals.description', 'DESC')
-            ->orderBy('source.amount', 'DESC')
         ;
     }
 

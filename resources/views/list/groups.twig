@@ -1,3 +1,54 @@
+{% macro sortableHeader(field, label, currentSortField, currentSortDirection, showCategory = false, showBudget = false) %}
+    {% set newDirection = (currentSortField == field and currentSortDirection == 'asc') ? 'desc' : 'asc' %}
+    {% set cssClass = showCategory or showBudget ? 'hidden-xs sortable-header' : 'sortable-header' %}
+    <th class="{{ cssClass }}" data-sort="{{ field }}">
+        <a href="{{ app.request.getRequestUri()|split('?')|first }}?sort={{ field }}&direction={{ newDirection }}" class="sort-link">
+            {{ label }}
+            <!-- DEBUG: currentSortField={{ currentSortField }}, currentSortDirection={{ currentSortDirection }}, field={{ field }}, newDirection={{ newDirection }} -->
+            {% if currentSortField == field %}
+                {% if currentSortDirection == 'asc' %}
+                    <span class="fa fa-sort-asc"></span>
+                {% else %}
+                    <span class="fa fa-sort-desc"></span>
+                {% endif %}
+            {% else %}
+                <span class="fa fa-sort sort-inactive"></span>
+            {% endif %}
+        </a>
+    </th>
+{% endmacro %}
+
+<style>
+.sortable-header {
+    cursor: pointer;
+    user-select: none;
+}
+
+.sortable-header:hover {
+    background-color: #f5f5f5;
+}
+
+.sort-link {
+    text-decoration: none;
+    color: inherit;
+    display: block;
+    width: 100%;
+}
+
+.sort-link:hover {
+    text-decoration: none;
+    color: inherit;
+}
+
+.sort-inactive {
+    opacity: 0.3;
+}
+
+.sort-inactive:hover {
+    opacity: 0.7;
+}
+</style>
+
 <table class="table table-condensed table-hover table-responsive">
     <thead>
     <tr>
@@ -31,16 +82,16 @@
     </tr>
     <tr>
         <th class="hidden-xs">&nbsp;</th>
-        <th>{{ trans('list.description') }}</th>
-        <th>{{ trans('list.amount') }}</th>
-        <th>{{ trans('list.date') }}</th>
-        <th>{{ trans('list.source_account') }}</th>
-        <th>{{ trans('list.destination_account') }}</th>
+        {{ _self.sortableHeader('description', trans('list.description'), sortField, sortDirection) }}
+        {{ _self.sortableHeader('amount', trans('list.amount'), sortField, sortDirection) }}
+        {{ _self.sortableHeader('date', trans('list.date'), sortField, sortDirection) }}
+        {{ _self.sortableHeader('source_account', trans('list.source_account'), sortField, sortDirection) }}
+        {{ _self.sortableHeader('destination_account', trans('list.destination_account'), sortField, sortDirection) }}
         {% if showCategory %}
-            <th class="hidden-xs">{{ trans('list.category') }}</th>
+            {{ _self.sortableHeader('category', trans('list.category'), sortField, sortDirection, true) }}
         {% endif %}
         {% if showBudget %}
-            <th class="hidden-xs">{{ trans('list.budget') }}</th>
+            {{ _self.sortableHeader('budget', trans('list.budget'), sortField, sortDirection, false, true) }}
         {% endif %}
         <th class="hidden-xs">&nbsp;</th><!-- actions -->
         <th class="hidden-xs">&nbsp;</th><!-- checkbox -->
@@ -362,4 +413,5 @@
 <script type="text/javascript" nonce="{{ JS_NONCE }}">
     var cloneGroupUrl = '{{ route('transactions.clone') }}';
     var cloneAndEditUrl = '{{ route('transactions.clone') }}?redirect=edit';
+    
 </script>
