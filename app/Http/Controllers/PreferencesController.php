@@ -174,6 +174,9 @@ class PreferencesController extends Controller
             $ntfyPass          = '';
         }
 
+        // get date format preference
+        $dateFormat = app('preferences')->get('date_format', 'month_day_year')->data;
+
         return view('preferences.index', compact(
             'language',
             'pushoverAppToken',
@@ -200,7 +203,8 @@ class PreferencesController extends Controller
             'viewRange',
             'customFiscalYear',
             'listPageSize',
-            'fiscalYearStart'
+            'fiscalYearStart',
+            'dateFormat'
         ));
     }
 
@@ -283,6 +287,12 @@ class PreferencesController extends Controller
         $listPageSize      = (int) $request->get('listPageSize');
         if ($listPageSize > 0 && $listPageSize < 1337) {
             Preferences::set('listPageSize', $listPageSize);
+        }
+
+        // save date format:
+        $dateFormat = $request->get('date_format');
+        if (in_array($dateFormat, ['month_day_year', 'month_day_short', 'iso_date'], true)) {
+            Preferences::set('date_format', $dateFormat);
         }
 
         // language:

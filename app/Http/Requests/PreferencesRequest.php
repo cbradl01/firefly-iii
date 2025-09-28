@@ -42,6 +42,7 @@ class PreferencesRequest extends FormRequest
             'ntfy_server'       => ['nullable', 'url', 'min:1'],
             'ntfy_user'         => ['required_with:ntfy_pass,ntfy_auth', 'nullable', 'string', 'min:1'],
             'ntfy_pass'         => ['required_with:ntfy_user,ntfy_auth', 'nullable', 'string', 'min:1'],
+            'date_format'       => ['nullable', 'string', 'in:month_day_year,month_day_short,iso_date'],
         ];
         foreach (config('notifications.notifications.user') as $key => $info) {
             $rules[sprintf('notification_%s', $key)] = 'in:0,1';

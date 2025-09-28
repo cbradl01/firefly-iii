@@ -307,6 +307,28 @@
                                             </div>
                                         {% endfor %}
                                     </div>
+                                    <div class="preferences-box">
+                                        <h3>{{ 'date_format_preference'|_ }}</h3>
+                                        <p class="text-info">{{ 'date_format_preference_help'|_ }}</p>
+                                        <div class="radio">
+                                            <label>
+                                                <input type="radio" name="date_format" value="month_day_year" {% if dateFormat == 'month_day_year' %} checked {% endif %}>
+                                                {{ 'date_format_month_day_year'|_ }} ({{ 'date_format_month_day_year_example'|_ }})
+                                            </label>
+                                        </div>
+                                        <div class="radio">
+                                            <label>
+                                                <input type="radio" name="date_format" value="month_day_short" {% if dateFormat == 'month_day_short' %} checked {% endif %}>
+                                                {{ 'date_format_month_day_short'|_ }} ({{ 'date_format_month_day_short_example'|_ }})
+                                            </label>
+                                        </div>
+                                        <div class="radio">
+                                            <label>
+                                                <input type="radio" name="date_format" value="iso_date" {% if dateFormat == 'iso_date' %} checked {% endif %}>
+                                                {{ 'date_format_iso_date'|_ }} ({{ 'date_format_iso_date_example'|_ }})
+                                            </label>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>

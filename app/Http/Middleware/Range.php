@@ -123,8 +123,11 @@ class Range
         // also format for moment JS:
         $madMomentJS       = (string) trans('config.month_and_day_moment_js', [], $locale);
 
+        // get user's preferred date format
+        $userDateFormat = app('steam')->getDateFormatString();
+
         app('view')->share('madMomentJS', $madMomentJS);
-        app('view')->share('monthAndDayFormat', $monthAndDayFormat);
+        app('view')->share('monthAndDayFormat', $userDateFormat);
         app('view')->share('dateTimeFormat', $dateTimeFormat);
         app('view')->share('defaultCurrency', $defaultCurrency);
     }

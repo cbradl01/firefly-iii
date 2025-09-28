@@ -962,6 +962,38 @@ class Steam
         return str_replace('-', '_', $preference);
     }
 
+    /**
+     * Get user's date format preference.
+     */
+    public function getDateFormat(): string
+    {
+        $preference = app('preferences')->get('date_format', 'month_day_year')->data;
+        if (!is_string($preference)) {
+            return 'month_day_year';
+        }
+
+        return $preference;
+    }
+
+    /**
+     * Get the date format string based on user preference.
+     */
+    public function getDateFormatString(): string
+    {
+        $format = $this->getDateFormat();
+        $locale = $this->getLocale();
+
+        switch ($format) {
+            case 'month_day_short':
+                return (string) trans('config.month_and_day_short_js', [], $locale);
+            case 'iso_date':
+                return 'YYYY-MM-DD';
+            case 'month_day_year':
+            default:
+                return (string) trans('config.month_and_day_js', [], $locale);
+        }
+    }
+
     public function getLocaleArray(string $locale): array
     {
         return [

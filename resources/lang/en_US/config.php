@@ -34,6 +34,7 @@ return [
     'month_and_day_moment_js'  => 'MMM D, YYYY',
     'month_and_day_fns'        => 'MMMM d, y',
     'month_and_day_js'         => 'MMMM Do, YYYY',
+    'month_and_day_short_js'   => 'MMM D, YYYY',
 
     // 'month_and_date_day'      => '%A %B %e, %Y',
     'month_and_date_day_js'    => 'dddd MMMM Do, YYYY',
