@@ -513,6 +513,7 @@ Route::group(
         Route::post('generate-firefly-transactions', ['uses' => 'PfinanceController@generateFireflyTransactions', 'as' => 'generate-firefly-transactions']);
         Route::post('generate-firefly-transactions-for-account', ['uses' => 'PfinanceController@generateFireflyTransactionsForAccount', 'as' => 'generate-firefly-transactions-for-account']);
         Route::post('consolidate-and-generate-transactions-for-account', ['uses' => 'PfinanceController@consolidateAndGenerateTransactionsForAccount', 'as' => 'consolidate-and-generate-transactions-for-account']);
+        Route::post('match-transactions', ['uses' => 'PfinanceController@matchTransactions', 'as' => 'match-transactions']);
         Route::post('import-firefly-transactions', ['uses' => 'PfinanceController@importFireflyTransactions', 'as' => 'import-firefly-transactions']);
         Route::post('push-to-google', ['uses' => 'PfinanceController@pushToGoogle', 'as' => 'push-to-google']);
         Route::post('get-google-transactions', ['uses' => 'PfinanceController@getGoogleTransactions', 'as' => 'get-google-transactions']);

@@ -354,6 +354,39 @@ class PfinanceController extends Controller
     }
 
     /**
+     * Match unknown counterparties in transactions.
+     */
+    public function matchTransactions(Request $request): JsonResponse
+    {
+        try {
+            $requestData = $request->all();
+            
+            $response = Http::post($this->pfinanceServiceUrl . '/api/v1/accounts/match-transactions', $requestData);
+            
+            if ($response->successful()) {
+                return response()->json($response->json());
+            }
+            
+            Log::error('PFinance service error', [
+                'status' => $response->status(),
+                'body' => $response->body()
+            ]);
+            
+            return response()->json([
+                'message' => 'Error matching transactions',
+                'category' => 'error'
+            ], 500);
+            
+        } catch (\Exception $e) {
+            Log::error('PFinance service exception', ['error' => $e->getMessage()]);
+            return response()->json([
+                'message' => 'Service unavailable',
+                'category' => 'error'
+            ], 503);
+        }
+    }
+
+    /**
      * Get PFinance service status.
      */
     public function getStatus(): JsonResponse

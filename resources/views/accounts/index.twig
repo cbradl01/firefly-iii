@@ -18,6 +18,9 @@
                             <button type="button" class="btn btn-warning btn-sm" id="sync-all-accounts-btn" title="Sync All Accounts">
                                 <span class="fa fa-refresh"></span> Sync All
                             </button>
+                            <button type="button" class="btn btn-outline-primary btn-sm" id="match-unknown-btn" title="Match UNKNOWN counterparties" style="margin-left:6px;">
+                                <span class="fa fa-link"></span> Match UNKNOWN
+                            </button>
                             {% endif %}
                             <div class="btn-group">
                                 <button class="btn btn-box-tool dropdown-toggle" data-toggle="dropdown"><span class="fa fa-ellipsis-v"></span></button>
@@ -106,4 +109,40 @@
     <script src="v1/js/lib/jquery-ui.min.js?v={{ FF_VERSION }}" type="text/javascript" nonce="{{ JS_NONCE }}"></script>
     <script src="v1/js/ff/shared/consolidate-and-generate.js?v={{ FF_VERSION }}" type="text/javascript" nonce="{{ JS_NONCE }}"></script>
     <script type="text/javascript" nonce="{{ JS_NONCE }}" src="v1/js/ff/accounts/index.js?v={{ FF_VERSION }}"></script>
+    <script type="text/javascript" nonce="{{ JS_NONCE }}">
+        (function() {
+            var btn = document.getElementById('match-unknown-btn');
+            if (!btn) { return; }
+            btn.addEventListener('click', function() {
+                btn.disabled = true;
+                btn.innerText = 'Matching...';
+                $.ajax({
+                    url: '/api/v1/pfinance/match-transactions',
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+                    },
+                    data: JSON.stringify({
+                        window_days: 0,
+                        dry_run: false,
+                        exclude_account_ids: [2, 3]
+                    }),
+                    success: function(data) {
+                        alert('Matched: ' + (data.result && data.result.matched) + '\nUpdated: ' + (data.result && data.result.updated));
+                        window.location.reload();
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Match request failed:', xhr.responseText);
+                        alert('Match request failed: ' + (xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : error));
+                    },
+                    complete: function() {
+                        btn.disabled = false;
+                        btn.innerText = 'Match UNKNOWN';
+                    }
+                });
+            });
+        })();
+    </script>
 {% endblock %}
