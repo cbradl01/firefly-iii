@@ -213,7 +213,20 @@
                     {% if group.count == 1 %}
                     <a href="{{ route('transactions.show', [group.id]) }}" title="{{ transaction.description }}">
                         {% endif %}
-                        {{ transaction.description }}
+                        {% if transaction.transaction_type_type == 'Transfer' and (transaction.source_description or transaction.destination_description) %}
+                            {% if transaction.source_account_id == account.id %}
+                                {# This transaction is from the current account - show source description #}
+                                {{ transaction.source_description|default(transaction.description) }}
+                            {% elseif transaction.destination_account_id == account.id %}
+                                {# This transaction is to the current account - show destination description #}
+                                {{ transaction.destination_description|default(transaction.description) }}
+                            {% else %}
+                                {# Fallback to journal description #}
+                                {{ transaction.description }}
+                            {% endif %}
+                        {% else %}
+                            {{ transaction.description }}
+                        {% endif %}
                         {% if group.count == 1 %}
                     </a>
                     {% endif %}

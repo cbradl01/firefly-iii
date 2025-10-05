@@ -65,7 +65,17 @@
                             <td>{{ trans('list.description') }}</td>
                             <td>
                                 {% if splits == 1 %}
-                                    {{ first.description }}
+                                    {% if groupArray.transactions[0].type == 'transfer' and (groupArray.transactions[0].source_description or groupArray.transactions[0].destination_description) %}
+                                        {% if groupArray.transactions[0].source_description and groupArray.transactions[0].destination_description %}
+                                            {{ groupArray.transactions[0].source_description }} → {{ groupArray.transactions[0].destination_description }}
+                                        {% elseif groupArray.transactions[0].source_description %}
+                                            {{ groupArray.transactions[0].source_description }}
+                                        {% elseif groupArray.transactions[0].destination_description %}
+                                            {{ groupArray.transactions[0].destination_description }}
+                                        {% endif %}
+                                    {% else %}
+                                        {{ first.description }}
+                                    {% endif %}
                                 {% else %}
                                     {{ transactionGroup.title }}
                                 {% endif %}
@@ -195,14 +205,25 @@
     {% endif %}
     {% if (splits > 2) %}
         {% set boxSize = 4 %}
-    {% endif %}
-    <div class="row">
+      {% endif %}
+      <div class="row">
         {% for index,journal in groupArray.transactions %}
             <div class="col-lg-{{ boxSize }}">
                 <div class="box">
                     <div class="box-header with-border">
                         <h3 class="box-title">
-                            {{ journal.description }}
+                            {% if groupArray.transactions[index].type == 'transfer' and (groupArray.transactions[index].source_description or groupArray.transactions[index].destination_description) %}
+                                {% if groupArray.transactions[index].source_description and groupArray.transactions[index].destination_description %}
+                                    {# Show both descriptions for transfers #}
+                                    {{ groupArray.transactions[index].source_description }} → {{ groupArray.transactions[index].destination_description }}
+                                {% elseif groupArray.transactions[index].source_description %}
+                                    {{ groupArray.transactions[index].source_description }}
+                                {% elseif groupArray.transactions[index].destination_description %}
+                                    {{ groupArray.transactions[index].destination_description }}
+                                {% endif %}
+                            {% else %}
+                                {{ journal.description }}
+                            {% endif %}
                             {% if journal.reconciled %}
                                 <span class="fa fa-check"></span>
                             {% endif %}
