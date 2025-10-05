@@ -193,6 +193,10 @@ Route::group(
         // import from csv
         Route::get('import/csv/{objectType}', ['uses' => 'Account\ImportController@importCsv', 'as' => 'import.csv'])->where('objectType', 'revenue|asset|expense|liabilities');
         Route::post('import/csv/{objectType}', ['uses' => 'Account\ImportController@processCsv', 'as' => 'import.csv.process'])->where('objectType', 'revenue|asset|expense|liabilities');
+        
+        // import from json
+        Route::get('import/json/{objectType}', ['uses' => 'Account\ImportController@importJson', 'as' => 'import.json'])->where('objectType', 'revenue|asset|expense|liabilities');
+        Route::post('import/json/{objectType}', ['uses' => 'Account\ImportController@importFromJson', 'as' => 'import.json.process'])->where('objectType', 'revenue|asset|expense|liabilities');
 
         // reconcile routes:
         Route::get('reconcile/{account}/index/{start_date?}/{end_date?}', ['uses' => 'Account\ReconcileController@reconcile', 'as' => 'reconcile'])

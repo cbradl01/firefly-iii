@@ -239,7 +239,7 @@ trait AccountServiceTrait
         // submit to factory:
         $submission = [
             'group_title'  => null,
-            'user'         => $account->user_id,
+            'user'         => $account->user,
             'transactions' => [
                 [
                     'type'             => 'Opening balance',
@@ -464,7 +464,8 @@ trait AccountServiceTrait
         // submit to factory:
         $submission = [
             'group_title'  => null,
-            'user'         => $account->user_id,
+            'user'         => $account->user,
+            'user_group'   => $account->user->userGroup,
             'transactions' => [
                 [
                     'type'             => 'Liability credit',

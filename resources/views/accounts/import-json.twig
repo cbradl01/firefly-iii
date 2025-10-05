@@ -1,0 +1,150 @@
+{% extends './layout/default' %}
+
+{% block breadcrumbs %}
+    <ol class="breadcrumb">
+        <li><a href="{{ route('index') }}"><span class="fa fa-home"></span></a></li>
+        <li><a href="{{ route('accounts.index', objectType) }}">{{ objectType|title }} Accounts</a></li>
+        <li class="active">Import Accounts from JSON</li>
+    </ol>
+{% endblock %}
+
+{% block content %}
+    <div class="row">
+        <div class="col-lg-12 col-md-12 col-sm-12">
+            <div class="box">
+                <div class="box-header with-border">
+                    <h3 class="box-title">
+                        {{ subTitle }}
+                    </h3>
+                </div>
+                <div class="box-body">
+                    <div class="row">
+                        <div class="col-lg-8 col-md-8 col-sm-12">
+                            <p>
+                                Upload a JSON file (.json) to import multiple accounts at once. The JSON file should contain an array of account objects with explicit account definitions.
+                            </p>
+                            
+                            <div class="alert alert-info">
+                                <h4>JSON Structure</h4>
+                                <p>The JSON file should be an array of account objects. Each account object can contain:</p>
+                                <ul>
+                                    <li><strong>name</strong> - Account name (required)</li>
+                                    <li><strong>type</strong> - Account type: "asset" or "liability" (required)</li>
+                                    <li><strong>active</strong> - Active status (true/false, defaults to true)</li>
+                                    <li><strong>include_net_worth</strong> - Include in net worth (true/false, defaults to true)</li>
+                                    <li><strong>account_role</strong> - For asset accounts: "defaultAsset", "savingAsset", "sharedAsset", "brokerageAsset"</li>
+                                    <li><strong>liability_type</strong> - For liability accounts: "debt", "loan", "mortgage", "creditcard"</li>
+                                    <li><strong>liability_direction</strong> - For liability accounts: "debit" (I owe) or "credit" (I am owed)</li>
+                                    <li><strong>interest</strong> - Interest rate (for loans/debts)</li>
+                                    <li><strong>interest_period</strong> - Interest period: "monthly", "yearly", etc.</li>
+                                    <li><strong>opening_balance</strong> - Opening balance amount</li>
+                                    <li><strong>opening_balance_date</strong> - Opening balance date (YYYY-MM-DD)</li>
+                                    <li><strong>account_number</strong> - Account number</li>
+                                    <li><strong>notes</strong> - Account notes</li>
+                                </ul>
+                            </div>
+
+                            <div class="alert alert-success">
+                                <h4>Example JSON</h4>
+                                <pre><code>[
+  {
+    "name": "Promissory Note - Borrower Name",
+    "type": "liability",
+    "liability_type": "debt",
+    "liability_direction": "credit",
+    "interest": "10",
+    "interest_period": "yearly",
+    "opening_balance": "200000",
+    "opening_balance_date": "2023-06-01",
+    "active": true,
+    "include_net_worth": true
+  },
+  {
+    "name": "Checking Account",
+    "type": "asset",
+    "account_role": "defaultAsset",
+    "account_number": "123456",
+    "opening_balance": "5000",
+    "opening_balance_date": "2023-01-01",
+    "active": true,
+    "include_net_worth": true
+  }
+]</code></pre>
+                            </div>
+
+                            <form method="post" action="{{ route('accounts.import.json.process', objectType) }}" enctype="multipart/form-data">
+                                {{ csrf_field() }}
+                                
+                                <div class="form-group">
+                                    <label for="json_file">JSON file</label>
+                                    <input type="file" class="form-control" id="json_file" name="json_file" accept=".json" required>
+                                    <small class="form-text text-muted">
+                                        Select a JSON file (.json) with account data. Maximum file size: 10MB.
+                                    </small>
+                                </div>
+
+                                <div class="form-group">
+                                    <button type="submit" class="btn btn-success">
+                                        <span class="fa fa-upload fa-fw"></span> Import accounts
+                                    </button>
+                                    <a href="{{ route('accounts.index', objectType) }}" class="btn btn-default">
+                                        <span class="fa fa-arrow-left fa-fw"></span> Back to accounts
+                                    </a>
+                                </div>
+                            </form>
+                        </div>
+                        
+                        <div class="col-lg-4 col-md-4 col-sm-12">
+                            <div class="box">
+                                <div class="box-header with-border">
+                                    <h3 class="box-title">Import tips</h3>
+                                </div>
+                                <div class="box-body">
+                                    <ul>
+                                        <li>JSON format provides explicit control over account properties</li>
+                                        <li>Account names must be unique - duplicates will be skipped</li>
+                                        <li>Opening balance dates should be in YYYY-MM-DD format</li>
+                                        <li>Liability accounts require liability_type and liability_direction</li>
+                                        <li>Asset accounts require account_role</li>
+                                        <li>You can edit the JSON file before importing to make adjustments</li>
+                                    </ul>
+                                </div>
+                            </div>
+                            
+                            <div class="box">
+                                <div class="box-header with-border">
+                                    <h3 class="box-title">Benefits of JSON Import</h3>
+                                </div>
+                                <div class="box-body">
+                                    <ul>
+                                        <li><strong>Explicit definitions</strong> - No guessing about field mappings</li>
+                                        <li><strong>Easy to edit</strong> - Manually adjust accounts before importing</li>
+                                        <li><strong>Version control friendly</strong> - Track changes easily</li>
+                                        <li><strong>Debugging</strong> - See exactly what will be created</li>
+                                        <li><strong>Reusable</strong> - Same JSON for testing/staging/production</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block scripts %}
+    <script type="text/javascript" nonce="{{ JS_NONCE }}">
+        // Add any JavaScript for file validation or preview here
+        document.getElementById('json_file').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file && file.type === 'application/json') {
+                // File is valid JSON
+                console.log('JSON file selected:', file.name);
+            } else if (file) {
+                alert('Please select a valid JSON file (.json)');
+                e.target.value = '';
+            }
+        });
+    </script>
+{% endblock %}

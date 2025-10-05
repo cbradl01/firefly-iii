@@ -47,6 +47,14 @@
 .sort-inactive:hover {
     opacity: 0.7;
 }
+
+/* Limit the width of the Description column to prevent it from crowding other columns */
+.table td:nth-child(2) {
+    max-width: 200px;
+    word-wrap: break-word;
+    word-break: break-word;
+    overflow-wrap: break-word;
+}
 </style>
 
 <table class="table table-condensed table-hover table-responsive">

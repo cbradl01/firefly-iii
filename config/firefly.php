@@ -100,7 +100,9 @@ return [
     'disable_frame_header'         => env('DISABLE_FRAME_HEADER', false),
     
     // PFinance microservice configuration
-    'pfinance_service_url'         => env('PFINANCE_SERVICE_URL', 'http://192.168.4.109:5001'),
+    'pfinance_service_url'         => env('PFINANCE_SERVICE_URL', 'http://192.168.4.47:5001'),
+    // 'pfinance_service_url'         => env('PFINANCE_SERVICE_URL', 'http://host.docker.internal:5001'),
+    // 'pfinance_service_url'         => env('PFINANCE_SERVICE_URL', 'http://localhost:5001'),
     'disable_csp_header'           => env('DISABLE_CSP_HEADER', false),
     'allow_webhooks'               => env('ALLOW_WEBHOOKS', false),
 

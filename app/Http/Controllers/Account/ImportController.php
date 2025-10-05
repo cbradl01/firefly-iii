@@ -26,12 +26,14 @@ namespace FireflyIII\Http\Controllers\Account;
 
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Http\Controllers\Controller;
+use FireflyIII\Models\Account;
 use FireflyIII\Repositories\Account\AccountRepositoryInterface;
 use FireflyIII\Support\Http\Controllers\BasicDataSupport;
 use Illuminate\Contracts\View\Factory;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Redirector;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
 // use PhpOffice\PhpSpreadsheet\IOFactory;
@@ -128,6 +130,13 @@ class ImportController extends Controller
             $notesIndex = array_search('notes', $headers);
             $activeIndex = array_search('active', $headers);
             
+            // Find liability-specific columns
+            $accountTypeIdIndex = array_search('account_type_id', $headers);
+            $liabilityTypeIndex = array_search('liability_type', $headers);
+            $liabilityDirectionIndex = array_search('liability_direction', $headers);
+            $interestIndex = array_search('interest', $headers);
+            $interestPeriodIndex = array_search('interest_period', $headers);
+            
             Log::info('CSV Import - Column indices', [
                 'name_index' => $nameIndex,
                 'account_name_index' => $accountNameIndex,
@@ -183,7 +192,6 @@ class ImportController extends Controller
                     $accountData = [
                         'name' => $accountName,
                         'active' => true,
-                        'account_type_name' => $objectType,
                         'currency_id' => $this->defaultCurrency->id,
                         'virtual_balance' => '',
                         'iban' => ($ibanIndex !== false && isset($row[$ibanIndex])) ? trim($row[$ibanIndex]) : '',
@@ -200,6 +208,48 @@ class ImportController extends Controller
                         'include_net_worth' => '1',
                         'liability_direction' => '',
                     ];
+
+                    // Handle liability-specific data from CSV
+                    if ($objectType === 'liabilities') {
+                        // Read liability_type from CSV
+                        if ($liabilityTypeIndex !== false && isset($row[$liabilityTypeIndex])) {
+                            $liabilityType = trim($row[$liabilityTypeIndex]);
+                            if (!empty($liabilityType)) {
+                                $accountData['type'] = 'liability';
+                                $accountData['liability_type'] = $liabilityType;
+                            }
+                        }
+                        
+                        // Read liability_direction from CSV
+                        if ($liabilityDirectionIndex !== false && isset($row[$liabilityDirectionIndex])) {
+                            $liabilityDirection = trim($row[$liabilityDirectionIndex]);
+                            if (!empty($liabilityDirection)) {
+                                $accountData['liability_direction'] = $liabilityDirection;
+                            }
+                        }
+                        
+                        // Read interest from CSV
+                        if ($interestIndex !== false && isset($row[$interestIndex])) {
+                            $interest = trim($row[$interestIndex]);
+                            if (!empty($interest) && is_numeric($interest)) {
+                                $accountData['interest'] = $interest;
+                            }
+                        }
+                        
+                        // Read interest_period from CSV
+                        if ($interestPeriodIndex !== false && isset($row[$interestPeriodIndex])) {
+                            $interestPeriod = trim($row[$interestPeriodIndex]);
+                            if (!empty($interestPeriod)) {
+                                $accountData['interest_period'] = $interestPeriod;
+                            }
+                        }
+                        
+                        // Remove account_role for liability accounts
+                        unset($accountData['account_role']);
+                    } else {
+                        // For asset accounts, set the type explicitly
+                        $accountData['type'] = 'asset';
+                    }
 
                     // Set opening balance if provided
                     if ($openingBalanceIndex !== false && isset($row[$openingBalanceIndex]) && !empty(trim($row[$openingBalanceIndex]))) {
@@ -227,9 +277,9 @@ class ImportController extends Controller
                         $accountData['active'] = in_array($activeValue, ['1', 'true', 'yes', 'active']);
                     }
 
-                    // Create the account
+                    // Create the account using the API endpoint
                     try {
-                        $account = $this->repository->store($accountData);
+                        $account = $this->createAccountViaAPI($accountData);
                         $createdCount++;
 
                         Log::channel('audit')->info('Imported account from CSV.', [
@@ -290,4 +340,177 @@ class ImportController extends Controller
             return redirect()->back()->withErrors(['csv_file' => 'Error processing CSV file: ' . $e->getMessage()]);
         }
     }
+
+
+
+
+    /**
+     * Show the JSON import form
+     */
+    public function importJson(string $objectType)
+    {
+        $subTitle = 'Import ' . ucfirst($objectType) . ' accounts from JSON';
+        
+        return view('accounts.import-json', compact('objectType', 'subTitle'));
+    }
+
+    /**
+     * Import accounts from JSON file (alternative to CSV)
+     * This method provides explicit account definitions
+     */
+    public function importFromJson(Request $request, string $objectType)
+    {
+        $request->validate([
+            'json_file' => 'required|file|mimes:json|max:10240', // 10MB max
+        ]);
+
+        $file = $request->file('json_file');
+        
+        try {
+            $jsonContent = file_get_contents($file->getPathname());
+            $accounts = json_decode($jsonContent, true);
+            
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                return redirect()->back()->withErrors(['json_file' => 'Invalid JSON file: ' . json_last_error_msg()]);
+            }
+            
+            if (!is_array($accounts)) {
+                return redirect()->back()->withErrors(['json_file' => 'JSON file must contain an array of accounts']);
+            }
+            
+            $createdCount = 0;
+            $skippedCount = 0;
+            $skippedReasons = [];
+            
+            foreach ($accounts as $index => $accountData) {
+                try {
+                    // Handle source account for liability credit accounts
+                    $sourceAccountId = null;
+                    if (isset($accountData['source_account_id']) && !empty($accountData['source_account_id'])) {
+                        $sourceAccountId = $accountData['source_account_id'];
+                        unset($accountData['source_account_id']); // Remove from account data
+                    }
+                    
+                    // Create account via API endpoint (same as POST /v1/accounts)
+                    Log::info('Creating account from JSON via API', ['account_data' => $accountData]);
+                    
+                    // Make an internal HTTP request to the API endpoint
+                    $response = \Http::withHeaders([
+                        'Authorization' => 'Bearer ' . Auth::user()->createToken('import')->accessToken,
+                        'Accept' => 'application/json',
+                        'Content-Type' => 'application/json',
+                    ])->post('http://localhost:8080/api/v1/accounts', $accountData);
+                    
+                    if ($response->successful()) {
+                        $responseData = $response->json();
+                        $account = \FireflyIII\Models\Account::find($responseData['data']['id']);
+                        
+                        // Update the opening balance transaction to use the real source account
+                        if ($sourceAccountId && $account) {
+                            $this->updateOpeningBalanceSourceAccount($account, $sourceAccountId);
+                        }
+                    } else {
+                        Log::error('API request failed', [
+                            'status' => $response->status(),
+                            'body' => $response->body(),
+                        ]);
+                        throw new \Exception('API request failed: ' . $response->body());
+                    }
+                    
+                    $createdCount++;
+                    
+                    Log::channel('audit')->info('Imported account from JSON.', [
+                        'account_id' => $account->id,
+                        'account_name' => $account->name,
+                        'account_index' => $index + 1,
+                    ]);
+                    
+                } catch (\Exception $e) {
+                    $skippedCount++;
+                    $skippedReasons[] = "Account " . ($index + 1) . ": " . $e->getMessage();
+                    Log::error('Error importing account from JSON', [
+                        'account_index' => $index + 1,
+                        'account_data' => $accountData,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+            
+            $message = "Import completed successfully! Created {$createdCount} accounts.";
+            if ($skippedCount > 0) {
+                $message .= " Skipped {$skippedCount} accounts.";
+            }
+            
+            if (!empty($skippedReasons)) {
+                $message .= "\n\nSkipped accounts: " . implode('; ', array_slice($skippedReasons, 0, 5));
+                if (count($skippedReasons) > 5) {
+                    $message .= ' (and ' . (count($skippedReasons) - 5) . ' more)';
+                }
+            }
+            
+            return redirect()->route('accounts.index', [$objectType])
+                ->with('success', $message);
+                
+        } catch (\Exception $e) {
+            Log::error('Error processing JSON file', [
+                'error' => $e->getMessage(),
+                'file' => $file->getClientOriginalName(),
+            ]);
+            
+            return redirect()->back()->withErrors(['json_file' => 'Error processing JSON file: ' . $e->getMessage()]);
+        }
+    }
+    
+    /**
+     * Update the opening balance transaction to use a real source account
+     */
+    private function updateOpeningBalanceSourceAccount(Account $account, int $sourceAccountId): void
+    {
+        try {
+            // Get the opening balance transaction group
+            $openingBalance = $this->repository->getOpeningBalance($account);
+            if (!$openingBalance) {
+                Log::warning('No opening balance found for account', ['account_id' => $account->id]);
+                return;
+            }
+            
+            // Find the source transaction (negative amount)
+            $sourceTransaction = $openingBalance->transactions()->where('amount', '<', 0)->first();
+            if (!$sourceTransaction) {
+                Log::warning('No source transaction found in opening balance', ['account_id' => $account->id]);
+                return;
+            }
+            
+            // Verify the source account exists and belongs to the user
+            $sourceAccount = \FireflyIII\Models\Account::where('id', $sourceAccountId)
+                ->where('user_id', Auth::id())
+                ->first();
+                
+            if (!$sourceAccount) {
+                Log::warning('Source account not found or does not belong to user', [
+                    'source_account_id' => $sourceAccountId,
+                    'user_id' => Auth::id()
+                ]);
+                return;
+            }
+            
+            // Update the source transaction to use the real account
+            $sourceTransaction->account_id = $sourceAccountId;
+            $sourceTransaction->save();
+            
+            Log::info('Updated opening balance source account', [
+                'account_id' => $account->id,
+                'source_account_id' => $sourceAccountId,
+                'source_account_name' => $sourceAccount->name
+            ]);
+            
+        } catch (\Exception $e) {
+            Log::error('Failed to update opening balance source account', [
+                'account_id' => $account->id,
+                'source_account_id' => $sourceAccountId,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
 }
