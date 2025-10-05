@@ -151,6 +151,8 @@ class TransactionGroupTransformer extends AbstractTransformer
             'foreign_amount'                  => $foreignAmount,
 
             'description'                     => $transaction['description'],
+            'source_description'              => $transaction['source_description'] ?? null,
+            'destination_description'         => $transaction['destination_description'] ?? null,
 
             'source_id'                       => (string) $transaction['source_account_id'],
             'source_name'                     => $transaction['source_account_name'],
@@ -339,6 +341,8 @@ class TransactionGroupTransformer extends AbstractTransformer
             'foreign_amount'                  => $foreignAmount,
 
             'description'                     => $journal->description,
+            'source_description'              => $source->description,
+            'destination_description'         => $destination->description,
 
             'source_id'                       => $source->account_id,
             'source_name'                     => $source->account->name,

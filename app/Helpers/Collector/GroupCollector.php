@@ -130,6 +130,7 @@ class GroupCollector implements GroupCollectorInterface
             'source.id as source_transaction_id',
             'source.account_id as source_account_id',
             'source.reconciled',
+            'source.description as source_description',
 
             // currency info:
             'source.amount as amount',
@@ -151,6 +152,7 @@ class GroupCollector implements GroupCollectorInterface
 
             // destination account info (always present)
             'destination.account_id as destination_account_id',
+            'destination.description as destination_description',
         ];
     }
 
