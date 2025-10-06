@@ -11,15 +11,7 @@
             <div class="box">
                 <div class="box-header with-border">
                     <h3 class="box-title">
-                        {% if balances.balance %}
-                        {{ trans('firefly.chart_account_in_period', {
-                            balance: formatAmountBySymbol(balances.balance, currency.symbol, currency.decimal_places, true),
-                            name: account.name|escape, start: start.isoFormat(monthAndDayFormat), end: end.isoFormat(monthAndDayFormat) })|raw }}
-                        {% elseif balances.native_balance %}
-                            {{ trans('firefly.chart_account_in_period', {
-                                balance: formatAmountBySymbol(balances.native_balance, defaultCurrency.symbol, defaultCurrency.decimal_places, true),
-                                name: account.name|escape, start: start.isoFormat(monthAndDayFormat), end: end.isoFormat(monthAndDayFormat) })|raw }}
-                        {% endif %}
+                        <span class="fa fa-line-chart"></span> Account Overview
                     </h3>
                     <div class="box-tools pull-right">
                         <div class="btn-group">
@@ -49,8 +41,88 @@
                     </div>
                 </div>
                 <div class="box-body">
-                    <div>
-                        <canvas id="overview-chart" style="width:100%;height:400px;" height="400" width="100%"></canvas>
+                    <!-- Account Summary Table -->
+                    <div class="row">
+                        <div class="col-md-6">
+                            <table class="table table-hover">
+                                <tbody>
+                                    <tr>
+                                        <td style="width:40%;">{{ trans('list.name') }}</td>
+                                        <td>{{ account.name|escape }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td>{{ trans('list.account_type') }}</td>
+                                        <td>{{ account.accountType.type|_ }}</td>
+                                    </tr>
+                                    {% if account.iban %}
+                                    <tr>
+                                        <td>{{ trans('list.iban') }}</td>
+                                        <td>{{ account.iban }}</td>
+                                    </tr>
+                                    {% endif %}
+                                    {% if account.account_number %}
+                                    <tr>
+                                        <td>{{ trans('list.account_number') }}</td>
+                                        <td>{{ account.account_number }}</td>
+                                    </tr>
+                                    {% endif %}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <table class="table table-hover">
+                                <tbody>
+                                    <tr>
+                                        <td style="width:40%;">{{ trans('list.current_balance') }}</td>
+                                        <td>
+                                            {% if balances.balance %}
+                                                {{ formatAmountBySymbol(balances.balance, currency.symbol, currency.decimal_places, true)|raw }}
+                                            {% elseif balances.native_balance %}
+                                                {{ formatAmountBySymbol(balances.native_balance, defaultCurrency.symbol, defaultCurrency.decimal_places, true)|raw }}
+                                            {% else %}
+                                                {{ 'no_data'|_ }}
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td>Period</td>
+                                        <td>
+                                            {% if showAll %}
+                                                All transactions
+                                            {% else %}
+                                                {{ start.isoFormat(monthAndDayFormat) }} - {{ end.isoFormat(monthAndDayFormat) }}
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td>{{ trans('form.currency') }}</td>
+                                        <td>
+                                            {% if balances.balance %}
+                                                {{ currency.name }} ({{ currency.symbol }})
+                                            {% else %}
+                                                {{ defaultCurrency.name }} ({{ defaultCurrency.symbol }})
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% if account.notes.count() > 0 %}
+                                    <tr>
+                                        <td>{{ trans('list.notes') }}</td>
+                                        <td>{{ account.notes.first().text|markdown }}</td>
+                                    </tr>
+                                    {% endif %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <!-- Chart Section -->
+                    <div class="row">
+                        <div class="col-12">
+                            <h4><span class="fa fa-line-chart"></span> Balance Chart</h4>
+                            <div>
+                                <canvas id="overview-chart" style="width:100%;height:400px;" height="400" width="100%"></canvas>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -71,8 +143,6 @@
         {% endif %}
     </div>
 
-    <!-- Plugin System: Load automation section if plugin is enabled -->
-    <div id="plugin-automation-section"></div>
 
     {% if not showAll and isLiability %}
         <div class="row">
@@ -263,41 +333,6 @@
     {# required for groups.twig #}
     <script type="text/javascript" src="v1/js/ff/list/groups.js?v={{ FF_VERSION }}" nonce="{{ JS_NONCE }}"></script>
     
-    <!-- PFinance Automation Plugin -->
-    <link rel="stylesheet" href="plugins/PFinance/static/css/automation.css?v={{ FF_VERSION }}" nonce="{{ JS_NONCE }}">
-    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js" nonce="{{ JS_NONCE }}"></script>
-    <script type="text/javascript" src="plugins/PFinance/static/js/plaid-link.js?v={{ FF_VERSION }}" nonce="{{ JS_NONCE }}"></script>
-    <script type="text/javascript" nonce="{{ JS_NONCE }}">
-        // Load automation section template
-        document.addEventListener('DOMContentLoaded', function() {
-            fetch('plugins/PFinance/static/templates/automation-section.html')
-                .then(response => response.text())
-                .then(html => {
-                    // Replace template variables
-                    const accountId = '{{ account.id }}';
-                    const processedHtml = html
-                        .replace(/ACCOUNT_ID_PLACEHOLDER/g, accountId);
-                    
-                    const targetElement = document.getElementById('plugin-automation-section');
-                    if (targetElement) {
-                        targetElement.innerHTML = processedHtml;
-                        console.log('PFinance automation plugin loaded successfully');
-                        
-                        // Bind Plaid Link functionality to the download transactions button
-                        const downloadBtn = document.getElementById('download-transactions-btn');
-                        if (downloadBtn && window.plaidLinkController) {
-                            downloadBtn.addEventListener('click', function() {
-                                const accountId = this.getAttribute('data-account-id');
-                                window.plaidLinkController.downloadTransactionsWithPlaid(accountId);
-                            });
-                            console.log('Plaid Link functionality bound to download button');
-                        }
-                        
-                    }
-                })
-                .catch(error => console.error('Error loading automation template:', error));
-        });
-    </script>
 {% endblock %}
 
 {% block styles %}
