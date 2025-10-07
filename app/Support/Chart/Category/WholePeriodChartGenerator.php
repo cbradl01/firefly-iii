@@ -36,11 +36,11 @@ use Illuminate\Support\Collection;
  */
 class WholePeriodChartGenerator
 {
-    public bool $convertToNative;
+    public bool $convertToPrimary;
 
     public function generate(Category $category, Carbon $start, Carbon $end): array
     {
-        $collection        = new Collection([$category]);
+        $collection        = new Collection()->push($category);
 
         /** @var OperationsRepositoryInterface $opsRepository */
         $opsRepository     = app(OperationsRepositoryInterface::class);
@@ -124,7 +124,7 @@ class WholePeriodChartGenerator
             $step = '1M';
         }
         if ($months > 100) {
-            $step = '1Y';
+            return '1Y';
         }
 
         return $step;

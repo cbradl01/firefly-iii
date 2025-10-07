@@ -29,7 +29,9 @@ use FireflyIII\Http\Controllers\Controller;
 use FireflyIII\Models\Recurrence;
 use FireflyIII\Repositories\Recurring\RecurringRepositoryInterface;
 use FireflyIII\Support\Http\Controllers\GetConfigurationData;
+use FireflyIII\Support\JsonApi\Enrichments\RecurringEnrichment;
 use FireflyIII\Transformers\RecurrenceTransformer;
+use FireflyIII\User;
 use Illuminate\Contracts\View\Factory;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -43,7 +45,7 @@ class IndexController extends Controller
 {
     use GetConfigurationData;
 
-    private RecurringRepositoryInterface $recurringRepos;
+    private RecurringRepositoryInterface $repository;
 
     /**
      * IndexController constructor.
@@ -58,7 +60,7 @@ class IndexController extends Controller
                 app('view')->share('mainTitleIcon', 'fa-paint-brush');
                 app('view')->share('title', (string) trans('firefly.recurrences'));
 
-                $this->recurringRepos = app(RecurringRepositoryInterface::class);
+                $this->repository = app(RecurringRepositoryInterface::class);
 
                 return $next($request);
             }
@@ -77,13 +79,20 @@ class IndexController extends Controller
     {
         $page        = 0 === (int) $request->get('page') ? 1 : (int) $request->get('page');
         $pageSize    = (int) app('preferences')->get('listPageSize', 50)->data;
-        $collection  = $this->recurringRepos->get();
+        $collection  = $this->repository->get();
         $today       = today(config('app.timezone'));
         $year        = today(config('app.timezone'));
 
         // split collection
         $total       = $collection->count();
         $recurrences = $collection->slice(($page - 1) * $pageSize, $pageSize);
+
+        // enrich
+        /** @var User $admin */
+        $admin       = auth()->user();
+        $enrichment  = new RecurringEnrichment();
+        $enrichment->setUser($admin);
+        $recurrences = $enrichment->enrich($recurrences);
 
         /** @var RecurrenceTransformer $transformer */
         $transformer = app(RecurrenceTransformer::class);

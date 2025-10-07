@@ -28,16 +28,22 @@ namespace FireflyIII\Rules;
 use FireflyIII\Support\Validation\ValidatesAmountsTrait;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Support\Facades\Log;
+use Closure;
 
 class IsValidZeroOrMoreAmount implements ValidationRule
 {
     use ValidatesAmountsTrait;
 
+    public function __construct(private bool $nullable = false) {}
+
     /**
      * @SuppressWarnings("PHPMD.UnusedFormalParameter")
      */
-    public function validate(string $attribute, mixed $value, \Closure $fail): void
+    public function validate(string $attribute, mixed $value, Closure $fail): void
     {
+        if (true === $this->nullable && null === $value) {
+            return;
+        }
         $value = (string) $value;
         // must not be empty:
         if ($this->emptyString($value)) {

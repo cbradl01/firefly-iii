@@ -25,7 +25,6 @@ declare(strict_types=1);
 namespace FireflyIII\Notifications\User;
 
 use FireflyIII\Notifications\ReturnsAvailableChannels;
-use FireflyIII\Notifications\ReturnsSettings;
 use FireflyIII\Support\Facades\Steam;
 use FireflyIII\User;
 use Illuminate\Bus\Queueable;
@@ -34,7 +33,6 @@ use Illuminate\Notifications\Messages\SlackMessage;
 use Illuminate\Notifications\Notification;
 use Illuminate\Support\Facades\Request;
 use NotificationChannels\Pushover\PushoverMessage;
-use Ntfy\Message;
 
 /**
  * Class UserNewPassword
@@ -43,12 +41,7 @@ class UserNewPassword extends Notification
 {
     use Queueable;
 
-    private string $url;
-
-    public function __construct(string $url)
-    {
-        $this->url = $url;
-    }
+    public function __construct(private string $url) {}
 
     /**
      * @SuppressWarnings("PHPMD.UnusedFormalParameter")
@@ -69,21 +62,21 @@ class UserNewPassword extends Notification
         $userAgent = Request::userAgent();
         $time      = now(config('app.timezone'))->isoFormat((string) trans('config.date_time_js'));
 
-        return (new MailMessage())
+        return new MailMessage()
             ->markdown('emails.password', ['url' => $this->url, 'ip' => $ip, 'host' => $host, 'userAgent' => $userAgent, 'time' => $time])
             ->subject((string) trans('email.reset_pw_subject'))
         ;
     }
 
-    public function toNtfy(User $notifiable): Message
-    {
-        $settings = ReturnsSettings::getSettings('ntfy', 'user', $notifiable);
-        $message  = new Message();
-        $message->topic($settings['ntfy_topic']);
-        $message->body((string) trans('email.reset_pw_message'));
-
-        return $message;
-    }
+    //    public function toNtfy(User $notifiable): Message
+    //    {
+    //        $settings = ReturnsSettings::getSettings('ntfy', 'user', $notifiable);
+    //        $message  = new Message();
+    //        $message->topic($settings['ntfy_topic']);
+    //        $message->body((string) trans('email.reset_pw_message'));
+    //
+    //        return $message;
+    //    }
 
     /**
      * @SuppressWarnings("PHPMD.UnusedFormalParameter")

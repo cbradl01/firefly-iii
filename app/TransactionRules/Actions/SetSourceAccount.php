@@ -32,22 +32,19 @@ use FireflyIII\Models\Transaction;
 use FireflyIII\Models\TransactionJournal;
 use FireflyIII\Repositories\Account\AccountRepositoryInterface;
 use FireflyIII\User;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Class SetSourceAccount.
  */
 class SetSourceAccount implements ActionInterface
 {
-    private RuleAction                 $action;
     private AccountRepositoryInterface $repository;
 
     /**
      * TriggerInterface constructor.
      */
-    public function __construct(RuleAction $action)
-    {
-        $this->action = $action;
-    }
+    public function __construct(private readonly RuleAction $action) {}
 
     public function actOnArray(array $journal): bool
     {
@@ -70,7 +67,7 @@ class SetSourceAccount implements ActionInterface
 
         // if this is a transfer or a withdrawal, the new source account must be an asset account or a default account, and it MUST exist:
         $newAccount       = $this->findAssetAccount($type, $accountName);
-        if ((TransactionTypeEnum::WITHDRAWAL->value === $type || TransactionTypeEnum::TRANSFER->value === $type) && null === $newAccount) {
+        if ((TransactionTypeEnum::WITHDRAWAL->value === $type || TransactionTypeEnum::TRANSFER->value === $type) && !$newAccount instanceof Account) {
             app('log')->error(
                 sprintf('Cant change source account of journal #%d because no asset account with name "%s" exists.', $object->id, $accountName)
             );
@@ -95,7 +92,7 @@ class SetSourceAccount implements ActionInterface
 
             return false;
         }
-        if (null !== $newAccount && $newAccount->id === $destination->account_id) {
+        if ($newAccount instanceof Account && $newAccount->id === $destination->account_id) {
             app('log')->error(
                 sprintf(
                     'New source account ID #%d and current destination account ID #%d are the same. Do nothing.',
@@ -117,7 +114,7 @@ class SetSourceAccount implements ActionInterface
         app('log')->debug(sprintf('New source account is #%d ("%s").', $newAccount->id, $newAccount->name));
 
         // update source transaction with new source account:
-        \DB::table('transactions')
+        DB::table('transactions')
             ->where('transaction_journal_id', '=', $object->id)
             ->where('amount', '<', 0)
             ->update(['account_id' => $newAccount->id])
@@ -144,7 +141,7 @@ class SetSourceAccount implements ActionInterface
     {
         $allowed = config('firefly.expected_source_types.source.Deposit');
         $account = $this->repository->findByName($accountName, $allowed);
-        if (null === $account) {
+        if (!$account instanceof Account) {
             // create new revenue account with this name:
             $data    = [
                 'name'              => $accountName,

@@ -29,8 +29,8 @@ use FireflyIII\Models\Attachment;
 use FireflyIII\Models\Transaction;
 use FireflyIII\Models\TransactionGroup;
 use FireflyIII\Models\TransactionJournal;
+use FireflyIII\Repositories\Account\AccountRepositoryInterface;
 use FireflyIII\Repositories\Attachment\AttachmentRepositoryInterface;
-use FireflyIII\Repositories\UserGroups\Account\AccountRepositoryInterface;
 use FireflyIII\Support\Facades\Amount;
 use FireflyIII\Support\Http\Api\ExchangeRateConverter;
 use Illuminate\Support\Facades\DB;
@@ -44,15 +44,15 @@ class AccountObserver
     public function created(Account $account): void
     {
         //        Log::debug('Observe "created" of an account.');
-        $this->updateNativeAmount($account);
+        $this->updatePrimaryCurrencyAmount($account);
     }
 
-    private function updateNativeAmount(Account $account): void
+    private function updatePrimaryCurrencyAmount(Account $account): void
     {
-        if (!Amount::convertToNative($account->user)) {
+        if (!Amount::convertToPrimary($account->user)) {
             return;
         }
-        $userCurrency = app('amount')->getNativeCurrencyByUserGroup($account->user->userGroup);
+        $userCurrency = app('amount')->getPrimaryCurrencyByUserGroup($account->user->userGroup);
         $repository   = app(AccountRepositoryInterface::class);
         $currency     = $repository->getAccountCurrency($account);
         if (null !== $currency && $currency->id !== $userCurrency->id && '' !== (string) $account->virtual_balance && 0 !== bccomp($account->virtual_balance, '0')) {
@@ -67,7 +67,7 @@ class AccountObserver
             $account->native_virtual_balance = null;
         }
         $account->saveQuietly();
-        // Log::debug('Account native virtual balance is updated.');
+        // Log::debug('Account primary currency virtual balance is updated.');
     }
 
     /**
@@ -88,7 +88,8 @@ class AccountObserver
         }
 
         $journalIds = Transaction::where('account_id', $account->id)->get(['transactions.transaction_journal_id'])->pluck('transaction_journal_id')->toArray();
-        $groupIds   = TransactionJournal::whereIn('id', $journalIds)->get(['transaction_journals.transaction_group_id'])->pluck('transaction_group_id')->toArray();
+        $groupIds   = TransactionJournal::whereIn('id', $journalIds)->get(['transaction_journals.transaction_group_id'])->pluck('transaction_group_id')->toArray(); // @phpstan-ignore-line
+
         if (count($journalIds) > 0) {
             Transaction::whereIn('transaction_journal_id', $journalIds)->delete();
             TransactionJournal::whereIn('id', $journalIds)->delete();
@@ -107,6 +108,6 @@ class AccountObserver
     public function updated(Account $account): void
     {
         //        Log::debug('Observe "updated" of an account.');
-        $this->updateNativeAmount($account);
+        $this->updatePrimaryCurrencyAmount($account);
     }
 }

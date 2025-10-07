@@ -88,13 +88,15 @@ class IndexController extends Controller
 
         /** @var Carbon $end */
         $end           = clone session('end', today(config('app.timezone'))->endOfMonth());
-        $start->subDay();
+
+        // #10618 go to the end of the previous day.
+        $start->subSecond();
 
         $ids           = $accounts->pluck('id')->toArray();
-        Log::debug(sprintf('inactive start: finalAccountsBalance("%s")', $start->format('Y-m-d H:i:s')));
-        Log::debug(sprintf('inactive end: finalAccountsBalance("%s")', $end->format('Y-m-d H:i:s')));
-        $startBalances = Steam::finalAccountsBalance($accounts, $start);
-        $endBalances   = Steam::finalAccountsBalance($accounts, $end);
+        Log::debug(sprintf('inactive start: accountsBalancesOptimized("%s")', $start->format('Y-m-d H:i:s')));
+        Log::debug(sprintf('inactive end: accountsBalancesOptimized("%s")', $end->format('Y-m-d H:i:s')));
+        $startBalances = Steam::accountsBalancesOptimized($accounts, $start, $this->primaryCurrency, $this->convertToPrimary);
+        $endBalances   = Steam::accountsBalancesOptimized($accounts, $end, $this->primaryCurrency, $this->convertToPrimary);
         $activities    = Steam::getLastActivities($ids);
 
 
@@ -102,14 +104,14 @@ class IndexController extends Controller
             function (Account $account) use ($activities, $startBalances, $endBalances): void {
                 $currency                   = $this->repository->getAccountCurrency($account);
                 $account->lastActivityDate  = $this->isInArrayDate($activities, $account->id);
-                $account->startBalances     = Steam::filterAccountBalance($startBalances[$account->id] ?? [], $account, $this->convertToNative, $currency);
-                $account->endBalances       = Steam::filterAccountBalance($endBalances[$account->id] ?? [], $account, $this->convertToNative, $currency);
+                $account->startBalances     = Steam::filterAccountBalance($startBalances[$account->id] ?? [], $account, $this->convertToPrimary, $currency);
+                $account->endBalances       = Steam::filterAccountBalance($endBalances[$account->id] ?? [], $account, $this->convertToPrimary, $currency);
                 $account->differences       = $this->subtract($account->startBalances, $account->endBalances);
                 $account->interest          = Steam::bcround($this->repository->getMetaValue($account, 'interest'), 4);
                 $account->interestPeriod    = (string) trans(sprintf('firefly.interest_calc_%s', $this->repository->getMetaValue($account, 'interest_period')));
                 $account->accountTypeString = (string) trans(sprintf('firefly.account_type_%s', $account->accountType->type));
                 $account->current_debt      = '0';
-                $account->currency          = $currency ?? $this->defaultCurrency;
+                $account->currency          = $currency ?? $this->primaryCurrency;
                 $account->iban              = implode(' ', str_split((string) $account->iban, 4));
             }
         );
@@ -119,6 +121,16 @@ class IndexController extends Controller
         $accounts->setPath(route('accounts.inactive.index', [$objectType]));
 
         return view('accounts.index', compact('objectType', 'inactivePage', 'subTitleIcon', 'subTitle', 'page', 'accounts'));
+    }
+
+    private function subtract(array $startBalances, array $endBalances): array
+    {
+        $result = [];
+        foreach ($endBalances as $key => $value) {
+            $result[$key] = bcsub((string) $value, $startBalances[$key] ?? '0');
+        }
+
+        return $result;
     }
 
     /**
@@ -153,13 +165,15 @@ class IndexController extends Controller
 
         /** @var Carbon $end */
         $end           = clone session('end', today(config('app.timezone'))->endOfMonth());
-        $start->subDay();
+
+        // #10618 go to the end of the previous day.
+        $start->subSecond();
 
         $ids           = $accounts->pluck('id')->toArray();
-        Log::debug(sprintf('index start: finalAccountsBalance("%s")', $start->format('Y-m-d H:i:s')));
-        Log::debug(sprintf('index end: finalAccountsBalance("%s")', $end->format('Y-m-d H:i:s')));
-        $startBalances = Steam::finalAccountsBalance($accounts, $start);
-        $endBalances   = Steam::finalAccountsBalance($accounts, $end);
+        Log::debug(sprintf('index start: accountsBalancesOptimized("%s")', $start->format('Y-m-d H:i:s')));
+        Log::debug(sprintf('index end: accountsBalancesOptimized("%s")', $end->format('Y-m-d H:i:s')));
+        $startBalances = Steam::accountsBalancesOptimized($accounts, $start, $this->primaryCurrency, $this->convertToPrimary);
+        $endBalances   = Steam::accountsBalancesOptimized($accounts, $end, $this->primaryCurrency, $this->convertToPrimary);
         $activities    = Steam::getLastActivities($ids);
 
 
@@ -169,8 +183,8 @@ class IndexController extends Controller
                 $interest                     = '' === $interest ? '0' : $interest;
                 $currency                     = $this->repository->getAccountCurrency($account);
 
-                $account->startBalances       = Steam::filterAccountBalance($startBalances[$account->id] ?? [], $account, $this->convertToNative, $currency);
-                $account->endBalances         = Steam::filterAccountBalance($endBalances[$account->id] ?? [], $account, $this->convertToNative, $currency);
+                $account->startBalances       = Steam::filterAccountBalance($startBalances[$account->id] ?? [], $account, $this->convertToPrimary, $currency);
+                $account->endBalances         = Steam::filterAccountBalance($endBalances[$account->id] ?? [], $account, $this->convertToPrimary, $currency);
                 $account->differences         = $this->subtract($account->startBalances, $account->endBalances);
                 $account->lastActivityDate    = $this->isInArrayDate($activities, $account->id);
                 $account->interest            = Steam::bcround($interest, 4);
@@ -181,7 +195,7 @@ class IndexController extends Controller
                 $account->location            = $this->repository->getLocation($account);
                 $account->liability_direction = $this->repository->getMetaValue($account, 'liability_direction');
                 $account->current_debt        = $this->repository->getMetaValue($account, 'current_debt') ?? '-';
-                $account->currency            = $currency ?? $this->defaultCurrency;
+                $account->currency            = $currency ?? $this->primaryCurrency;
                 $account->iban                = implode(' ', str_split((string) $account->iban, 4));
 
 
@@ -198,15 +212,5 @@ class IndexController extends Controller
         app('log')->debug(sprintf('Count of accounts after LAP (2): %d', $accounts->getCollection()->count()));
 
         return view('accounts.index', compact('objectType', 'inactiveCount', 'subTitleIcon', 'subTitle', 'page', 'accounts'));
-    }
-
-    private function subtract(array $startBalances, array $endBalances): array
-    {
-        $result = [];
-        foreach ($endBalances as $key => $value) {
-            $result[$key] = bcsub($value, $startBalances[$key] ?? '0');
-        }
-
-        return $result;
     }
 }

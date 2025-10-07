@@ -29,6 +29,9 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\ServiceProvider;
 use Laravel\Passport\Passport;
+use Override;
+
+use function Safe\preg_match;
 
 /**
  * Class AppServiceProvider
@@ -41,6 +44,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Schema::defaultStringLength(191);
+        // Passport::$clientUuids = false;
         Response::macro('api', function (array $value) {
             $headers = [
                 'Cache-Control' => 'no-store',
@@ -58,7 +62,7 @@ class AppServiceProvider extends ServiceProvider
 
         // blade extension
         Blade::directive('activeXRoutePartial', function (string $route) {
-            $name = \Route::getCurrentRoute()->getName() ?? '';
+            $name = Route::getCurrentRoute()->getName() ?? '';
             if (str_contains($name, $route)) {
                 return 'menu-open';
             }
@@ -86,6 +90,7 @@ class AppServiceProvider extends ServiceProvider
     /**
      * Register any application services.
      */
+    #[Override]
     public function register(): void
     {
         Passport::ignoreRoutes();

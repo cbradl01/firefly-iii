@@ -25,7 +25,6 @@ declare(strict_types=1);
 namespace FireflyIII\Notifications\User;
 
 use FireflyIII\Notifications\ReturnsAvailableChannels;
-use FireflyIII\Notifications\ReturnsSettings;
 use FireflyIII\Support\Facades\Steam;
 use FireflyIII\User;
 use Illuminate\Bus\Queueable;
@@ -34,7 +33,6 @@ use Illuminate\Notifications\Messages\SlackMessage;
 use Illuminate\Notifications\Notification;
 use Illuminate\Support\Facades\Request;
 use NotificationChannels\Pushover\PushoverMessage;
-use Ntfy\Message;
 
 /**
  * Class UserLogin
@@ -59,24 +57,24 @@ class UserLogin extends Notification
         $userAgent = Request::userAgent();
         $time      = now(config('app.timezone'))->isoFormat((string) trans('config.date_time_js'));
 
-        return (new MailMessage())
+        return new MailMessage()
             ->markdown('emails.new-ip', ['ip' => $ip, 'host' => $host, 'userAgent' => $userAgent, 'time' => $time])
             ->subject((string) trans('email.login_from_new_ip'))
         ;
     }
 
-    public function toNtfy(User $notifiable): Message
-    {
-        $ip       = Request::ip();
-        $host     = Steam::getHostName($ip);
-        $settings = ReturnsSettings::getSettings('ntfy', 'user', $notifiable);
-        $message  = new Message();
-        $message->topic($settings['ntfy_topic']);
-        $message->title((string) trans('email.login_from_new_ip'));
-        $message->body((string) trans('email.slack_login_from_new_ip', ['ip' => $ip, 'host' => $host]));
-
-        return $message;
-    }
+    //    public function toNtfy(User $notifiable): Message
+    //    {
+    //        $ip       = Request::ip();
+    //        $host     = Steam::getHostName($ip);
+    //        $settings = ReturnsSettings::getSettings('ntfy', 'user', $notifiable);
+    //        $message  = new Message();
+    //        $message->topic($settings['ntfy_topic']);
+    //        $message->title((string) trans('email.login_from_new_ip'));
+    //        $message->body((string) trans('email.slack_login_from_new_ip', ['ip' => $ip, 'host' => $host]));
+    //
+    //        return $message;
+    //    }
 
     /**
      * @SuppressWarnings("PHPMD.UnusedFormalParameter")

@@ -24,7 +24,6 @@ declare(strict_types=1);
 
 namespace FireflyIII\Api\V1\Requests\Models\UserGroup;
 
-use FireflyIII\Models\UserGroup;
 use FireflyIII\Support\Request\ChecksLogin;
 use FireflyIII\Support\Request\ConvertsDataTypes;
 use Illuminate\Foundation\Http\FormRequest;
@@ -40,9 +39,9 @@ class UpdateRequest extends FormRequest
     public function getData(): array
     {
         $fields = [
-            'title'                => ['title', 'convertString'],
-            'native_currency_id'   => ['native_currency_id', 'convertInteger'],
-            'native_currency_code' => ['native_currency_code', 'convertString'],
+            'title'                 => ['title', 'convertString'],
+            'primary_currency_id'   => ['primary_currency_id', 'convertInteger'],
+            'primary_currency_code' => ['primary_currency_code', 'convertString'],
         ];
 
         return $this->getAllData($fields);
@@ -53,13 +52,10 @@ class UpdateRequest extends FormRequest
      */
     public function rules(): array
     {
-        /** @var UserGroup $userGroup */
-        $userGroup = $this->route()->parameter('userGroup');
-
         return [
-            'title'                => ['required', 'min:1', 'max:255'],
-            'native_currency_id'   => 'exists:transaction_currencies,id',
-            'native_currency_code' => 'exists:transaction_currencies,code',
+            'title'                 => ['required', 'min:1', 'max:255'],
+            'primary_currency_id'   => 'exists:transaction_currencies,id',
+            'primary_currency_code' => 'exists:transaction_currencies,code',
         ];
     }
 }

@@ -18,7 +18,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import Summary from "../../api/v2/summary/index.js";
+import Summary from "../../api/v1/summary/index.js";
 import {format} from "date-fns";
 import {getVariable} from "../../store/get-variable.js";
 import formatMoney from "../../util/format-money.js";
@@ -31,19 +31,30 @@ export default () => ({
     billBox: {paid: [], unpaid: []},
     leftBox: {left: [], perDay: []},
     netBox: {net: []},
-    autoConversion: false,
+    convertToPrimary: false,
     loading: false,
     boxData: null,
     boxOptions: null,
+    eventListeners: {
+        ['@convert-to-primary.window'](event){
+            this.convertToPrimary = event.detail;
+            this.accountList = [];
+            console.log('I heard that! (dashboard/boxes)');
+            this.boxData = null;
+            this.loadBoxes();
+        }
+    },
+
     getFreshData() {
         const start = new Date(window.store.get('start'));
         const end = new Date(window.store.get('end'));
         // TODO cache key is hard coded, problem?
-        const boxesCacheKey = getCacheKey('ds_boxes_data', {start: start, end: end});
+        const boxesCacheKey = getCacheKey('ds_boxes_data', {convertToPrimary: this.convertToPrimary, start: start, end: end});
         cleanupCache();
 
-        const cacheValid = window.store.get('cacheValid');
+        //const cacheValid = window.store.get('cacheValid');
         let cachedData = window.store.get(boxesCacheKey);
+        const cacheValid = false; // force refresh
 
         if (cacheValid && typeof cachedData !== 'undefined') {
             this.boxData = cachedData;
@@ -75,114 +86,56 @@ export default () => ({
                     continue;
                 }
                 let key = current.key;
-                // native (auto conversion):
-                if (this.autoConversion) {
-                    if (key.startsWith('balance-in-native')) {
-                        this.balanceBox.amounts.push(formatMoney(current.value, current.currency_code));
-                        // prep subtitles (for later)
-                        if (!subtitles.hasOwnProperty(current.currency_code)) {
-                            subtitles[current.currency_code] = '';
-                        }
-                        continue;
-                    }
-                    // spent info is used in subtitle:
-                    if (key.startsWith('spent-in-native')) {
-                        // prep subtitles (for later)
-                        if (!subtitles.hasOwnProperty(current.currency_code)) {
-                            subtitles[current.currency_code] = '';
-                        }
-                        // append the amount spent.
-                        subtitles[current.currency_code] =
-                            subtitles[current.currency_code] +
-                            formatMoney(current.value, current.currency_code);
-                        continue;
-                    }
-                    // earned info is used in subtitle:
-                    if (key.startsWith('earned-in-native')) {
-                        // prep subtitles (for later)
-                        if (!subtitles.hasOwnProperty(current.currency_code)) {
-                            subtitles[current.currency_code] = '';
-                        }
-                        // prepend the amount earned.
-                        subtitles[current.currency_code] =
-                            formatMoney(current.value, current.currency_code) + ' + ' +
-                            subtitles[current.currency_code];
-                        continue;
-                    }
-
-                    if (key.startsWith('bills-unpaid-in-native')) {
-                        this.billBox.unpaid.push(formatMoney(current.value, current.currency_code));
-                        continue;
-                    }
-                    if (key.startsWith('bills-paid-in-native')) {
-                        this.billBox.paid.push(formatMoney(current.value, current.currency_code));
-                        continue;
-                    }
-                    if (key.startsWith('left-to-spend-in-native')) {
-                        this.leftBox.left.push(formatMoney(current.value, current.currency_code));
-                        continue;
-                    }
-                    if (key.startsWith('left-per-day-to-spend-in-native')) { // per day
-                        this.leftBox.perDay.push(formatMoney(current.value, current.currency_code));
-                        continue;
-                    }
-                    if (key.startsWith('net-worth-in-native')) {
-                        this.netBox.net.push(formatMoney(current.value, current.currency_code));
-                        continue;
-                    }
+                // console.log('NOT PRIMARY CURRENCY');
+                if (key.startsWith('balance-in-')) {
+                    this.balanceBox.amounts.push(formatMoney(current.monetary_value, current.currency_code));
+                    continue;
                 }
-                // not native
-                if (!this.autoConversion && !key.endsWith('native')) {
-                    if (key.startsWith('balance-in-')) {
-                        this.balanceBox.amounts.push(formatMoney(current.value, current.currency_code));
-                        continue;
+                // spent info is used in subtitle:
+                if (key.startsWith('spent-in-')) {
+                    // prep subtitles (for later)
+                    if (!subtitles.hasOwnProperty(current.currency_code)) {
+                        subtitles[current.currency_code] = '';
                     }
-                    // spent info is used in subtitle:
-                    if (key.startsWith('spent-in-')) {
-                        // prep subtitles (for later)
-                        if (!subtitles.hasOwnProperty(current.currency_code)) {
-                            subtitles[current.currency_code] = '';
-                        }
-                        // append the amount spent.
-                        subtitles[current.currency_code] =
-                            subtitles[current.currency_code] +
-                            formatMoney(current.value, current.currency_code);
-                        continue;
+                    // append the amount spent.
+                    subtitles[current.currency_code] =
+                        subtitles[current.currency_code] +
+                        formatMoney(current.monetary_value, current.currency_code);
+                    continue;
+                }
+                // earned info is used in subtitle:
+                if (key.startsWith('earned-in-')) {
+                    // prep subtitles (for later)
+                    if (!subtitles.hasOwnProperty(current.currency_code)) {
+                        subtitles[current.currency_code] = '';
                     }
-                    // earned info is used in subtitle:
-                    if (key.startsWith('earned-in-')) {
-                        // prep subtitles (for later)
-                        if (!subtitles.hasOwnProperty(current.currency_code)) {
-                            subtitles[current.currency_code] = '';
-                        }
-                        // prepend the amount earned.
-                        subtitles[current.currency_code] =
-                            formatMoney(current.value, current.currency_code) + ' + ' +
-                            subtitles[current.currency_code];
-                        continue;
-                    }
+                    // prepend the amount earned.
+                    subtitles[current.currency_code] =
+                        formatMoney(current.monetary_value, current.currency_code) + ' + ' +
+                        subtitles[current.currency_code];
+                    continue;
+                }
 
 
-                    if (key.startsWith('bills-unpaid-in-')) {
-                        this.billBox.unpaid.push(formatMoney(current.value, current.currency_code));
-                        continue;
-                    }
-                    if (key.startsWith('bills-paid-in-')) {
-                        this.billBox.paid.push(formatMoney(current.value, current.currency_code));
-                        continue;
-                    }
-                    if (key.startsWith('left-to-spend-in-')) {
-                        this.leftBox.left.push(formatMoney(current.value, current.currency_code));
-                        continue;
-                    }
-                    if (key.startsWith('left-per-day-to-spend-in-')) {
-                        this.leftBox.perDay.push(formatMoney(current.value, current.currency_code));
-                        continue;
-                    }
-                    if (key.startsWith('net-worth-in-')) {
-                        this.netBox.net.push(formatMoney(current.value, current.currency_code));
+                if (key.startsWith('bills-unpaid-in-')) {
+                    this.billBox.unpaid.push(formatMoney(current.monetary_value, current.currency_code));
+                    continue;
+                }
+                if (key.startsWith('bills-paid-in-')) {
+                    this.billBox.paid.push(formatMoney(current.monetary_value, current.currency_code));
+                    continue;
+                }
+                if (key.startsWith('left-to-spend-in-')) {
+                    this.leftBox.left.push(formatMoney(current.monetary_value, current.currency_code));
+                    continue;
+                }
+                if (key.startsWith('left-per-day-to-spend-in-')) {
+                    this.leftBox.perDay.push(formatMoney(current.monetary_value, current.currency_code));
+                    continue;
+                }
+                if (key.startsWith('net-worth-in-')) {
+                    this.netBox.net.push(formatMoney(current.monetary_value, current.currency_code));
 
-                    }
                 }
             }
         }
@@ -210,10 +163,10 @@ export default () => ({
     init() {
         // console.log('boxes init');
         // TODO can be replaced by "getVariables"
-        Promise.all([getVariable('viewRange'), getVariable('autoConversion', false)]).then((values) => {
+        Promise.all([getVariable('viewRange'), getVariable('convert_to_primary', false)]).then((values) => {
             // console.log('boxes after promises');
             afterPromises = true;
-            this.autoConversion = values[1];
+            this.convertToPrimary = values[1];
             this.loadBoxes();
         });
         window.store.observe('end', () => {
@@ -224,12 +177,12 @@ export default () => ({
             this.boxData = null;
             this.loadBoxes();
         });
-        window.store.observe('autoConversion', (newValue) => {
+        window.store.observe('convert_to_primary', (newValue) => {
             if (!afterPromises) {
                 return;
             }
-            // console.log('boxes observe autoConversion');
-            this.autoConversion = newValue;
+            // console.log('boxes observe convertToPrimary');
+            this.convertToPrimary = newValue;
             this.loadBoxes();
         });
     },

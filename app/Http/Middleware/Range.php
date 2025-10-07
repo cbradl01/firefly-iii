@@ -23,6 +23,9 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Middleware;
 
+use Closure;
+use FireflyIII\Support\Facades\Steam;
+use Illuminate\Support\Facades\App;
 use Carbon\Carbon;
 use FireflyIII\Repositories\Journal\JournalRepositoryInterface;
 use FireflyIII\Support\Facades\Amount;
@@ -42,7 +45,7 @@ class Range
      *
      * @return mixed
      */
-    public function handle(Request $request, \Closure $next)
+    public function handle(Request $request, Closure $next)
     {
         if (null !== $request->user()) {
             // set start, end and finish:
@@ -99,12 +102,12 @@ class Range
     private function configureView(): void
     {
         // get locale preference:
-        $language          = app('steam')->getLanguage();
-        $locale            = app('steam')->getLocale();
-        \App::setLocale($language);
+        $language          = Steam::getLanguage();
+        $locale            = Steam::getLocale();
+        App::setLocale($language);
         Carbon::setLocale(substr($locale, 0, 2));
 
-        $localeArray       = app('steam')->getLocaleArray($locale);
+        $localeArray       = Steam::getLocaleArray($locale);
 
         setlocale(LC_TIME, $localeArray);
         $moneyResult       = setlocale(LC_MONETARY, $localeArray);
@@ -118,7 +121,7 @@ class Range
         // save some formats:
         $monthAndDayFormat = (string) trans('config.month_and_day_js', [], $locale);
         $dateTimeFormat    = (string) trans('config.date_time_js', [], $locale);
-        $defaultCurrency   = Amount::getNativeCurrency();
+        $primaryCurrency   = Amount::getPrimaryCurrency();
 
         // also format for moment JS:
         $madMomentJS       = (string) trans('config.month_and_day_moment_js', [], $locale);
@@ -129,7 +132,7 @@ class Range
         app('view')->share('madMomentJS', $madMomentJS);
         app('view')->share('monthAndDayFormat', $userDateFormat);
         app('view')->share('dateTimeFormat', $dateTimeFormat);
-        app('view')->share('defaultCurrency', $defaultCurrency);
+        app('view')->share('primaryCurrency', $primaryCurrency);
     }
 
     /**

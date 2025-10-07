@@ -34,7 +34,10 @@ use FireflyIII\Models\RecurrenceRepetition;
 use FireflyIII\Repositories\Bill\BillRepositoryInterface;
 use FireflyIII\Repositories\Budget\BudgetRepositoryInterface;
 use FireflyIII\Repositories\Recurring\RecurringRepositoryInterface;
+use FireflyIII\Support\Facades\ExpandedForm;
+use FireflyIII\Support\JsonApi\Enrichments\RecurringEnrichment;
 use FireflyIII\Transformers\RecurrenceTransformer;
+use FireflyIII\User;
 use Illuminate\Contracts\View\Factory;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -51,7 +54,7 @@ class EditController extends Controller
     private AttachmentHelperInterface    $attachments;
     private BillRepositoryInterface      $billRepository;
     private BudgetRepositoryInterface    $budgetRepos;
-    private RecurringRepositoryInterface $recurring;
+    private RecurringRepositoryInterface $repository;
 
     /**
      * EditController constructor.
@@ -67,7 +70,7 @@ class EditController extends Controller
                 app('view')->share('title', (string) trans('firefly.recurrences'));
                 app('view')->share('subTitle', (string) trans('firefly.recurrences'));
 
-                $this->recurring      = app(RecurringRepositoryInterface::class);
+                $this->repository     = app(RecurringRepositoryInterface::class);
                 $this->budgetRepos    = app(BudgetRepositoryInterface::class);
                 $this->attachments    = app(AttachmentHelperInterface::class);
                 $this->billRepository = app(BillRepositoryInterface::class);
@@ -92,19 +95,27 @@ class EditController extends Controller
             throw new FireflyException('This recurring transaction has no meta-data. You will have to delete it and recreate it. Sorry!');
         }
 
+        // enrich
+        /** @var User $admin */
+        $admin                            = auth()->user();
+        $enrichment                       = new RecurringEnrichment();
+        $enrichment->setUser($admin);
+
+        /** @var Recurrence $recurrence */
+        $recurrence                       = $enrichment->enrichSingle($recurrence);
+
         /** @var RecurrenceTransformer $transformer */
         $transformer                      = app(RecurrenceTransformer::class);
         $transformer->setParameters(new ParameterBag());
-
         $array                            = $transformer->transform($recurrence);
-        $budgets                          = app('expandedform')->makeSelectListWithEmpty($this->budgetRepos->getActiveBudgets());
-        $bills                            = app('expandedform')->makeSelectListWithEmpty($this->billRepository->getActiveBills());
+        $budgets                          = ExpandedForm::makeSelectListWithEmpty($this->budgetRepos->getActiveBudgets());
+        $bills                            = ExpandedForm::makeSelectListWithEmpty($this->billRepository->getActiveBills());
 
         /** @var RecurrenceRepetition $repetition */
         $repetition                       = $recurrence->recurrenceRepetitions()->first();
         $currentRepType                   = $repetition->repetition_type;
         if ('' !== $repetition->repetition_moment) {
-            $currentRepType .= ','.$repetition->repetition_moment;
+            $currentRepType = sprintf('%s,%s', $currentRepType, $repetition->repetition_moment);
         }
 
         // put previous url in session if not redirect from store (not "return_to_edit").
@@ -135,7 +146,7 @@ class EditController extends Controller
 
         $hasOldInput                      = null !== $request->old('_token');
         $preFilled                        = [
-            'transaction_type'          => strtolower($recurrence->transactionType->type),
+            'transaction_type'          => strtolower((string) $recurrence->transactionType->type),
             'active'                    => $hasOldInput ? (bool) $request->old('active') : $recurrence->active,
             'apply_rules'               => $hasOldInput ? (bool) $request->old('apply_rules') : $recurrence->apply_rules,
             'deposit_source_id'         => $array['transactions'][0]['source_id'],
@@ -171,7 +182,7 @@ class EditController extends Controller
     public function update(RecurrenceFormRequest $request, Recurrence $recurrence)
     {
         $data     = $request->getAll();
-        $this->recurring->update($recurrence, $data);
+        $this->repository->update($recurrence, $data);
 
         $request->session()->flash('success', (string) trans('firefly.updated_recurrence', ['title' => $recurrence->title]));
         Log::channel('audit')->info(sprintf('Updated recurrence #%d.', $recurrence->id), $data);

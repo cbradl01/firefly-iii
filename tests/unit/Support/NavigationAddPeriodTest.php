@@ -24,9 +24,11 @@ declare(strict_types=1);
 
 namespace Tests\unit\Support;
 
+use Override;
 use Carbon\Carbon;
 use FireflyIII\Support\Calendar\Periodicity;
 use FireflyIII\Support\Navigation;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\integration\TestCase;
 
 /**
@@ -42,80 +44,18 @@ final class NavigationAddPeriodTest extends TestCase
 {
     private Navigation $navigation;
 
-    public function __construct(string $name)
+    #[Override]
+    protected function setUp(): void
     {
-        parent::__construct($name);
+        parent::setUp();
         $this->navigation = new Navigation();
     }
 
-    public static function provideFrequencies(): iterable
+    #[DataProvider('providePeriodsWithSkippingParam')]
+    public function testGivenAFrequencyAndSkipIntervalWhenCalculateTheDateThenReturnsTheSkippedDateSuccessful(int $skip, string $frequency, Carbon $from, Carbon $expected): void
     {
-        return [
-            Periodicity::Daily->name       => ['periodicity' => Periodicity::Daily, 'from' => Carbon::now(), 'expected' => Carbon::tomorrow()],
-            Periodicity::Weekly->name      => ['periodicity' => Periodicity::Weekly, 'from' => Carbon::now(), 'expected' => Carbon::now()->addWeeks(1)],
-            Periodicity::Fortnightly->name => ['periodicity' => Periodicity::Fortnightly, 'from' => Carbon::now(), 'expected' => Carbon::now()->addWeeks(2)],
-            Periodicity::Monthly->name     => ['periodicity' => Periodicity::Monthly, 'from' => Carbon::now(), 'expected' => Carbon::now()->addMonthsNoOverflow(1)],
-            '2019-01-01 to 2019-02-01'     => ['periodicity' => Periodicity::Monthly, 'from' => Carbon::parse('2019-01-01'), 'expected' => Carbon::parse('2019-02-01')],
-            '2019-01-29 to 2019-02-28'     => ['periodicity' => Periodicity::Monthly, 'from' => Carbon::parse('2019-01-29'), 'expected' => Carbon::parse('2019-02-28')],
-            '2019-01-30 to 2019-02-28'     => ['periodicity' => Periodicity::Monthly, 'from' => Carbon::parse('2019-01-30'), 'expected' => Carbon::parse('2019-02-28')],
-            '2019-01-31 to 2019-02-28'     => ['periodicity' => Periodicity::Monthly, 'from' => Carbon::parse('2019-01-31'), 'expected' => Carbon::parse('2019-02-28')],
-            '2023-03-31 to 2023-04-30'     => ['periodicity' => Periodicity::Monthly, 'from' => Carbon::parse('2023-03-31'), 'expected' => Carbon::parse('2023-04-30')],
-            '2023-05-31 to 2023-06-30'     => ['periodicity' => Periodicity::Monthly, 'from' => Carbon::parse('2023-05-31'), 'expected' => Carbon::parse('2023-06-30')],
-            '2023-08-31 to 2023-09-30'     => ['periodicity' => Periodicity::Monthly, 'from' => Carbon::parse('2023-08-31'), 'expected' => Carbon::parse('2023-09-30')],
-            '2023-10-31 to 2023-11-30'     => ['periodicity' => Periodicity::Monthly, 'from' => Carbon::parse('2023-10-31'), 'expected' => Carbon::parse('2023-11-30')],
-            Periodicity::Quarterly->name   => ['periodicity' => Periodicity::Quarterly, 'from' => Carbon::now(), 'expected' => Carbon::now()->addMonthsNoOverflow(3)],
-            '2019-01-29 to 2020-04-29'     => ['periodicity' => Periodicity::Quarterly, 'from' => Carbon::parse('2019-01-29'), 'expected' => Carbon::parse('2019-04-29')],
-            '2019-01-30 to 2020-04-30'     => ['periodicity' => Periodicity::Quarterly, 'from' => Carbon::parse('2019-01-30'), 'expected' => Carbon::parse('2019-04-30')],
-            '2019-01-31 to 2020-04-30'     => ['periodicity' => Periodicity::Quarterly, 'from' => Carbon::parse('2019-01-31'), 'expected' => Carbon::parse('2019-04-30')],
-            Periodicity::HalfYearly->name  => ['periodicity' => Periodicity::HalfYearly, 'from' => Carbon::now(), 'expected' => Carbon::now()->addMonthsNoOverflow(6)],
-            '2019-01-31 to 2020-07-29'     => ['periodicity' => Periodicity::HalfYearly, 'from' => Carbon::parse('2019-01-29'), 'expected' => Carbon::parse('2019-07-29')],
-            '2019-01-31 to 2020-07-30'     => ['periodicity' => Periodicity::HalfYearly, 'from' => Carbon::parse('2019-01-30'), 'expected' => Carbon::parse('2019-07-30')],
-            '2019-01-31 to 2020-07-31'     => ['periodicity' => Periodicity::HalfYearly, 'from' => Carbon::parse('2019-01-31'), 'expected' => Carbon::parse('2019-07-31')],
-            Periodicity::Yearly->name      => ['periodicity' => Periodicity::Yearly, 'from' => Carbon::now(), 'expected' => Carbon::now()->addYears(1)],
-            '2020-02-29 to 2021-02-28'     => ['periodicity' => Periodicity::Yearly, 'from' => Carbon::parse('2020-02-29'), 'expected' => Carbon::parse('2021-02-28')],
-        ];
-    }
-
-    public static function provideMonthPeriods(): iterable
-    {
-        return [
-            '1M'                       => ['frequency' => '1M', 'from' => Carbon::parse('2023-06-25'), 'expected' => Carbon::parse('2023-06-25')->addMonthsNoOverflow(1)],
-            'month'                    => ['frequency' => 'month', 'from' => Carbon::parse('2023-06-25'), 'expected' => Carbon::parse('2023-06-25')->addMonthsNoOverflow(1)],
-            'monthly'                  => ['frequency' => 'monthly', 'from' => Carbon::parse('2023-06-25'), 'expected' => Carbon::parse('2023-06-25')->addMonthsNoOverflow(1)],
-            '2019-01-29 to 2019-02-28' => ['frequency' => 'monthly', 'from' => Carbon::parse('2019-01-29'), 'expected' => Carbon::parse('2019-02-28')],
-            '2019-01-30 to 2019-02-28' => ['frequency' => 'monthly', 'from' => Carbon::parse('2019-01-30'), 'expected' => Carbon::parse('2019-02-28')],
-            '2019-01-31 to 2019-02-28' => ['frequency' => 'monthly', 'from' => Carbon::parse('2019-01-31'), 'expected' => Carbon::parse('2019-02-28')],
-            '2023-03-31 to 2023-04-30' => ['frequency' => 'monthly', 'from' => Carbon::parse('2023-03-31'), 'expected' => Carbon::parse('2023-04-30')],
-            '2023-05-31 to 2023-06-30' => ['frequency' => 'monthly', 'from' => Carbon::parse('2023-05-31'), 'expected' => Carbon::parse('2023-06-30')],
-            '2023-08-31 to 2023-09-30' => ['frequency' => 'monthly', 'from' => Carbon::parse('2023-08-31'), 'expected' => Carbon::parse('2023-09-30')],
-            '2023-10-31 to 2023-11-30' => ['frequency' => 'monthly', 'from' => Carbon::parse('2023-10-31'), 'expected' => Carbon::parse('2023-11-30')],
-        ];
-    }
-
-    public static function providePeriods(): iterable
-    {
-        return [
-            '1D'        => ['frequency' => '1D', 'from' => Carbon::now(), 'expected' => Carbon::tomorrow()],
-            'daily'     => ['frequency' => 'daily', 'from' => Carbon::now(), 'expected' => Carbon::tomorrow()],
-            '1W'        => ['frequency' => '1W', 'from' => Carbon::now(), 'expected' => Carbon::now()->addWeeks(1)],
-            'weekly'    => ['frequency' => 'weekly', 'from' => Carbon::now(), 'expected' => Carbon::now()->addWeeks(1)],
-            'week'      => ['frequency' => 'week', 'from' => Carbon::now(), 'expected' => Carbon::now()->addWeeks(1)],
-            '3M'        => ['frequency' => '3M', 'from' => Carbon::now(), 'expected' => Carbon::now()->addMonthsNoOverflow(3)],
-            'quarter'   => ['frequency' => 'quarter', 'from' => Carbon::now(), 'expected' => Carbon::now()->addMonthsNoOverflow(3)],
-            'quarterly' => ['frequency' => 'quarterly', 'from' => Carbon::now(), 'expected' => Carbon::now()->addMonthsNoOverflow(3)],
-            '6M'        => ['frequency' => '6M', 'from' => Carbon::now(), 'expected' => Carbon::now()->addMonthsNoOverflow(6)],
-            'half-year' => ['frequency' => 'half-year', 'from' => Carbon::now(), 'expected' => Carbon::now()->addMonthsNoOverflow(6)],
-            'year'      => ['frequency' => 'year', 'from' => Carbon::now(), 'expected' => Carbon::now()->addYears(1)],
-            'yearly'    => ['frequency' => 'yearly', 'from' => Carbon::now(), 'expected' => Carbon::now()->addYears(1)],
-            '1Y'        => ['frequency' => '1Y', 'from' => Carbon::now(), 'expected' => Carbon::now()->addYears(1)],
-            'last7'     => ['frequency' => 'last7', 'from' => Carbon::now(), 'expected' => Carbon::now()->addDays(7)],
-            'last30'    => ['frequency' => 'last30', 'from' => Carbon::now(), 'expected' => Carbon::now()->addMonthsNoOverflow(1)],
-            'last90'    => ['frequency' => 'last90', 'from' => Carbon::now(), 'expected' => Carbon::now()->addMonthsNoOverflow(3)],
-            'last365'   => ['frequency' => 'last365', 'from' => Carbon::now(), 'expected' => Carbon::now()->addYears(1)],
-            'MTD'       => ['frequency' => 'MTD', 'from' => Carbon::now(), 'expected' => Carbon::now()->addMonthsNoOverflow(1)],
-            'QTD'       => ['frequency' => 'QTD', 'from' => Carbon::now(), 'expected' => Carbon::now()->addMonthsNoOverflow(3)],
-            'YTD'       => ['frequency' => 'YTD', 'from' => Carbon::now(), 'expected' => Carbon::now()->addYears(1)],
-        ];
+        $period = $this->navigation->addPeriod($from, $frequency, $skip);
+        $this->assertSame($expected->toDateString(), $period->toDateString());
     }
 
     public static function providePeriodsWithSkippingParam(): iterable
@@ -163,39 +103,137 @@ final class NavigationAddPeriodTest extends TestCase
         }
     }
 
-    /**
-     * @dataProvider providePeriodsWithSkippingParam
-     */
-    public function testGivenAFrequencyAndSkipIntervalWhenCalculateTheDateThenReturnsTheSkippedDateSuccessful(int $skip, string $frequency, Carbon $from, Carbon $expected): void
-    {
-        $period = $this->navigation->addPeriod($from, $frequency, $skip);
-        self::assertSame($expected->toDateString(), $period->toDateString());
-    }
-
-    /**
-     * @dataProvider providePeriods
-     */
+    #[DataProvider('providePeriods')]
     public function testGivenAFrequencyWhenCalculateTheDateThenReturnsTheExpectedDateSuccessful(string $frequency, Carbon $from, Carbon $expected): void
     {
         $period = $this->navigation->addPeriod($from, $frequency, 0);
-        self::assertSame($expected->toDateString(), $period->toDateString());
+        $this->assertSame($expected->toDateString(), $period->toDateString());
     }
 
-    /**
-     * @dataProvider provideFrequencies
-     */
+    public static function providePeriods(): iterable
+    {
+        yield '1D' => ['1D', Carbon::now(), Carbon::tomorrow()];
+
+        yield 'daily' => ['daily', Carbon::now(), Carbon::tomorrow()];
+
+        yield '1W' => ['1W', Carbon::now(), Carbon::now()->addWeeks(1)];
+
+        yield 'weekly' => ['weekly', Carbon::now(), Carbon::now()->addWeeks(1)];
+
+        yield 'week' => ['week', Carbon::now(), Carbon::now()->addWeeks(1)];
+
+        yield '3M' => ['3M', Carbon::now(), Carbon::now()->addMonthsNoOverflow(3)];
+
+        yield 'quarter' => ['quarter', Carbon::now(), Carbon::now()->addMonthsNoOverflow(3)];
+
+        yield 'quarterly' => ['quarterly', Carbon::now(), Carbon::now()->addMonthsNoOverflow(3)];
+
+        yield '6M' => ['6M', Carbon::now(), Carbon::now()->addMonthsNoOverflow(6)];
+
+        yield 'half-year' => ['half-year', Carbon::now(), Carbon::now()->addMonthsNoOverflow(6)];
+
+        yield 'year' => ['year', Carbon::now(), Carbon::now()->addYears(1)];
+
+        yield 'yearly' => ['yearly', Carbon::now(), Carbon::now()->addYears(1)];
+
+        yield '1Y' => ['1Y', Carbon::now(), Carbon::now()->addYears(1)];
+
+        yield 'last7' => ['last7', Carbon::now(), Carbon::now()->addDays(7)];
+
+        yield 'last30' => ['last30', Carbon::now(), Carbon::now()->addMonthsNoOverflow(1)];
+
+        yield 'last90' => ['last90', Carbon::now(), Carbon::now()->addMonthsNoOverflow(3)];
+
+        yield 'last365' => ['last365', Carbon::now(), Carbon::now()->addYears(1)];
+
+        yield 'MTD' => ['MTD', Carbon::now(), Carbon::now()->addMonthsNoOverflow(1)];
+
+        yield 'QTD' => ['QTD', Carbon::now(), Carbon::now()->addMonthsNoOverflow(3)];
+
+        yield 'YTD' => ['YTD', Carbon::now(), Carbon::now()->addYears(1)];
+    }
+
+    #[DataProvider('provideFrequencies')]
     public function testGivenAIntervalWhenCallTheNextDateByIntervalMethodThenReturnsTheExpectedDateSuccessful(Periodicity $periodicity, Carbon $from, Carbon $expected): void
     {
         $period = $this->navigation->nextDateByInterval($from, $periodicity);
-        self::assertSame($expected->toDateString(), $period->toDateString());
+        $this->assertSame($expected->toDateString(), $period->toDateString());
     }
 
-    /**
-     * @dataProvider provideMonthPeriods
-     */
+    public static function provideFrequencies(): iterable
+    {
+        yield Periodicity::Daily->name => [Periodicity::Daily, Carbon::now(), Carbon::tomorrow()];
+
+        yield Periodicity::Weekly->name => [Periodicity::Weekly, Carbon::now(), Carbon::now()->addWeeks(1)];
+
+        yield Periodicity::Fortnightly->name => [Periodicity::Fortnightly, Carbon::now(), Carbon::now()->addWeeks(2)];
+
+        yield Periodicity::Monthly->name => [Periodicity::Monthly, Carbon::now(), Carbon::now()->addMonthsNoOverflow(1)];
+
+        yield '2019-01-01 to 2019-02-01' => [Periodicity::Monthly, Carbon::parse('2019-01-01'), Carbon::parse('2019-02-01')];
+
+        yield '2019-01-29 to 2019-02-28' => [Periodicity::Monthly, Carbon::parse('2019-01-29'), Carbon::parse('2019-02-28')];
+
+        yield '2019-01-30 to 2019-02-28' => [Periodicity::Monthly, Carbon::parse('2019-01-30'), Carbon::parse('2019-02-28')];
+
+        yield '2019-01-31 to 2019-02-28' => [Periodicity::Monthly, Carbon::parse('2019-01-31'), Carbon::parse('2019-02-28')];
+
+        yield '2023-03-31 to 2023-04-30' => [Periodicity::Monthly, Carbon::parse('2023-03-31'), Carbon::parse('2023-04-30')];
+
+        yield '2023-05-31 to 2023-06-30' => [Periodicity::Monthly, Carbon::parse('2023-05-31'), Carbon::parse('2023-06-30')];
+
+        yield '2023-08-31 to 2023-09-30' => [Periodicity::Monthly, Carbon::parse('2023-08-31'), Carbon::parse('2023-09-30')];
+
+        yield '2023-10-31 to 2023-11-30' => [Periodicity::Monthly, Carbon::parse('2023-10-31'), Carbon::parse('2023-11-30')];
+
+        yield Periodicity::Quarterly->name => [Periodicity::Quarterly, Carbon::now(), Carbon::now()->addMonthsNoOverflow(3)];
+
+        yield '2019-01-29 to 2020-04-29' => [Periodicity::Quarterly, Carbon::parse('2019-01-29'), Carbon::parse('2019-04-29')];
+
+        yield '2019-01-30 to 2020-04-30' => [Periodicity::Quarterly, Carbon::parse('2019-01-30'), Carbon::parse('2019-04-30')];
+
+        yield '2019-01-31 to 2020-04-30' => [Periodicity::Quarterly, Carbon::parse('2019-01-31'), Carbon::parse('2019-04-30')];
+
+        yield Periodicity::HalfYearly->name => [Periodicity::HalfYearly, Carbon::now(), Carbon::now()->addMonthsNoOverflow(6)];
+
+        yield '2019-01-31 to 2020-07-29' => [Periodicity::HalfYearly, Carbon::parse('2019-01-29'), Carbon::parse('2019-07-29')];
+
+        yield '2019-01-31 to 2020-07-30' => [Periodicity::HalfYearly, Carbon::parse('2019-01-30'), Carbon::parse('2019-07-30')];
+
+        yield '2019-01-31 to 2020-07-31' => [Periodicity::HalfYearly, Carbon::parse('2019-01-31'), Carbon::parse('2019-07-31')];
+
+        yield Periodicity::Yearly->name => [Periodicity::Yearly, Carbon::now(), Carbon::now()->addYears(1)];
+
+        yield '2020-02-29 to 2021-02-28' => [Periodicity::Yearly, Carbon::parse('2020-02-29'), Carbon::parse('2021-02-28')];
+    }
+
+    #[DataProvider('provideMonthPeriods')]
     public function testGivenAMonthFrequencyWhenCalculateTheDateThenReturnsTheLastDayOfMonthSuccessful(string $frequency, Carbon $from, Carbon $expected): void
     {
         $period = $this->navigation->addPeriod($from, $frequency, 0);
-        self::assertSame($expected->toDateString(), $period->toDateString());
+        $this->assertSame($expected->toDateString(), $period->toDateString());
+    }
+
+    public static function provideMonthPeriods(): iterable
+    {
+        yield '1M' => ['1M', Carbon::parse('2023-06-25'), Carbon::parse('2023-06-25')->addMonthsNoOverflow(1)];
+
+        yield 'month' => ['month', Carbon::parse('2023-06-25'), Carbon::parse('2023-06-25')->addMonthsNoOverflow(1)];
+
+        yield 'monthly' => ['monthly', Carbon::parse('2023-06-25'), Carbon::parse('2023-06-25')->addMonthsNoOverflow(1)];
+
+        yield '2019-01-29 to 2019-02-28' => ['monthly', Carbon::parse('2019-01-29'), Carbon::parse('2019-02-28')];
+
+        yield '2019-01-30 to 2019-02-28' => ['monthly', Carbon::parse('2019-01-30'), Carbon::parse('2019-02-28')];
+
+        yield '2019-01-31 to 2019-02-28' => ['monthly', Carbon::parse('2019-01-31'), Carbon::parse('2019-02-28')];
+
+        yield '2023-03-31 to 2023-04-30' => ['monthly', Carbon::parse('2023-03-31'), Carbon::parse('2023-04-30')];
+
+        yield '2023-05-31 to 2023-06-30' => ['monthly', Carbon::parse('2023-05-31'), Carbon::parse('2023-06-30')];
+
+        yield '2023-08-31 to 2023-09-30' => ['monthly', Carbon::parse('2023-08-31'), Carbon::parse('2023-09-30')];
+
+        yield '2023-10-31 to 2023-11-30' => ['monthly', Carbon::parse('2023-10-31'), Carbon::parse('2023-11-30')];
     }
 }

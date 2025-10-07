@@ -32,8 +32,10 @@ use FireflyIII\Support\Cronjobs\BillWarningCronjob;
 use FireflyIII\Support\Cronjobs\ExchangeRatesCronjob;
 use FireflyIII\Support\Cronjobs\RecurringCronjob;
 use FireflyIII\Support\Cronjobs\UpdateCheckCronjob;
+use FireflyIII\Support\Cronjobs\WebhookCronjob;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
+use InvalidArgumentException;
 
 class Cron extends Command
 {
@@ -48,7 +50,8 @@ class Cron extends Command
         {--download-cer : Download exchange rates. Other tasks will be skipped unless also requested.}
         {--create-recurring : Create recurring transactions. Other tasks will be skipped unless also requested.}
         {--create-auto-budgets : Create auto budgets. Other tasks will be skipped unless also requested.}
-        {--send-bill-warnings : Send bill warnings. Other tasks will be skipped unless also requested.}
+        {--send-subscription-warnings : Send subscription warnings. Other tasks will be skipped unless also requested.}
+        {--send-webhook-messages : Sends any stray webhook messages (with a maximum of 5).}
         ';
 
     public function handle(): int
@@ -56,13 +59,14 @@ class Cron extends Command
         $doAll = !$this->option('download-cer')
                  && !$this->option('create-recurring')
                  && !$this->option('create-auto-budgets')
-                 && !$this->option('send-bill-warnings')
-                 && !$this->option('check-version');
+                 && !$this->option('send-subscription-warnings')
+                 && !$this->option('check-version')
+                 && !$this->option('send-webhook-messages');
         $date  = null;
 
         try {
             $date = new Carbon($this->option('date'));
-        } catch (\InvalidArgumentException $e) {
+        } catch (InvalidArgumentException $e) {
             $this->friendlyError(sprintf('"%s" is not a valid date', $this->option('date')));
         }
         $force = (bool) $this->option('force'); // @phpstan-ignore-line
@@ -112,9 +116,19 @@ class Cron extends Command
         }
 
         // Fire bill warning cron job
-        if ($doAll || $this->option('send-bill-warnings')) {
+        if ($doAll || $this->option('send-subscription-warnings')) {
             try {
-                $this->billWarningCronJob($force, $date);
+                $this->subscriptionWarningCronJob($force, $date);
+            } catch (FireflyException $e) {
+                app('log')->error($e->getMessage());
+                app('log')->error($e->getTraceAsString());
+                $this->friendlyError($e->getMessage());
+            }
+        }
+        // Fire webhook messages cron job.
+        if ($doAll || $this->option('send-webhook-messages')) {
+            try {
+                $this->webhookCronJob($force, $date);
             } catch (FireflyException $e) {
                 app('log')->error($e->getMessage());
                 app('log')->error($e->getTraceAsString());
@@ -133,7 +147,7 @@ class Cron extends Command
         $exchangeRates = new ExchangeRatesCronjob();
         $exchangeRates->setForce($force);
         // set date in cron job:
-        if (null !== $date) {
+        if ($date instanceof Carbon) {
             $exchangeRates->setDate($date);
         }
 
@@ -150,6 +164,23 @@ class Cron extends Command
         }
     }
 
+    private function checkForUpdates(bool $force): void
+    {
+        $updateCheck = new UpdateCheckCronjob();
+        $updateCheck->setForce($force);
+        $updateCheck->fire();
+
+        if ($updateCheck->jobErrored) {
+            $this->friendlyError(sprintf('Error in "update check" cron: %s', $updateCheck->message));
+        }
+        if ($updateCheck->jobFired) {
+            $this->friendlyInfo(sprintf('"Update check" cron fired: %s', $updateCheck->message));
+        }
+        if ($updateCheck->jobSucceeded) {
+            $this->friendlyPositive(sprintf('"Update check" cron ran with success: %s', $updateCheck->message));
+        }
+    }
+
     /**
      * @throws FireflyException
      */
@@ -159,7 +190,7 @@ class Cron extends Command
         $recurring->setForce($force);
 
         // set date in cron job:
-        if (null !== $date) {
+        if ($date instanceof Carbon) {
             $recurring->setDate($date);
         }
 
@@ -180,7 +211,7 @@ class Cron extends Command
         $autoBudget = new AutoBudgetCronjob();
         $autoBudget->setForce($force);
         // set date in cron job:
-        if (null !== $date) {
+        if ($date instanceof Carbon) {
             $autoBudget->setDate($date);
         }
 
@@ -200,42 +231,47 @@ class Cron extends Command
     /**
      * @throws FireflyException
      */
-    private function billWarningCronJob(bool $force, ?Carbon $date): void
+    private function subscriptionWarningCronJob(bool $force, ?Carbon $date): void
     {
-        $autoBudget = new BillWarningCronjob();
-        $autoBudget->setForce($force);
+        $subscriptionWarningJob = new BillWarningCronjob();
+        $subscriptionWarningJob->setForce($force);
         // set date in cron job:
-        if (null !== $date) {
-            $autoBudget->setDate($date);
+        if ($date instanceof Carbon) {
+            $subscriptionWarningJob->setDate($date);
         }
 
-        $autoBudget->fire();
+        $subscriptionWarningJob->fire();
 
-        if ($autoBudget->jobErrored) {
-            $this->friendlyError(sprintf('Error in "bill warnings" cron: %s', $autoBudget->message));
+        if ($subscriptionWarningJob->jobErrored) {
+            $this->friendlyError(sprintf('Error in "subscription warnings" cron: %s', $subscriptionWarningJob->message));
         }
-        if ($autoBudget->jobFired) {
-            $this->friendlyInfo(sprintf('"Send bill warnings" cron fired: %s', $autoBudget->message));
+        if ($subscriptionWarningJob->jobFired) {
+            $this->friendlyInfo(sprintf('"Send subscription warnings" cron fired: %s', $subscriptionWarningJob->message));
         }
-        if ($autoBudget->jobSucceeded) {
-            $this->friendlyPositive(sprintf('"Send bill warnings" cron ran with success: %s', $autoBudget->message));
+        if ($subscriptionWarningJob->jobSucceeded) {
+            $this->friendlyPositive(sprintf('"Send subscription warnings" cron ran with success: %s', $subscriptionWarningJob->message));
         }
     }
 
-    private function checkForUpdates(bool $force): void
+    private function webhookCronJob(bool $force, ?Carbon $date): void
     {
-        $updateCheck = new UpdateCheckCronjob();
-        $updateCheck->setForce($force);
-        $updateCheck->fire();
+        $webhook = new WebhookCronjob();
+        $webhook->setForce($force);
+        // set date in cron job:
+        if ($date instanceof Carbon) {
+            $webhook->setDate($date);
+        }
 
-        if ($updateCheck->jobErrored) {
-            $this->friendlyError(sprintf('Error in "update check" cron: %s', $updateCheck->message));
+        $webhook->fire();
+
+        if ($webhook->jobErrored) {
+            $this->friendlyError(sprintf('Error in "webhook" cron: %s', $webhook->message));
         }
-        if ($updateCheck->jobFired) {
-            $this->friendlyInfo(sprintf('"Update check" cron fired: %s', $updateCheck->message));
+        if ($webhook->jobFired) {
+            $this->friendlyInfo(sprintf('"Webhook" cron fired: %s', $webhook->message));
         }
-        if ($updateCheck->jobSucceeded) {
-            $this->friendlyPositive(sprintf('"Update check" cron ran with success: %s', $updateCheck->message));
+        if ($webhook->jobSucceeded) {
+            $this->friendlyPositive(sprintf('"Webhook" cron ran with success: %s', $webhook->message));
         }
     }
 }

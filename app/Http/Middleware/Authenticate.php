@@ -24,11 +24,14 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Middleware;
 
+use Closure;
 use FireflyIII\Exceptions\FireflyException;
+use FireflyIII\Exceptions\Handler;
 use FireflyIII\User;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Contracts\Auth\Factory as Auth;
 use Illuminate\Http\Request;
+use League\OAuth2\Server\Exception\OAuthServerException;
 
 /**
  * Class Authenticate
@@ -36,17 +39,14 @@ use Illuminate\Http\Request;
 class Authenticate
 {
     /**
-     * The authentication factory instance.
-     */
-    protected Auth $auth;
-
-    /**
      * Create a new middleware instance.
      */
-    public function __construct(Auth $auth)
-    {
-        $this->auth = $auth;
-    }
+    public function __construct(
+        /**
+         * The authentication factory instance.
+         */
+        protected Auth $auth
+    ) {}
 
     /**
      * Handle an incoming request.
@@ -59,7 +59,7 @@ class Authenticate
      * @throws FireflyException
      * @throws AuthenticationException
      */
-    public function handle($request, \Closure $next, ...$guards)
+    public function handle($request, Closure $next, ...$guards)
     {
         $this->authenticate($request, $guards);
 
@@ -86,6 +86,7 @@ class Authenticate
             if ($this->auth->check()) {
                 // do an extra check on user object.
                 /** @noinspection PhpUndefinedMethodInspection */
+
                 /** @var User $user */
                 $user = $this->auth->authenticate();
                 $this->validateBlockedUser($user, $guards);
@@ -109,7 +110,14 @@ class Authenticate
             }
         }
 
-        throw new AuthenticationException('Unauthenticated.', $guards);
+        // this is a massive hack, but if the handler has the oauth exception
+        // at this point we can report its error instead of a generic one.
+        $message = 'Unauthenticated.';
+        if (Handler::$lastError instanceof OAuthServerException) {
+            $message = Handler::$lastError->getHint();
+        }
+
+        throw new AuthenticationException($message, $guards);
     }
 
     /**
@@ -117,10 +125,10 @@ class Authenticate
      */
     private function validateBlockedUser(?User $user, array $guards): void
     {
-        if (null === $user) {
+        if (!$user instanceof User) {
             app('log')->warning('User is null, throw exception?');
         }
-        if (null !== $user) {
+        if ($user instanceof User) {
             // app('log')->debug(get_class($user));
             if (1 === (int) $user->blocked) {
                 $message = (string) trans('firefly.block_account_logout');

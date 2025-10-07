@@ -28,33 +28,31 @@ use FireflyIII\Enums\AccountTypeEnum;
 use FireflyIII\Models\Account;
 use FireflyIII\Models\AccountMeta;
 use Illuminate\Contracts\Validation\ValidationRule;
+use Closure;
+
+use function Safe\json_encode;
 
 /**
  * Class UniqueAccountNumber
  */
 class UniqueAccountNumber implements ValidationRule
 {
-    private ?Account $account;
-    private ?string  $expectedType;
-
     /**
      * Create a new rule instance.
      */
-    public function __construct(?Account $account, ?string $expectedType)
+    public function __construct(private readonly ?Account $account, private ?string $expectedType)
     {
         app('log')
             ->debug('Constructed UniqueAccountNumber')
         ;
-        $this->account      = $account;
-        $this->expectedType = $expectedType;
         // a very basic fix to make sure we get the correct account type:
-        if ('expense' === $expectedType) {
+        if ('expense' === $this->expectedType) {
             $this->expectedType = AccountTypeEnum::EXPENSE->value;
         }
-        if ('revenue' === $expectedType) {
+        if ('revenue' === $this->expectedType) {
             $this->expectedType = AccountTypeEnum::REVENUE->value;
         }
-        if ('asset' === $expectedType) {
+        if ('asset' === $this->expectedType) {
             $this->expectedType = AccountTypeEnum::ASSET->value;
         }
         app('log')->debug(sprintf('Expected type is "%s"', $this->expectedType));
@@ -71,7 +69,7 @@ class UniqueAccountNumber implements ValidationRule
     /**
      * @SuppressWarnings("PHPMD.UnusedFormalParameter")
      */
-    public function validate(string $attribute, mixed $value, \Closure $fail): void
+    public function validate(string $attribute, mixed $value, Closure $fail): void
     {
         if (!auth()->check()) {
             return;
@@ -141,7 +139,7 @@ class UniqueAccountNumber implements ValidationRule
             ->where('account_meta.data', json_encode($accountNumber))
         ;
 
-        if (null !== $this->account) {
+        if ($this->account instanceof Account) {
             $query->where('accounts.id', '!=', $this->account->id);
         }
 

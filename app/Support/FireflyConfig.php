@@ -28,7 +28,9 @@ use FireflyIII\Models\Configuration;
 use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Contracts\Encryption\EncryptException;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Exception;
 
 /**
  * Class FireflyConfig.
@@ -37,9 +39,9 @@ class FireflyConfig
 {
     public function delete(string $name): void
     {
-        $fullName = 'ff-config-'.$name;
-        if (\Cache::has($fullName)) {
-            \Cache::forget($fullName);
+        $fullName = 'ff3-config-'.$name;
+        if (Cache::has($fullName)) {
+            Cache::forget($fullName);
         }
         Configuration::where('name', $name)->forceDelete();
     }
@@ -52,7 +54,7 @@ class FireflyConfig
     public function getEncrypted(string $name, mixed $default = null): ?Configuration
     {
         $result = $this->get($name, $default);
-        if (null === $result) {
+        if (!$result instanceof Configuration) {
             return null;
         }
         if ('' === $result->data) {
@@ -79,20 +81,20 @@ class FireflyConfig
      */
     public function get(string $name, mixed $default = null): ?Configuration
     {
-        $fullName = 'ff-config-'.$name;
-        if (\Cache::has($fullName)) {
-            return \Cache::get($fullName);
+        $fullName = 'ff3-config-'.$name;
+        if (Cache::has($fullName)) {
+            return Cache::get($fullName);
         }
 
         try {
             /** @var null|Configuration $config */
             $config = Configuration::where('name', $name)->first(['id', 'name', 'data']);
-        } catch (\Exception|QueryException $e) {
+        } catch (Exception|QueryException $e) {
             throw new FireflyException(sprintf('Could not poll the database: %s', $e->getMessage()), 0, $e);
         }
 
         if (null !== $config) {
-            \Cache::forever($fullName, $config);
+            Cache::forever($fullName, $config);
 
             return $config;
         }
@@ -122,13 +124,13 @@ class FireflyConfig
             $item->name = $name;
             $item->data = $value;
             $item->save();
-            \Cache::forget('ff-config-'.$name);
+            Cache::forget('ff3-config-'.$name);
 
             return $item;
         }
         $config->data = $value;
         $config->save();
-        \Cache::forget('ff-config-'.$name);
+        Cache::forget('ff3-config-'.$name);
 
         return $config;
     }

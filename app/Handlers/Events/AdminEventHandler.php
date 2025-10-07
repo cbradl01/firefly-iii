@@ -32,11 +32,11 @@ use FireflyIII\Notifications\Admin\UserInvitation;
 use FireflyIII\Notifications\Admin\VersionCheckResult;
 use FireflyIII\Notifications\Notifiables\OwnerNotifiable;
 use FireflyIII\Notifications\Test\OwnerTestNotificationEmail;
-use FireflyIII\Notifications\Test\OwnerTestNotificationNtfy;
 use FireflyIII\Notifications\Test\OwnerTestNotificationPushover;
 use FireflyIII\Notifications\Test\OwnerTestNotificationSlack;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
+use Exception;
 
 /**
  * Class AdminEventHandler.
@@ -52,7 +52,7 @@ class AdminEventHandler
 
         try {
             Notification::send(new OwnerNotifiable(), new UserInvitation($event->invitee));
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             $message = $e->getMessage();
             if (str_contains($message, 'Bcc')) {
                 app('log')->warning('[Bcc] Could not send notification. Please validate your email settings, use the .env.example file as a guide.');
@@ -74,7 +74,7 @@ class AdminEventHandler
         try {
             $owner = new OwnerNotifiable();
             Notification::send($owner, new UnknownUserLoginAttempt($event->address));
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             $message = $e->getMessage();
             if (str_contains($message, 'Bcc')) {
                 app('log')->warning('[Bcc] Could not send notification. Please validate your email settings, use the .env.example file as a guide.');
@@ -104,7 +104,7 @@ class AdminEventHandler
         try {
             $owner = new OwnerNotifiable();
             Notification::send($owner, new VersionCheckResult($event->message));
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             $message = $e->getMessage();
             if (str_contains($message, 'Bcc')) {
                 app('log')->warning('[Bcc] Could not send notification. Please validate your email settings, use the .env.example file as a guide.');
@@ -139,10 +139,10 @@ class AdminEventHandler
 
                 break;
 
-            case 'ntfy':
-                $class = OwnerTestNotificationNtfy::class;
-
-                break;
+                //            case 'ntfy':
+                //                $class = OwnerTestNotificationNtfy::class;
+                //
+                //                break;
 
             case 'pushover':
                 $class = OwnerTestNotificationPushover::class;
@@ -158,7 +158,7 @@ class AdminEventHandler
 
         try {
             Notification::send($event->owner, new $class());
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             $message = $e->getMessage();
             if (str_contains($message, 'Bcc')) {
                 app('log')->warning('[Bcc] Could not send notification. Please validate your email settings, use the .env.example file as a guide.');

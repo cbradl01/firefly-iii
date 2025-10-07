@@ -26,6 +26,7 @@ namespace FireflyIII\Api\V1\Requests\Models\CurrencyExchangeRate;
 
 use Carbon\Carbon;
 use FireflyIII\Models\TransactionCurrency;
+use FireflyIII\Support\Facades\Amount;
 use FireflyIII\Support\Request\ChecksLogin;
 use FireflyIII\Support\Request\ConvertsDataTypes;
 use Illuminate\Foundation\Http\FormRequest;
@@ -40,19 +41,19 @@ class StoreRequest extends FormRequest
         return $this->getCarbonDate('date');
     }
 
+    public function getFromCurrency(): TransactionCurrency
+    {
+        return Amount::getTransactionCurrencyByCode((string) $this->get('from'));
+    }
+
     public function getRate(): string
     {
         return (string) $this->get('rate');
     }
 
-    public function getFromCurrency(): TransactionCurrency
-    {
-        return TransactionCurrency::where('code', $this->get('from'))->first();
-    }
-
     public function getToCurrency(): TransactionCurrency
     {
-        return TransactionCurrency::where('code', $this->get('to'))->first();
+        return Amount::getTransactionCurrencyByCode((string) $this->get('to'));
     }
 
     /**
@@ -61,7 +62,7 @@ class StoreRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'date' => 'required|date|after:1900-01-01|before:2099-12-31',
+            'date' => 'required|date|after:1970-01-02|before:2038-01-17',
             'rate' => 'required|numeric|gt:0',
             'from' => 'required|exists:transaction_currencies,code',
             'to'   => 'required|exists:transaction_currencies,code',

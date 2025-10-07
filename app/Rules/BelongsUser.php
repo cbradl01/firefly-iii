@@ -32,13 +32,14 @@ use FireflyIII\Models\Category;
 use FireflyIII\Models\PiggyBank;
 use FireflyIII\Models\TransactionJournal;
 use Illuminate\Contracts\Validation\ValidationRule;
+use Closure;
 
 /**
  * Class BelongsUser
  */
 class BelongsUser implements ValidationRule
 {
-    public function validate(string $attribute, mixed $value, \Closure $fail): void
+    public function validate(string $attribute, mixed $value, Closure $fail): void
     {
         $attribute = $this->parseAttribute($attribute);
         if (!auth()->check()) {
@@ -82,8 +83,6 @@ class BelongsUser implements ValidationRule
     {
 
 
-
-
         $count = PiggyBank::leftJoin('account_piggy_bank', 'account_piggy_bank.piggy_bank_id', '=', 'piggy_banks.id')
             ->leftJoin('accounts', 'accounts.id', '=', 'account_piggy_bank.account_id')
             ->where('piggy_banks.id', '=', $value)
@@ -102,32 +101,6 @@ class BelongsUser implements ValidationRule
         ;
 
         return $count > 0;
-    }
-
-    protected function countField(string $class, string $field, string $value): int
-    {
-        $value   = trim($value);
-        $objects = [];
-        // get all objects belonging to user:
-        if (PiggyBank::class === $class) {
-            $objects = PiggyBank::leftJoin('accounts', 'accounts.id', '=', 'piggy_banks.account_id')
-                ->where('accounts.user_id', '=', auth()->user()->id)->get(['piggy_banks.*'])
-            ;
-        }
-        if (PiggyBank::class !== $class) {
-            $objects = $class::where('user_id', '=', auth()->user()->id)->get();
-        }
-        $count   = 0;
-        foreach ($objects as $object) {
-            $objectValue = trim((string) $object->{$field}); // @phpstan-ignore-line
-            app('log')->debug(sprintf('Comparing object "%s" with value "%s"', $objectValue, $value));
-            if ($objectValue === $value) {
-                ++$count;
-                app('log')->debug(sprintf('Hit! Count is now %d', $count));
-            }
-        }
-
-        return $count;
     }
 
     private function validateBillId(int $value): bool
@@ -156,6 +129,32 @@ class BelongsUser implements ValidationRule
         app('log')->debug(sprintf('Result of countField for bill name "%s" is %d', $value, $count));
 
         return 1 === $count;
+    }
+
+    protected function countField(string $class, string $field, string $value): int
+    {
+        $value   = trim($value);
+        $objects = [];
+        // get all objects belonging to user:
+        if (PiggyBank::class === $class) {
+            $objects = PiggyBank::leftJoin('accounts', 'accounts.id', '=', 'piggy_banks.account_id')
+                ->where('accounts.user_id', '=', auth()->user()->id)->get(['piggy_banks.*'])
+            ;
+        }
+        if (PiggyBank::class !== $class) {
+            $objects = $class::where('user_id', '=', auth()->user()->id)->get();
+        }
+        $count   = 0;
+        foreach ($objects as $object) {
+            $objectValue = trim((string) $object->{$field}); // @phpstan-ignore-line
+            app('log')->debug(sprintf('Comparing object "%s" with value "%s"', $objectValue, $value));
+            if ($objectValue === $value) {
+                ++$count;
+                app('log')->debug(sprintf('Hit! Count is now %d', $count));
+            }
+        }
+
+        return $count;
     }
 
     private function validateBudgetId(int $value): bool

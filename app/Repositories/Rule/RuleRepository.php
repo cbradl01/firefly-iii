@@ -29,21 +29,21 @@ use FireflyIII\Models\RuleAction;
 use FireflyIII\Models\RuleGroup;
 use FireflyIII\Models\RuleTrigger;
 use FireflyIII\Repositories\RuleGroup\RuleGroupRepositoryInterface;
+use FireflyIII\Support\Repositories\UserGroup\UserGroupInterface;
+use FireflyIII\Support\Repositories\UserGroup\UserGroupTrait;
 use FireflyIII\Support\Search\OperatorQuerySearch;
-use FireflyIII\User;
-use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Support\Collection;
+use Exception;
 
 /**
  * Class RuleRepository.
  */
-class RuleRepository implements RuleRepositoryInterface
+class RuleRepository implements RuleRepositoryInterface, UserGroupInterface
 {
-    /** @var User */
-    private $user;
+    use UserGroupTrait;
 
     /**
-     * @throws \Exception
+     * @throws Exception
      */
     public function destroy(Rule $rule): bool
     {
@@ -143,8 +143,8 @@ class RuleRepository implements RuleRepositoryInterface
                 continue;
             }
             $triggerType  = $trigger->trigger_type;
-            if (str_starts_with($trigger->trigger_type, '-')) {
-                $triggerType = substr($trigger->trigger_type, 1);
+            if (str_starts_with((string) $trigger->trigger_type, '-')) {
+                $triggerType = substr((string) $trigger->trigger_type, 1);
             }
             $needsContext = config(sprintf('search.operators.%s.needs_context', $triggerType)) ?? true;
             if (false === $needsContext) {
@@ -312,13 +312,6 @@ class RuleRepository implements RuleRepositoryInterface
         return true;
     }
 
-    public function setUser(null|Authenticatable|User $user): void
-    {
-        if ($user instanceof User) {
-            $this->user = $user;
-        }
-    }
-
     public function setOrder(Rule $rule, int $newOrder): void
     {
         $oldOrder    = $rule->order;
@@ -367,7 +360,7 @@ class RuleRepository implements RuleRepositoryInterface
             $stopProcessing = $trigger['stop_processing'] ?? false;
             $active         = $trigger['active'] ?? true;
             $type           = $trigger['type'];
-            if (true === ($trigger['prohibited'] ?? false) && !str_starts_with($type, '-')) {
+            if (true === ($trigger['prohibited'] ?? false) && !str_starts_with((string) $type, '-')) {
                 $type = sprintf('-%s', $type);
             }
 

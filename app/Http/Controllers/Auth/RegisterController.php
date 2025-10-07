@@ -36,6 +36,7 @@ use Illuminate\Foundation\Auth\RegistersUsers;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Redirector;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Psr\Container\ContainerExceptionInterface;
@@ -94,7 +95,7 @@ class RegisterController extends Controller
 
         $this->validator($request->all())->validate();
         $user              = $this->createUser($request->all());
-        app('log')->info(sprintf('Registered new user %s', $user->email));
+        Log::info(sprintf('Registered new user %s', $user->email));
         $owner             = new OwnerNotifiable();
         event(new RegisteredUser($owner, $user));
 
@@ -121,7 +122,7 @@ class RegisterController extends Controller
 
         try {
             $singleUserMode = app('fireflyconfig')->get('single_user_mode', config('firefly.configuration.single_user_mode'))->data;
-        } catch (ContainerExceptionInterface|NotFoundExceptionInterface $e) {
+        } catch (ContainerExceptionInterface|NotFoundExceptionInterface) {
             $singleUserMode = true;
         }
         $userCount         = User::count();
@@ -130,7 +131,7 @@ class RegisterController extends Controller
             $allowRegistration = false;
         }
         if ('web' !== $guard) {
-            $allowRegistration = false;
+            return false;
         }
 
         return $allowRegistration;
@@ -175,7 +176,7 @@ class RegisterController extends Controller
      *
      * @throws FireflyException
      */
-    public function showRegistrationForm(Request $request)
+    public function showRegistrationForm(?Request $request = null)
     {
         $isDemoSite        = app('fireflyconfig')->get('is_demo_site', config('firefly.configuration.is_demo_site'))->data;
         $pageTitle         = (string) trans('firefly.register_page_title');
@@ -187,7 +188,7 @@ class RegisterController extends Controller
             return view('error', compact('message'));
         }
 
-        $email             = $request->old('email');
+        $email             = $request?->old('email');
 
         return view('auth.register', compact('isDemoSite', 'email', 'pageTitle'));
     }

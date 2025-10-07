@@ -34,6 +34,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\Log;
 use League\Fractal\Pagination\IlluminatePaginatorAdapter;
 use League\Fractal\Resource\Collection as FractalCollection;
 
@@ -71,7 +72,7 @@ class AccountController extends Controller
         if ('' === $query || !in_array($field, $this->validFields, true)) {
             return response(null, 422);
         }
-        app('log')->debug(sprintf('Now in account search("%s", "%s")', $field, $query));
+        Log::debug(sprintf('Now in account search("%s", "%s")', $field, $query));
         $types       = $this->mapAccountTypes($type);
 
         /** @var AccountSearch $search */
@@ -87,9 +88,8 @@ class AccountController extends Controller
         /** @var User $admin */
         $admin       = auth()->user();
         $enrichment  = new AccountEnrichment();
+        $enrichment->setDate($this->parameters->get('date'));
         $enrichment->setUser($admin);
-        $enrichment->setConvertToNative($this->convertToNative);
-        $enrichment->setNative($this->nativeCurrency);
         $accounts    = $enrichment->enrich($accounts);
 
         /** @var AccountTransformer $transformer */

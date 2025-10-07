@@ -38,11 +38,19 @@ use FireflyIII\Repositories\PiggyBank\PiggyBankRepositoryInterface;
 use FireflyIII\Services\Password\Verifier;
 use FireflyIII\Support\ParseDateString;
 use FireflyIII\User;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Validator;
 use PragmaRX\Google2FA\Exceptions\IncompatibleWithGoogleAuthenticatorException;
 use PragmaRX\Google2FA\Exceptions\InvalidCharactersException;
 use PragmaRX\Google2FA\Exceptions\SecretKeyTooShortException;
+use PragmaRX\Google2FALaravel\Facade;
+use Config;
+use ValueError;
+
+use function Safe\preg_match;
+use function Safe\iconv;
+use function Safe\json_encode;
 
 /**
  * Class FireflyValidator.
@@ -78,7 +86,7 @@ class FireflyValidator extends Validator
         }
         $secret           = (string) $secret;
 
-        return (bool) \Google2FA::verifyKey($secret, $value);
+        return (bool) Facade::verifyKey($secret, $value);
     }
 
     /**
@@ -95,7 +103,7 @@ class FireflyValidator extends Validator
         if (0 === (int) $value) {
             return true;
         }
-        $count = \DB::table($parameters[0])->where('user_id', auth()->user()->id)->where($field, $value)->count();
+        $count = DB::table($parameters[0])->where('user_id', auth()->user()->id)->where($field, $value)->count();
 
         return 1 === $count;
     }
@@ -103,14 +111,14 @@ class FireflyValidator extends Validator
     /**
      * @SuppressWarnings("PHPMD.UnusedFormalParameter")
      */
-    public function validateBic(mixed $attribute, mixed  $value): bool
+    public function validateBic(mixed $attribute, mixed $value): bool
     {
         if (!is_string($value) || strlen($value) < 8) {
             return false;
         }
         $regex  = '/^[a-z]{6}[0-9a-z]{2}([0-9a-z]{3})?\z/i';
         $result = preg_match($regex, $value);
-        if (false === $result || 0 === $result) {
+        if (0 === $result) {
             return false;
         }
 
@@ -130,7 +138,7 @@ class FireflyValidator extends Validator
         }
         $secret = (string) $user->mfa_secret;
 
-        return (bool) \Google2FA::verifyKey($secret, $value);
+        return (bool) Facade::verifyKey($secret, $value);
     }
 
     /**
@@ -199,7 +207,7 @@ class FireflyValidator extends Validator
         $value   = strtoupper($value);
 
         // replace characters outside of ASCI range.
-        $value   = (string) iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $value);
+        $value   = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $value);
         $search  = [' ', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'];
         $replace = ['', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22', '23', '24', '25', '26', '27', '28', '29', '30', '31', '32', '33', '34', '35'];
 
@@ -214,7 +222,7 @@ class FireflyValidator extends Validator
 
         try {
             $checksum = bcmod($iban, '97');
-        } catch (\ValueError $e) { // @phpstan-ignore-line
+        } catch (ValueError $e) { // @phpstan-ignore-line
             $message = sprintf('Could not validate IBAN check value "%s" (IBAN "%s")', $iban, $value);
             Log::error($message);
             Log::error($e->getTraceAsString());
@@ -269,7 +277,7 @@ class FireflyValidator extends Validator
         if (0 === (int) $value) {
             return true;
         }
-        $count = \DB::table($parameters[0])->where($field, $value)->count();
+        $count = DB::table($parameters[0])->where($field, $value)->count();
 
         return 1 === $count;
     }
@@ -417,7 +425,7 @@ class FireflyValidator extends Validator
         // check transaction type.
         // TODO create a helper to automatically return these.
         if ('transaction_type' === $triggerType) {
-            $count = TransactionType::where('type', ucfirst($value))->count();
+            $count = TransactionType::where('type', ucfirst((string) $value))->count();
 
             return 1 === $count;
         }
@@ -535,7 +543,7 @@ class FireflyValidator extends Validator
     private function validateByAccountTypeString(string $value, array $parameters, string $type): bool
     {
         /** @var null|array $search */
-        $search         = \Config::get('firefly.accountTypeByIdentifier.'.$type);
+        $search         = Config::get('firefly.accountTypeByIdentifier.'.$type);
 
         if (null === $search) {
             return false;
@@ -686,7 +694,7 @@ class FireflyValidator extends Validator
      */
     public function validateUniqueCurrency(string $field, string $attribute, string $value): bool
     {
-        return 0 === \DB::table('transaction_currencies')->where($field, $value)->whereNull('deleted_at')->count();
+        return 0 === DB::table('transaction_currencies')->where($field, $value)->whereNull('deleted_at')->count();
     }
 
     public function validateUniqueCurrencyName(?string $attribute, ?string $value): bool
@@ -775,7 +783,7 @@ class FireflyValidator extends Validator
             $exclude = (int) $data['id'];
         }
         // get entries from table
-        $result          = \DB::table($table)->where('user_id', auth()->user()->id)->whereNull('deleted_at')
+        $result          = DB::table($table)->where('user_id', auth()->user()->id)->whereNull('deleted_at')
             ->where('id', '!=', $exclude)
             ->where($field, $value)
             ->first([$field])
@@ -798,7 +806,7 @@ class FireflyValidator extends Validator
     public function validateUniqueObjectGroup($attribute, $value, $parameters): bool
     {
         $exclude = $parameters[0] ?? null;
-        $query   = \DB::table('object_groups')
+        $query   = DB::table('object_groups')
             ->whereNull('object_groups.deleted_at')
             ->where('object_groups.user_id', auth()->user()->id)
             ->where('object_groups.title', $value)

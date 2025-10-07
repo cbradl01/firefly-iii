@@ -29,10 +29,9 @@ use FireflyIII\Repositories\Account\AccountTasker;
 use FireflyIII\Repositories\Account\AccountTaskerInterface;
 use FireflyIII\Repositories\Account\OperationsRepository;
 use FireflyIII\Repositories\Account\OperationsRepositoryInterface;
-use FireflyIII\Repositories\UserGroups\Account\AccountRepository as AdminAccountRepository;
-use FireflyIII\Repositories\UserGroups\Account\AccountRepositoryInterface as AdminAccountRepositoryInterface;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\ServiceProvider;
+use Override;
 
 /**
  * Class AccountServiceProvider.
@@ -47,6 +46,7 @@ class AccountServiceProvider extends ServiceProvider
     /**
      * Register the application services.
      */
+    #[Override]
     public function register(): void
     {
         $this->registerRepository();
@@ -59,8 +59,7 @@ class AccountServiceProvider extends ServiceProvider
     private function registerRepository(): void
     {
         $this->app->bind(
-            AccountRepositoryInterface::class,
-            static function (Application $app) {
+            static function (Application $app): AccountRepositoryInterface {
                 /** @var AccountRepositoryInterface $repository */
                 $repository = app(AccountRepository::class);
 
@@ -74,23 +73,7 @@ class AccountServiceProvider extends ServiceProvider
         );
 
         $this->app->bind(
-            AdminAccountRepositoryInterface::class,
-            static function (Application $app) {
-                /** @var AdminAccountRepositoryInterface $repository */
-                $repository = app(AdminAccountRepository::class);
-
-                // phpstan thinks auth does not exist.
-                if ($app->auth->check()) { // @phpstan-ignore-line
-                    $repository->setUser(auth()->user());
-                }
-
-                return $repository;
-            }
-        );
-
-        $this->app->bind(
-            OperationsRepositoryInterface::class,
-            static function (Application $app) {
+            static function (Application $app): OperationsRepositoryInterface {
                 /** @var OperationsRepository $repository */
                 $repository = app(OperationsRepository::class);
 
@@ -110,8 +93,7 @@ class AccountServiceProvider extends ServiceProvider
     private function registerTasker(): void
     {
         $this->app->bind(
-            AccountTaskerInterface::class,
-            static function (Application $app) {
+            static function (Application $app): AccountTaskerInterface {
                 /** @var AccountTaskerInterface $tasker */
                 $tasker = app(AccountTasker::class);
 

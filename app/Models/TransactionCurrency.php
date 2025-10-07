@@ -37,16 +37,8 @@ class TransactionCurrency extends Model
     use ReturnsIntegerIdTrait;
     use SoftDeletes;
 
-    public ?bool $userGroupNative  = null;
     public ?bool $userGroupEnabled = null;
-    protected $casts
-                                   = [
-            'created_at'     => 'datetime',
-            'updated_at'     => 'datetime',
-            'deleted_at'     => 'datetime',
-            'decimal_places' => 'int',
-            'enabled'        => 'bool',
-        ];
+    public ?bool $userGroupNative  = null;
 
     protected $fillable            = ['name', 'code', 'symbol', 'decimal_places', 'enabled'];
 
@@ -73,7 +65,7 @@ class TransactionCurrency extends Model
     public function refreshForUser(User $user): void
     {
         $current                = $user->userGroup->currencies()->where('transaction_currencies.id', $this->id)->first();
-        $native                 = app('amount')->getNativeCurrencyByUserGroup($user->userGroup);
+        $native                 = app('amount')->getPrimaryCurrencyByUserGroup($user->userGroup);
         $this->userGroupNative  = $native->id === $this->id;
         $this->userGroupEnabled = null !== $current;
     }
@@ -114,5 +106,16 @@ class TransactionCurrency extends Model
         return Attribute::make(
             get: static fn ($value) => (int) $value,
         );
+    }
+
+    protected function casts(): array
+    {
+        return [
+            'created_at'     => 'datetime',
+            'updated_at'     => 'datetime',
+            'deleted_at'     => 'datetime',
+            'decimal_places' => 'int',
+            'enabled'        => 'bool',
+        ];
     }
 }

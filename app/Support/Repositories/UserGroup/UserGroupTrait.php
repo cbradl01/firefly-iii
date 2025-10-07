@@ -40,11 +40,6 @@ trait UserGroupTrait
     protected ?User      $user      = null;
     protected ?UserGroup $userGroup = null;
 
-    public function getUserGroup(): UserGroup
-    {
-        return $this->userGroup;
-    }
-
     public function checkUserGroupAccess(UserRoleEnum $role): bool
     {
         $result = $this->user->hasRoleInGroupOrOwner($this->userGroup, $role);
@@ -58,6 +53,35 @@ trait UserGroupTrait
         return false;
     }
 
+    public function getUser(): ?User
+    {
+        return $this->user;
+    }
+
+    /**
+     * @throws FireflyException
+     */
+    public function setUser(Authenticatable|User|null $user): void
+    {
+        if ($user instanceof User) {
+            $this->user      = $user;
+            if (null === $user->userGroup) {
+                throw new FireflyException(sprintf('User #%d ("%s") has no user group.', $user->id, $user->email));
+            }
+            $this->userGroup = $user->userGroup;
+
+            return;
+        }
+        $class = $user instanceof Authenticatable ? $user::class : 'NULL';
+
+        throw new FireflyException(sprintf('Object is %s, not User.', $class));
+    }
+
+    public function getUserGroup(): ?UserGroup
+    {
+        return $this->userGroup;
+    }
+
     /**
      * TODO This method does not check if the user has access to this particular user group.
      */
@@ -67,24 +91,6 @@ trait UserGroupTrait
             Log::warning(sprintf('User is not set in repository %s', static::class));
         }
         $this->userGroup = $userGroup;
-    }
-
-    /**
-     * @throws FireflyException
-     */
-    public function setUser(null|Authenticatable|User $user): void
-    {
-        if ($user instanceof User) {
-            $this->user      = $user;
-            if (null === $user->userGroup) {
-                throw new FireflyException(sprintf('User #%d has no user group.', $user->id));
-            }
-            $this->userGroup = $user->userGroup;
-
-            return;
-        }
-
-        throw new FireflyException(sprintf('Object is of class %s, not User.', get_class($user)));
     }
 
     /**

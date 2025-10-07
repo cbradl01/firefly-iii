@@ -24,13 +24,13 @@ declare(strict_types=1);
 
 namespace FireflyIII\Api\V1\Controllers\Autocomplete;
 
+use FireflyIII\Models\TransactionGroup;
 use FireflyIII\Api\V1\Controllers\Controller;
 use FireflyIII\Api\V1\Requests\Autocomplete\AutocompleteRequest;
 use FireflyIII\Enums\UserRoleEnum;
 use FireflyIII\Models\TransactionJournal;
 use FireflyIII\Repositories\Journal\JournalRepositoryInterface;
 use FireflyIII\Repositories\TransactionGroup\TransactionGroupRepositoryInterface;
-use FireflyIII\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Collection;
 
@@ -39,10 +39,9 @@ use Illuminate\Support\Collection;
  */
 class TransactionController extends Controller
 {
+    protected array $acceptedRoles = [UserRoleEnum::READ_ONLY];
     private TransactionGroupRepositoryInterface $groupRepository;
     private JournalRepositoryInterface          $repository;
-
-    protected array $acceptedRoles = [UserRoleEnum::READ_ONLY];
 
     /**
      * TransactionController constructor.
@@ -52,24 +51,19 @@ class TransactionController extends Controller
         parent::__construct();
         $this->middleware(
             function ($request, $next) {
-                /** @var User $user */
-                $user                  = auth()->user();
-                $userGroup             = $this->validateUserGroup($request);
+                $this->validateUserGroup($request);
                 $this->repository      = app(JournalRepositoryInterface::class);
                 $this->groupRepository = app(TransactionGroupRepositoryInterface::class);
-                $this->repository->setUser($user);
-                $this->groupRepository->setUser($user);
-                $this->groupRepository->setUserGroup($userGroup);
+                $this->repository->setUser($this->user);
+                $this->repository->setUserGroup($this->userGroup);
+                $this->groupRepository->setUser($this->user);
+                $this->groupRepository->setUserGroup($this->userGroup);
 
                 return $next($request);
             }
         );
     }
 
-    /**
-     * This endpoint is documented at:
-     * * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/autocomplete/getTransactionsAC
-     */
     public function transactions(AutocompleteRequest $request): JsonResponse
     {
         $data     = $request->getData();
@@ -92,10 +86,6 @@ class TransactionController extends Controller
         return response()->api($array);
     }
 
-    /**
-     * This endpoint is documented at:
-     * * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/autocomplete/getTransactionsIDAC
-     */
     public function transactionsWithID(AutocompleteRequest $request): JsonResponse
     {
         $data   = $request->getData();
@@ -103,7 +93,7 @@ class TransactionController extends Controller
         if (is_numeric($data['query'])) {
             // search for group, not journal.
             $firstResult = $this->groupRepository->find((int) $data['query']);
-            if (null !== $firstResult) {
+            if ($firstResult instanceof TransactionGroup) {
                 // group may contain multiple journals, each a result:
                 foreach ($firstResult->transactionJournals as $journal) {
                     $result->push($journal);

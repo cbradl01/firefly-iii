@@ -34,6 +34,8 @@ use FireflyIII\User;
 use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Override;
+use Throwable;
 
 /**
  * Class GracefulNotFoundHandler
@@ -45,11 +47,12 @@ class GracefulNotFoundHandler extends ExceptionHandler
      *
      * @param Request $request
      *
-     * @throws \Throwable
+     * @throws Throwable
      *
      * @SuppressWarnings("PHPMD.CyclomaticComplexity")
      */
-    public function render($request, \Throwable $e): Response
+    #[Override]
+    public function render($request, Throwable $e): Response
     {
         $route = $request->route();
         if (null === $route) {
@@ -125,6 +128,7 @@ class GracefulNotFoundHandler extends ExceptionHandler
                 return redirect(route('categories.index'));
 
             case 'rules.edit':
+            case 'rule-groups.edit':
                 $request->session()->reflash();
 
                 return redirect(route('rules.index'));
@@ -143,9 +147,9 @@ class GracefulNotFoundHandler extends ExceptionHandler
     }
 
     /**
-     * @throws \Throwable
+     * @throws Throwable
      */
-    private function handleAccount(Request $request, \Throwable $exception): Response
+    private function handleAccount(Request $request, Throwable $exception): Response
     {
         app('log')->debug('404 page is probably a deleted account. Redirect to overview of account types.');
 
@@ -162,7 +166,7 @@ class GracefulNotFoundHandler extends ExceptionHandler
         }
 
         /** @var null|Account $account */
-        $account   = $user->accounts()->with(['accountType'])->withTrashed()->find($accountId);
+        $account   = $user->accounts()->withTrashed()->with(['accountType'])->find($accountId);
         if (null === $account) {
             app('log')->error(sprintf('Could not find account %d, so give big fat error.', $accountId));
 
@@ -178,9 +182,9 @@ class GracefulNotFoundHandler extends ExceptionHandler
     /**
      * @return Response
      *
-     * @throws \Throwable
+     * @throws Throwable
      */
-    private function handleGroup(Request $request, \Throwable $exception)
+    private function handleGroup(Request $request, Throwable $exception)
     {
         app('log')->debug('404 page is probably a deleted group. Redirect to overview of group types.');
 
@@ -212,15 +216,15 @@ class GracefulNotFoundHandler extends ExceptionHandler
             return redirect(route('accounts.index', ['asset']));
         }
 
-        return redirect(route('transactions.index', [strtolower($type)]));
+        return redirect(route('transactions.index', [strtolower((string) $type)]));
     }
 
     /**
      * @return Response
      *
-     * @throws \Throwable
+     * @throws Throwable
      */
-    private function handleAttachment(Request $request, \Throwable $exception)
+    private function handleAttachment(Request $request, Throwable $exception)
     {
         app('log')->debug('404 page is probably a deleted attachment. Redirect to parent object.');
 

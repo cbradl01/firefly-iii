@@ -34,8 +34,8 @@ use Illuminate\Support\Facades\Log;
  */
 class QueryParser implements QueryParserInterface
 {
-    private string $query;
     private int    $position = 0;
+    private string $query;
 
     public function parse(string $query): NodeGroup
     {
@@ -51,7 +51,7 @@ class QueryParser implements QueryParserInterface
         $nodes      = [];
         $nodeResult = $this->buildNextNode($isSubquery);
 
-        while (null !== $nodeResult->node) {
+        while ($nodeResult->node instanceof Node) {
             $nodes[]    = $nodeResult->node;
             if ($nodeResult->isSubqueryEnd) {
                 break;

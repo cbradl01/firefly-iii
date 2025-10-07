@@ -24,7 +24,9 @@ declare(strict_types=1);
 
 namespace Tests\unit\Support;
 
+use Override;
 use FireflyIII\Support\Navigation;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\integration\TestCase;
 
 /**
@@ -40,30 +42,32 @@ final class NavigationPreferredCarbonFormatByPeriodTest extends TestCase
 {
     private Navigation $navigation;
 
-    public function __construct(string $name)
+    #[Override]
+    protected function setUp(): void
     {
-        parent::__construct($name);
+        parent::setUp();
         $this->navigation = new Navigation();
+    }
+
+    #[DataProvider('providePeriods')]
+    public function testGivenAPeriodWhenCallPreferredCarbonFormatByPeriodThenReturnsExpectedFormat(string $period, string $expected): void
+    {
+        $formatPeriod = $this->navigation->preferredCarbonFormatByPeriod($period);
+        $this->assertSame($expected, $formatPeriod);
     }
 
     public static function providePeriods(): iterable
     {
-        return [
-            'unknown'     => ['period' => '1day', 'expected' => 'Y-m-d'],
-            'week'        => ['period' => '1W', 'expected' => '\WW,Y'],
-            'month'       => ['period' => '1M', 'expected' => 'Y-m'],
-            'quarterly'   => ['period' => '3M', 'expected' => '\QQ,Y'],
-            'half-yearly' => ['period' => '6M', 'expected' => '\QQ,Y'],
-            'yearly'      => ['period' => '1Y', 'expected' => 'Y'],
-        ];
-    }
+        yield 'unknown' => ['1day', 'Y-m-d'];
 
-    /**
-     * @dataProvider providePeriods
-     */
-    public function testGivenAPeriodWhenCallPreferredCarbonFormatByPeriodThenReturnsExpectedFormat(string $period, string $expected): void
-    {
-        $formatPeriod = $this->navigation->preferredCarbonFormatByPeriod($period);
-        self::assertSame($expected, $formatPeriod);
+        yield 'week' => ['1W', '\WW,Y'];
+
+        yield 'month' => ['1M', 'Y-m'];
+
+        yield 'quarterly' => ['3M', '\QQ,Y'];
+
+        yield 'half-yearly' => ['6M', '\QQ,Y'];
+
+        yield 'yearly' => ['1Y', 'Y'];
     }
 }

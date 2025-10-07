@@ -32,22 +32,19 @@ use FireflyIII\Models\Transaction;
 use FireflyIII\Models\TransactionJournal;
 use FireflyIII\Repositories\Account\AccountRepositoryInterface;
 use FireflyIII\User;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Class SetDestinationAccount.
  */
 class SetDestinationAccount implements ActionInterface
 {
-    private RuleAction                 $action;
     private AccountRepositoryInterface $repository;
 
     /**
      * TriggerInterface constructor.
      */
-    public function __construct(RuleAction $action)
-    {
-        $this->action = $action;
-    }
+    public function __construct(private readonly RuleAction $action) {}
 
     public function actOnArray(array $journal): bool
     {
@@ -71,7 +68,7 @@ class SetDestinationAccount implements ActionInterface
 
         // if this is a transfer or a deposit, the new destination account must be an asset account or a default account, and it MUST exist:
         $newAccount       = $this->findAssetAccount($type, $accountName);
-        if ((TransactionTypeEnum::DEPOSIT->value === $type || TransactionTypeEnum::TRANSFER->value === $type) && null === $newAccount) {
+        if ((TransactionTypeEnum::DEPOSIT->value === $type || TransactionTypeEnum::TRANSFER->value === $type) && !$newAccount instanceof Account) {
             app('log')->error(
                 sprintf(
                     'Cant change destination account of journal #%d because no asset account with name "%s" exists.',
@@ -100,7 +97,7 @@ class SetDestinationAccount implements ActionInterface
 
             return false;
         }
-        if (null !== $newAccount && $newAccount->id === $source->account_id) {
+        if ($newAccount instanceof Account && $newAccount->id === $source->account_id) {
             app('log')->error(
                 sprintf(
                     'New destination account ID #%d and current source account ID #%d are the same. Do nothing.',
@@ -119,13 +116,25 @@ class SetDestinationAccount implements ActionInterface
         if (TransactionTypeEnum::WITHDRAWAL->value === $type) {
             $newAccount = $this->findWithdrawalDestinationAccount($accountName);
         }
+        if (!$newAccount instanceof Account) {
+            app('log')->error(
+                sprintf(
+                    'No destination account found for name "%s".',
+                    $accountName
+                )
+            );
+
+            event(new RuleActionFailedOnArray($this->action, $journal, trans('rules.no_destination', ['name' => $accountName])));
+
+            return false;
+        }
 
         app('log')->debug(sprintf('New destination account is #%d ("%s").', $newAccount->id, $newAccount->name));
 
         event(new TriggeredAuditLog($this->action->rule, $object, 'set_destination', null, $newAccount->name));
 
         // update destination transaction with new destination account:
-        \DB::table('transactions')
+        DB::table('transactions')
             ->where('transaction_journal_id', '=', $object->id)
             ->where('amount', '>', 0)
             ->update(['account_id' => $newAccount->id])
@@ -150,7 +159,7 @@ class SetDestinationAccount implements ActionInterface
     {
         $allowed = config('firefly.expected_source_types.destination.Withdrawal');
         $account = $this->repository->findByName($accountName, $allowed);
-        if (null === $account) {
+        if (!$account instanceof Account) {
             $data    = [
                 'name'              => $accountName,
                 'account_type_name' => 'expense',

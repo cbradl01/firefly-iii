@@ -38,7 +38,7 @@ use FireflyIII\Repositories\Budget\NoBudgetRepositoryInterface;
 use FireflyIII\Repositories\Budget\OperationsRepositoryInterface;
 use FireflyIII\Support\CacheProperties;
 use FireflyIII\Support\Chart\Budget\FrontpageChartGenerator;
-use FireflyIII\Support\Facades\Amount;
+use FireflyIII\Support\Facades\Navigation;
 use FireflyIII\Support\Http\Controllers\AugumentData;
 use FireflyIII\Support\Http\Controllers\DateCalculation;
 use Illuminate\Http\JsonResponse;
@@ -92,7 +92,7 @@ class BudgetController extends Controller
         $cache          = new CacheProperties();
         $cache->addProperty($start);
         $cache->addProperty($end);
-        $cache->addProperty($this->convertToNative);
+        $cache->addProperty($this->convertToPrimary);
         $cache->addProperty('chart.budget.budget');
         $cache->addProperty($budget->id);
 
@@ -100,17 +100,17 @@ class BudgetController extends Controller
             return response()->json($cache->get());
         }
         $step           = $this->calculateStep($start, $end); // depending on diff, do something with range of chart.
-        $collection     = new Collection([$budget]);
+        $collection     = new Collection()->push($budget);
         $chartData      = [];
         $loopStart      = clone $start;
-        $loopStart      = app('navigation')->startOfPeriod($loopStart, $step);
+        $loopStart      = Navigation::startOfPeriod($loopStart, $step);
         $currencies     = [];
         $defaultEntries = [];
         while ($end >= $loopStart) {
             /** @var Carbon $loopEnd */
-            $loopEnd                = app('navigation')->endOfPeriod($loopStart, $step);
-            $spent                  = $this->opsRepository->sumExpenses($loopStart, $loopEnd, null, $collection); // this method already converts to native.
-            $label                  = trim(app('navigation')->periodShow($loopStart, $step));
+            $loopEnd                = Navigation::endOfPeriod($loopStart, $step);
+            $spent                  = $this->opsRepository->sumExpenses($loopStart, $loopEnd, null, $collection); // this method already converts to primary currency.
+            $label                  = trim(Navigation::periodShow($loopStart, $step));
 
             foreach ($spent as $row) {
                 $currencyId                               = $row['currency_id'];
@@ -133,7 +133,7 @@ class BudgetController extends Controller
                 'entries'         => $defaultEntries,
             ];
             foreach ($currency['spent'] as $label => $spent) {
-                $chartData[$currencyId]['entries'][$label] = bcmul($spent, '-1');
+                $chartData[$currencyId]['entries'][$label] = bcmul((string) $spent, '-1');
             }
         }
         $data           = $this->generator->multiSet(array_values($chartData));
@@ -158,7 +158,7 @@ class BudgetController extends Controller
         $cache                                  = new CacheProperties();
         $cache->addProperty($start);
         $cache->addProperty($end);
-        $cache->addProperty($this->convertToNative);
+        $cache->addProperty($this->convertToPrimary);
         $cache->addProperty('chart.budget.budget.limit');
         $cache->addProperty($budgetLimit->id);
         $cache->addProperty($budget->id);
@@ -169,18 +169,18 @@ class BudgetController extends Controller
         $locale                                 = app('steam')->getLocale();
         $entries                                = [];
         $amount                                 = $budgetLimit->amount ?? '0';
-        $budgetCollection                       = new Collection([$budget]);
+        $budgetCollection                       = new Collection()->push($budget);
         $currency                               = $budgetLimit->transactionCurrency;
-        if ($this->convertToNative) {
-            $amount   = $budgetLimit->native_amount ?? '0';
-            $currency = $this->defaultCurrency;
+        if ($this->convertToPrimary) {
+            $amount   = $budgetLimit->native_amount ?? $amount;
+            $currency = $this->primaryCurrency;
         }
 
         while ($start <= $end) {
             $current          = clone $start;
-            $expenses         = $this->opsRepository->sumExpenses($current, $current, null, $budgetCollection, $budgetLimit->transactionCurrency);
+            $expenses         = $this->opsRepository->sumExpenses($current, $current, null, $budgetCollection, $budgetLimit->transactionCurrency, $this->convertToPrimary);
             $spent            = $expenses[$currency->id]['sum'] ?? '0';
-            $amount           = bcadd($amount, $spent);
+            $amount           = bcadd((string) $amount, $spent);
             $format           = $start->isoFormat((string) trans('config.month_and_day_js', [], $locale));
             $entries[$format] = $amount;
 
@@ -191,6 +191,7 @@ class BudgetController extends Controller
         $data['datasets'][0]['currency_symbol'] = $currency->symbol;
         $data['datasets'][0]['currency_code']   = $currency->code;
         $cache->store($data);
+        // var_dump($data);exit;
 
         return response()->json($data);
     }
@@ -202,19 +203,19 @@ class BudgetController extends Controller
     {
         /** @var GroupCollectorInterface $collector */
         $collector     = app(GroupCollectorInterface::class);
-        $budgetLimitId = null === $budgetLimit ? 0 : $budgetLimit->id;
+        $budgetLimitId = $budgetLimit instanceof BudgetLimit ? $budgetLimit->id : 0;
         $cache         = new CacheProperties();
         $cache->addProperty($budget->id);
-        $cache->addProperty($this->convertToNative);
+        $cache->addProperty($this->convertToPrimary);
         $cache->addProperty($budgetLimitId);
         $cache->addProperty('chart.budget.expense-asset');
         $start         = session('first', today(config('app.timezone'))->startOfYear());
         $end           = today();
 
-        if (null !== $budgetLimit) {
+        if ($budgetLimit instanceof BudgetLimit) {
             $start = $budgetLimit->start_date;
             $end   = $budgetLimit->end_date;
-            $collector->setRange($budgetLimit->start_date, $budgetLimit->end_date)->setCurrency($budgetLimit->transactionCurrency);
+            $collector->setRange($budgetLimit->start_date, $budgetLimit->end_date)->setNormalCurrency($budgetLimit->transactionCurrency);
         }
         $cache->addProperty($start);
         $cache->addProperty($end);
@@ -237,16 +238,16 @@ class BudgetController extends Controller
             $code                   = $journal['currency_code'];
             $name                   = $journal['currency_name'];
 
-            // if convert to native, use the native things, unless it's the foreign amount which is in the native currency.
-            if ($this->convertToNative && $journal['currency_id'] !== $this->defaultCurrency->id) {
-                $key    = sprintf('%d-%d', $journal['source_account_id'], $this->defaultCurrency->id);
-                $symbol = $this->defaultCurrency->symbol;
-                $code   = $this->defaultCurrency->code;
-                $name   = $this->defaultCurrency->name;
-                $amount = $journal['native_amount'];
+            // if convert to primary, use the primary things, unless it's the foreign amount which is in the primary currency.
+            if ($this->convertToPrimary && $journal['currency_id'] !== $this->primaryCurrency->id) {
+                $key    = sprintf('%d-%d', $journal['source_account_id'], $this->primaryCurrency->id);
+                $symbol = $this->primaryCurrency->symbol;
+                $code   = $this->primaryCurrency->code;
+                $name   = $this->primaryCurrency->name;
+                $amount = $journal['pc_amount'];
             }
 
-            if ($journal['foreign_currency_id'] === $this->defaultCurrency->id) {
+            if ($journal['foreign_currency_id'] === $this->primaryCurrency->id) {
                 $amount = $journal['foreign_amount'];
             }
 
@@ -256,7 +257,7 @@ class BudgetController extends Controller
                 'currency_code'   => $code,
                 'currency_name'   => $name,
             ];
-            $result[$key]['amount'] = bcadd($amount, $result[$key]['amount']);
+            $result[$key]['amount'] = bcadd((string) $amount, $result[$key]['amount']);
         }
 
         $names         = $this->getAccountNames(array_keys($result));
@@ -285,18 +286,18 @@ class BudgetController extends Controller
     {
         /** @var GroupCollectorInterface $collector */
         $collector     = app(GroupCollectorInterface::class);
-        $budgetLimitId = null === $budgetLimit ? 0 : $budgetLimit->id;
+        $budgetLimitId = $budgetLimit instanceof BudgetLimit ? $budgetLimit->id : 0;
         $cache         = new CacheProperties();
         $cache->addProperty($budget->id);
-        $cache->addProperty($this->convertToNative);
+        $cache->addProperty($this->convertToPrimary);
         $cache->addProperty($budgetLimitId);
         $cache->addProperty('chart.budget.expense-category');
         $start         = session('first', today(config('app.timezone'))->startOfYear());
         $end           = today();
-        if (null !== $budgetLimit) {
+        if ($budgetLimit instanceof BudgetLimit) {
             $start = $budgetLimit->start_date;
             $end   = $budgetLimit->end_date;
-            $collector->setCurrency($budgetLimit->transactionCurrency);
+            $collector->setNormalCurrency($budgetLimit->transactionCurrency);
         }
         $cache->addProperty($start);
         $cache->addProperty($end);
@@ -315,22 +316,22 @@ class BudgetController extends Controller
             $code                   = $journal['currency_code'];
             $name                   = $journal['currency_name'];
             $amount                 = $journal['amount'];
-            // if convert to native, use the native things, unless it's the foreign amount which is in the native currency.
-            if ($this->convertToNative && $journal['currency_id'] !== $this->defaultCurrency->id && $journal['foreign_currency_id'] !== $this->defaultCurrency->id
+            // if convert to primary, use the primary things, unless it's the foreign amount which is in the primary currency.
+            if ($this->convertToPrimary && $journal['currency_id'] !== $this->primaryCurrency->id && $journal['foreign_currency_id'] !== $this->primaryCurrency->id
             ) {
-                $key    = sprintf('%d-%d', $journal['category_id'], $this->defaultCurrency->id);
-                $symbol = $this->defaultCurrency->symbol;
-                $code   = $this->defaultCurrency->code;
-                $name   = $this->defaultCurrency->name;
-                $amount = $journal['native_amount'];
+                $key    = sprintf('%d-%d', $journal['category_id'], $this->primaryCurrency->id);
+                $symbol = $this->primaryCurrency->symbol;
+                $code   = $this->primaryCurrency->code;
+                $name   = $this->primaryCurrency->name;
+                $amount = $journal['pc_amount'];
             }
 
-            if ($this->convertToNative && $journal['currency_id'] !== $this->defaultCurrency->id && $journal['foreign_currency_id'] === $this->defaultCurrency->id
+            if ($this->convertToPrimary && $journal['currency_id'] !== $this->primaryCurrency->id && $journal['foreign_currency_id'] === $this->primaryCurrency->id
             ) {
-                $key    = sprintf('%d-%d', $journal['category_id'], $this->defaultCurrency->id);
-                $symbol = $this->defaultCurrency->symbol;
-                $code   = $this->defaultCurrency->code;
-                $name   = $this->defaultCurrency->name;
+                $key    = sprintf('%d-%d', $journal['category_id'], $this->primaryCurrency->id);
+                $symbol = $this->primaryCurrency->symbol;
+                $code   = $this->primaryCurrency->code;
+                $name   = $this->primaryCurrency->name;
                 $amount = $journal['foreign_amount'];
             }
 
@@ -340,7 +341,7 @@ class BudgetController extends Controller
                 'currency_code'   => $code,
                 'currency_name'   => $name,
             ];
-            $result[$key]['amount'] = bcadd($amount, $result[$key]['amount']);
+            $result[$key]['amount'] = bcadd((string) $amount, $result[$key]['amount']);
         }
 
         $names         = $this->getCategoryNames(array_keys($result));
@@ -367,18 +368,18 @@ class BudgetController extends Controller
     {
         /** @var GroupCollectorInterface $collector */
         $collector     = app(GroupCollectorInterface::class);
-        $budgetLimitId = null === $budgetLimit ? 0 : $budgetLimit->id;
+        $budgetLimitId = $budgetLimit instanceof BudgetLimit ? $budgetLimit->id : 0;
         $cache         = new CacheProperties();
         $cache->addProperty($budget->id);
         $cache->addProperty($budgetLimitId);
-        $cache->addProperty($this->convertToNative);
+        $cache->addProperty($this->convertToPrimary);
         $cache->addProperty('chart.budget.expense-expense');
         $start         = session('first', today(config('app.timezone'))->startOfYear());
         $end           = today();
-        if (null !== $budgetLimit) {
+        if ($budgetLimit instanceof BudgetLimit) {
             $start = $budgetLimit->start_date;
             $end   = $budgetLimit->end_date;
-            $collector->setRange($budgetLimit->start_date, $budgetLimit->end_date)->setCurrency($budgetLimit->transactionCurrency);
+            $collector->setRange($budgetLimit->start_date, $budgetLimit->end_date)->setNormalCurrency($budgetLimit->transactionCurrency);
         }
         $cache->addProperty($start);
         $cache->addProperty($end);
@@ -400,20 +401,20 @@ class BudgetController extends Controller
             $code                   = $journal['currency_code'];
             $name                   = $journal['currency_name'];
 
-            // if convert to native, use the native things, unless it's the foreign amount which is in the native currency.
-            if ($this->convertToNative && $journal['currency_id'] !== $this->defaultCurrency->id && $journal['foreign_currency_id'] !== $this->defaultCurrency->id) {
-                $key    = sprintf('%d-%d', $journal['destination_account_id'], $this->defaultCurrency->id);
-                $symbol = $this->defaultCurrency->symbol;
-                $code   = $this->defaultCurrency->code;
-                $name   = $this->defaultCurrency->name;
-                $amount = $journal['native_amount'];
+            // if convert to primary, use the primary things, unless it's the foreign amount which is in the primary currency.
+            if ($this->convertToPrimary && $journal['currency_id'] !== $this->primaryCurrency->id && $journal['foreign_currency_id'] !== $this->primaryCurrency->id) {
+                $key    = sprintf('%d-%d', $journal['destination_account_id'], $this->primaryCurrency->id);
+                $symbol = $this->primaryCurrency->symbol;
+                $code   = $this->primaryCurrency->code;
+                $name   = $this->primaryCurrency->name;
+                $amount = $journal['pc_amount'];
             }
 
-            if ($this->convertToNative && $journal['currency_id'] !== $this->defaultCurrency->id && $journal['foreign_currency_id'] === $this->defaultCurrency->id) {
-                $key    = sprintf('%d-%d', $journal['destination_account_id'], $this->defaultCurrency->id);
-                $symbol = $this->defaultCurrency->symbol;
-                $code   = $this->defaultCurrency->code;
-                $name   = $this->defaultCurrency->name;
+            if ($this->convertToPrimary && $journal['currency_id'] !== $this->primaryCurrency->id && $journal['foreign_currency_id'] === $this->primaryCurrency->id) {
+                $key    = sprintf('%d-%d', $journal['destination_account_id'], $this->primaryCurrency->id);
+                $symbol = $this->primaryCurrency->symbol;
+                $code   = $this->primaryCurrency->code;
+                $name   = $this->primaryCurrency->name;
                 $amount = $journal['foreign_amount'];
             }
 
@@ -423,7 +424,7 @@ class BudgetController extends Controller
                 'currency_code'   => $code,
                 'currency_name'   => $name,
             ];
-            $result[$key]['amount'] = bcadd($amount, $result[$key]['amount']);
+            $result[$key]['amount'] = bcadd((string) $amount, $result[$key]['amount']);
         }
 
         $names         = $this->getAccountNames(array_keys($result));
@@ -450,27 +451,27 @@ class BudgetController extends Controller
      */
     public function frontpage(): JsonResponse
     {
-        $start                           = session('start', today(config('app.timezone'))->startOfMonth());
-        $end                             = session('end', today(config('app.timezone'))->endOfMonth());
+        $start                            = session('start', today(config('app.timezone'))->startOfMonth());
+        $end                              = session('end', today(config('app.timezone'))->endOfMonth());
         // chart properties for cache:
-        $cache                           = new CacheProperties();
+        $cache                            = new CacheProperties();
         $cache->addProperty($start);
         $cache->addProperty($end);
-        $cache->addProperty($this->convertToNative);
+        $cache->addProperty($this->convertToPrimary);
         $cache->addProperty('chart.budget.frontpage');
         if ($cache->has()) {
             return response()->json($cache->get());
         }
         Log::debug('Regenerate frontpage chart from scratch.');
-        $chartGenerator                  = app(FrontpageChartGenerator::class);
+        $chartGenerator                   = app(FrontpageChartGenerator::class);
         $chartGenerator->setUser(auth()->user());
         $chartGenerator->setStart($start);
         $chartGenerator->setEnd($end);
-        $chartGenerator->convertToNative = $this->convertToNative;
-        $chartGenerator->default         = $this->defaultCurrency;
+        $chartGenerator->convertToPrimary = $this->convertToPrimary;
+        $chartGenerator->default          = $this->primaryCurrency;
 
-        $chartData                       = $chartGenerator->generate();
-        $data                            = $this->generator->multiSet($chartData);
+        $chartData                        = $chartGenerator->generate();
+        $data                             = $this->generator->multiSet($chartData);
         $cache->store($data);
 
         return response()->json($data);
@@ -496,8 +497,8 @@ class BudgetController extends Controller
         if ($cache->has()) {
             return response()->json($cache->get());
         }
-        $titleFormat    = app('navigation')->preferredCarbonLocalizedFormat($start, $end);
-        $preferredRange = app('navigation')->preferredRangeFormat($start, $end);
+        $titleFormat    = Navigation::preferredCarbonLocalizedFormat($start, $end);
+        $preferredRange = Navigation::preferredRangeFormat($start, $end);
         $chartData      = [
             [
                 'label'           => (string) trans('firefly.box_spent_in_currency', ['currency' => $currency->name]),
@@ -517,9 +518,9 @@ class BudgetController extends Controller
 
         $currentStart   = clone $start;
         while ($currentStart <= $end) {
-            $currentStart                    = app('navigation')->startOfPeriod($currentStart, $preferredRange);
+            $currentStart                    = Navigation::startOfPeriod($currentStart, $preferredRange);
             $title                           = $currentStart->isoFormat($titleFormat);
-            $currentEnd                      = app('navigation')->endOfPeriod($currentStart, $preferredRange);
+            $currentEnd                      = Navigation::endOfPeriod($currentStart, $preferredRange);
 
             // default limit is no limit:
             $chartData[0]['entries'][$title] = 0;
@@ -529,12 +530,12 @@ class BudgetController extends Controller
 
             // get budget limit in this period for this currency.
             $limit                           = $this->blRepository->find($budget, $currency, $currentStart, $currentEnd);
-            if (null !== $limit) {
+            if ($limit instanceof BudgetLimit) {
                 $chartData[1]['entries'][$title] = app('steam')->bcround($limit->amount, $currency->decimal_places);
             }
 
             // get spent amount in this period for this currency.
-            $sum                             = $this->opsRepository->sumExpenses($currentStart, $currentEnd, $accounts, new Collection([$budget]), $currency);
+            $sum                             = $this->opsRepository->sumExpenses($currentStart, $currentEnd, $accounts, new Collection()->push($budget), $currency);
             $amount                          = app('steam')->positive($sum[$currency->id]['sum'] ?? '0');
             $chartData[0]['entries'][$title] = app('steam')->bcround($amount, $currency->decimal_places);
 
@@ -565,17 +566,17 @@ class BudgetController extends Controller
         }
 
         // the expenses:
-        $titleFormat    = app('navigation')->preferredCarbonLocalizedFormat($start, $end);
+        $titleFormat    = Navigation::preferredCarbonLocalizedFormat($start, $end);
         $chartData      = [];
         $currentStart   = clone $start;
-        $preferredRange = app('navigation')->preferredRangeFormat($start, $end);
+        $preferredRange = Navigation::preferredRangeFormat($start, $end);
         while ($currentStart <= $end) {
-            $currentEnd        = app('navigation')->endOfPeriod($currentStart, $preferredRange);
+            $currentEnd        = Navigation::endOfPeriod($currentStart, $preferredRange);
             $title             = $currentStart->isoFormat($titleFormat);
             $sum               = $this->nbRepository->sumExpenses($currentStart, $currentEnd, $accounts, $currency);
             $amount            = app('steam')->positive($sum[$currency->id]['sum'] ?? '0');
             $chartData[$title] = app('steam')->bcround($amount, $currency->decimal_places);
-            $currentStart      = app('navigation')->addPeriod($currentStart, $preferredRange, 0);
+            $currentStart      = Navigation::addPeriod($currentStart, $preferredRange, 0);
         }
 
         $data           = $this->generator->singleSet((string) trans('firefly.spent'), $chartData);

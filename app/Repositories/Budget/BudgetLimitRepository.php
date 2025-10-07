@@ -31,18 +31,19 @@ use FireflyIII\Models\Budget;
 use FireflyIII\Models\BudgetLimit;
 use FireflyIII\Models\Note;
 use FireflyIII\Models\TransactionCurrency;
-use FireflyIII\User;
-use Illuminate\Contracts\Auth\Authenticatable;
+use FireflyIII\Support\Repositories\UserGroup\UserGroupInterface;
+use FireflyIII\Support\Repositories\UserGroup\UserGroupTrait;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
+use Override;
 
 /**
  * Class BudgetLimitRepository
  */
-class BudgetLimitRepository implements BudgetLimitRepositoryInterface
+class BudgetLimitRepository implements BudgetLimitRepositoryInterface, UserGroupInterface
 {
-    private User $user;
+    use UserGroupTrait;
 
     /**
      * Tells you which amount has been budgeted (for the given budgets)
@@ -87,7 +88,7 @@ class BudgetLimitRepository implements BudgetLimitRepositoryInterface
             ->where('budgets.active', true)
             ->where('budgets.user_id', $this->user->id)
         ;
-        if (null !== $budgets && $budgets->count() > 0) {
+        if ($budgets instanceof Collection && $budgets->count() > 0) {
             $query->whereIn('budget_limits.budget_id', $budgets->pluck('id')->toArray());
         }
 
@@ -96,7 +97,7 @@ class BudgetLimitRepository implements BudgetLimitRepositoryInterface
 
         /** @var BudgetLimit $budgetLimit */
         foreach ($set as $budgetLimit) {
-            $result = bcadd($budgetLimit->amount, $result);
+            $result = bcadd((string) $budgetLimit->amount, $result);
         }
 
         return $result;
@@ -127,16 +128,14 @@ class BudgetLimitRepository implements BudgetLimitRepositoryInterface
     public function getAllBudgetLimitsByCurrency(TransactionCurrency $currency, ?Carbon $start = null, ?Carbon $end = null): Collection
     {
         return $this->getAllBudgetLimits($start, $end)->filter(
-            static function (BudgetLimit $budgetLimit) use ($currency) {
-                return $budgetLimit->transaction_currency_id === $currency->id;
-            }
+            static fn (BudgetLimit $budgetLimit) => $budgetLimit->transaction_currency_id === $currency->id
         );
     }
 
     public function getAllBudgetLimits(?Carbon $start = null, ?Carbon $end = null): Collection
     {
         // both are NULL:
-        if (null === $start && null === $end) {
+        if (!$start instanceof Carbon && !$end instanceof Carbon) {
             return BudgetLimit::leftJoin('budgets', 'budgets.id', '=', 'budget_limits.budget_id')
                 ->with(['budget'])
                 ->where('budgets.user_id', $this->user->id)
@@ -145,17 +144,17 @@ class BudgetLimitRepository implements BudgetLimitRepositoryInterface
             ;
         }
         // one of the two is NULL.
-        if (null === $start xor null === $end) {
+        if (!$start instanceof Carbon xor !$end instanceof Carbon) {
             $query = BudgetLimit::leftJoin('budgets', 'budgets.id', '=', 'budget_limits.budget_id')
                 ->with(['budget'])
                 ->whereNull('budgets.deleted_at')
                 ->where('budgets.user_id', $this->user->id)
             ;
-            if (null !== $end) {
+            if ($end instanceof Carbon) {
                 // end date must be before $end.
                 $query->where('end_date', '<=', $end->format('Y-m-d 00:00:00'));
             }
-            if (null !== $start) {
+            if ($start instanceof Carbon) {
                 // start date must be after $start.
                 $query->where('start_date', '>=', $start->format('Y-m-d 00:00:00'));
             }
@@ -202,17 +201,17 @@ class BudgetLimitRepository implements BudgetLimitRepositoryInterface
 
     public function getBudgetLimits(Budget $budget, ?Carbon $start = null, ?Carbon $end = null): Collection
     {
-        if (null === $end && null === $start) {
+        if (!$end instanceof Carbon && !$start instanceof Carbon) {
             return $budget->budgetlimits()->with(['transactionCurrency'])->orderBy('budget_limits.start_date', 'DESC')->get(['budget_limits.*']);
         }
-        if (null === $end xor null === $start) {
+        if (!$end instanceof Carbon xor !$start instanceof Carbon) {
             $query = $budget->budgetlimits()->with(['transactionCurrency'])->orderBy('budget_limits.start_date', 'DESC');
             // one of the two is null
-            if (null !== $end) {
+            if ($end instanceof Carbon) {
                 // end date must be before $end.
                 $query->where('end_date', '<=', $end->format('Y-m-d 00:00:00'));
             }
-            if (null !== $start) {
+            if ($start instanceof Carbon) {
                 // start date must be after $start.
                 $query->where('start_date', '>=', $start->format('Y-m-d 00:00:00'));
             }
@@ -256,17 +255,10 @@ class BudgetLimitRepository implements BudgetLimitRepositoryInterface
         ;
     }
 
-    #[\Override]
+    #[Override]
     public function getNoteText(BudgetLimit $budgetLimit): string
     {
         return (string) $budgetLimit->notes()->first()?->text;
-    }
-
-    public function setUser(null|Authenticatable|User $user): void
-    {
-        if ($user instanceof User) {
-            $this->user = $user;
-        }
     }
 
     /**
@@ -279,7 +271,7 @@ class BudgetLimitRepository implements BudgetLimitRepositoryInterface
         $factory                        = app(TransactionCurrencyFactory::class);
         $currency                       = $factory->find($data['currency_id'] ?? null, $data['currency_code'] ?? null);
         if (null === $currency) {
-            $currency = app('amount')->getNativeCurrencyByUserGroup($this->user->userGroup);
+            $currency = app('amount')->getPrimaryCurrencyByUserGroup($this->user->userGroup);
         }
         $currency->enabled              = true;
         $currency->save();
@@ -332,7 +324,7 @@ class BudgetLimitRepository implements BudgetLimitRepositoryInterface
         ;
     }
 
-    #[\Override]
+    #[Override]
     public function setNoteText(BudgetLimit $budgetLimit, string $text): void
     {
         $dbNote = $budgetLimit->notes()->first();
@@ -377,7 +369,7 @@ class BudgetLimitRepository implements BudgetLimitRepositoryInterface
         }
         // catch unexpected null:
         if (null === $currency) {
-            $currency = $budgetLimit->transactionCurrency ?? app('amount')->getNativeCurrencyByUserGroup($this->user->userGroup);
+            $currency = $budgetLimit->transactionCurrency ?? app('amount')->getPrimaryCurrencyByUserGroup($this->user->userGroup);
         }
         $currency->enabled                    = true;
         $currency->save();

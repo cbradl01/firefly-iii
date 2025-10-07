@@ -31,7 +31,7 @@ use FireflyIII\Models\GroupMembership;
 use FireflyIII\Models\Transaction;
 use FireflyIII\Models\TransactionJournal;
 use FireflyIII\Models\UserGroup;
-use FireflyIII\Repositories\UserGroups\Currency\CurrencyRepositoryInterface;
+use FireflyIII\Repositories\Currency\CurrencyRepositoryInterface;
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
@@ -63,10 +63,10 @@ class CorrectsCurrencies extends Command
         $repos           = app(CurrencyRepositoryInterface::class);
 
         // first check if the user has any default currency (not necessarily the case, so can be forced).
-        $defaultCurrency = app('amount')->getNativeCurrencyByUserGroup($userGroup);
+        $primaryCurrency = app('amount')->getPrimaryCurrencyByUserGroup($userGroup);
 
         Log::debug(sprintf('Now correcting currencies for user group #%d', $userGroup->id));
-        $found           = [$defaultCurrency->id];
+        $found           = [$primaryCurrency->id];
 
         // get all meta entries
         $meta            = AccountMeta::leftJoin('accounts', 'accounts.id', '=', 'account_meta.account_id')
@@ -115,9 +115,7 @@ class CorrectsCurrencies extends Command
         $found           = array_values(
             array_filter(
                 $found,
-                static function (int $currencyId) {
-                    return 0 !== $currencyId;
-                }
+                static fn (int $currencyId) => 0 !== $currencyId
             )
         );
 

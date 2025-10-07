@@ -28,17 +28,18 @@ use Carbon\Carbon;
 use FireflyIII\Enums\TransactionTypeEnum;
 use FireflyIII\Helpers\Collector\GroupCollectorInterface;
 use FireflyIII\Models\TransactionCurrency;
+use FireflyIII\Support\Facades\Steam;
 use FireflyIII\Support\Report\Summarizer\TransactionSummarizer;
-use FireflyIII\User;
-use Illuminate\Contracts\Auth\Authenticatable;
+use FireflyIII\Support\Repositories\UserGroup\UserGroupInterface;
+use FireflyIII\Support\Repositories\UserGroup\UserGroupTrait;
 use Illuminate\Support\Collection;
 
 /**
  * Class OperationsRepository
  */
-class OperationsRepository implements OperationsRepositoryInterface
+class OperationsRepository implements OperationsRepositoryInterface, UserGroupInterface
 {
-    private User $user;
+    use UserGroupTrait;
 
     /**
      * This method returns a list of all the withdrawal transaction journals (as arrays) set in that period
@@ -66,13 +67,6 @@ class OperationsRepository implements OperationsRepositoryInterface
         return $collector->getExtractedJournals();
     }
 
-    public function setUser(null|Authenticatable|User $user): void
-    {
-        if ($user instanceof User) {
-            $this->user = $user;
-        }
-    }
-
     private function sortByCurrency(array $journals, string $direction): array
     {
         $array = [];
@@ -89,7 +83,7 @@ class OperationsRepository implements OperationsRepositoryInterface
             ];
 
             $array[$currencyId]['transaction_journals'][$journalId] = [
-                'amount'                   => app('steam')->{$direction}((string) $journal['amount']), // @phpstan-ignore-line
+                'amount'                   => Steam::{$direction}((string) $journal['amount']), // @phpstan-ignore-line
                 'date'                     => $journal['date'],
                 'transaction_journal_id'   => $journalId,
                 'budget_name'              => $journal['budget_name'],
@@ -157,51 +151,51 @@ class OperationsRepository implements OperationsRepositoryInterface
 
         // depends on transaction type:
         if (TransactionTypeEnum::WITHDRAWAL->value === $type) {
-            if (null !== $accounts) {
+            if ($accounts instanceof Collection) {
                 $collector->setSourceAccounts($accounts);
             }
-            if (null !== $opposing) {
+            if ($opposing instanceof Collection) {
                 $collector->setDestinationAccounts($opposing);
             }
         }
         if (TransactionTypeEnum::DEPOSIT->value === $type) {
-            if (null !== $accounts) {
+            if ($accounts instanceof Collection) {
                 $collector->setDestinationAccounts($accounts);
             }
-            if (null !== $opposing) {
+            if ($opposing instanceof Collection) {
                 $collector->setSourceAccounts($opposing);
             }
         }
         // supports only accounts, not opposing.
-        if (TransactionTypeEnum::TRANSFER->value === $type && null !== $accounts) {
+        if (TransactionTypeEnum::TRANSFER->value === $type && $accounts instanceof Collection) {
             $collector->setAccounts($accounts);
         }
 
-        if (null !== $currency) {
+        if ($currency instanceof TransactionCurrency) {
             $collector->setCurrency($currency);
         }
         $journals  = $collector->getExtractedJournals();
 
         // same but for foreign currencies:
-        if (null !== $currency) {
+        if ($currency instanceof TransactionCurrency) {
             /** @var GroupCollectorInterface $collector */
             $collector = app(GroupCollectorInterface::class);
             $collector->setUser($this->user)->setRange($start, $end)->setTypes([$type])->withAccountInformation()
                 ->setForeignCurrency($currency)
             ;
             if (TransactionTypeEnum::WITHDRAWAL->value === $type) {
-                if (null !== $accounts) {
+                if ($accounts instanceof Collection) {
                     $collector->setSourceAccounts($accounts);
                 }
-                if (null !== $opposing) {
+                if ($opposing instanceof Collection) {
                     $collector->setDestinationAccounts($opposing);
                 }
             }
             if (TransactionTypeEnum::DEPOSIT->value === $type) {
-                if (null !== $accounts) {
+                if ($accounts instanceof Collection) {
                     $collector->setDestinationAccounts($accounts);
                 }
-                if (null !== $opposing) {
+                if ($opposing instanceof Collection) {
                     $collector->setSourceAccounts($opposing);
                 }
             }
@@ -337,7 +331,7 @@ class OperationsRepository implements OperationsRepositoryInterface
         $currencyId                       = $journal['currency_id'];
         $sourceKey                        = sprintf('%d-%d', $currencyId, $sourceId);
         $destKey                          = sprintf('%d-%d', $currencyId, $destinationId);
-        $amount                           = app('steam')->positive($journal['amount']);
+        $amount                           = Steam::positive($journal['amount']);
 
         // source first
         $return[$sourceKey] ??= [
@@ -368,19 +362,19 @@ class OperationsRepository implements OperationsRepositoryInterface
         ];
 
         // source account? money goes out!
-        $return[$sourceKey]['out']        = bcadd($return[$sourceKey]['out'], app('steam')->negative($amount));
-        $return[$sourceKey]['difference'] = bcadd($return[$sourceKey]['out'], $return[$sourceKey]['in']);
+        $return[$sourceKey]['out']        = bcadd((string) $return[$sourceKey]['out'], Steam::negative($amount));
+        $return[$sourceKey]['difference'] = bcadd($return[$sourceKey]['out'], (string) $return[$sourceKey]['in']);
 
         // destination  account? money comes in:
-        $return[$destKey]['in']           = bcadd($return[$destKey]['in'], $amount);
-        $return[$destKey]['difference']   = bcadd($return[$destKey]['out'], $return[$destKey]['in']);
+        $return[$destKey]['in']           = bcadd((string) $return[$destKey]['in'], $amount);
+        $return[$destKey]['difference']   = bcadd((string) $return[$destKey]['out'], $return[$destKey]['in']);
 
         // foreign currency
         if (null !== $journal['foreign_currency_id'] && null !== $journal['foreign_amount']) {
             $currencyId                       = $journal['foreign_currency_id'];
             $sourceKey                        = sprintf('%d-%d', $currencyId, $sourceId);
             $destKey                          = sprintf('%d-%d', $currencyId, $destinationId);
-            $amount                           = app('steam')->positive($journal['foreign_amount']);
+            $amount                           = Steam::positive($journal['foreign_amount']);
 
             // same as above:
             // source first
@@ -411,12 +405,12 @@ class OperationsRepository implements OperationsRepositoryInterface
                 'currency_code'    => $journal['foreign_currency_code'],
             ];
             // source account? money goes out! (same as above)
-            $return[$sourceKey]['out']        = bcadd($return[$sourceKey]['out'], app('steam')->negative($amount));
-            $return[$sourceKey]['difference'] = bcadd($return[$sourceKey]['out'], $return[$sourceKey]['in']);
+            $return[$sourceKey]['out']        = bcadd((string) $return[$sourceKey]['out'], Steam::negative($amount));
+            $return[$sourceKey]['difference'] = bcadd($return[$sourceKey]['out'], (string) $return[$sourceKey]['in']);
 
             // destination  account? money comes in:
-            $return[$destKey]['in']           = bcadd($return[$destKey]['in'], $amount);
-            $return[$destKey]['difference']   = bcadd($return[$destKey]['out'], $return[$destKey]['in']);
+            $return[$destKey]['in']           = bcadd((string) $return[$destKey]['in'], $amount);
+            $return[$destKey]['difference']   = bcadd((string) $return[$destKey]['out'], $return[$destKey]['in']);
         }
 
         return $return;

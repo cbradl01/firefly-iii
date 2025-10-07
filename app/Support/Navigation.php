@@ -30,13 +30,14 @@ use FireflyIII\Helpers\Fiscal\FiscalHelperInterface;
 use FireflyIII\Support\Calendar\Calculator;
 use FireflyIII\Support\Calendar\Periodicity;
 use Illuminate\Support\Facades\Log;
+use Throwable;
 
 /**
  * Class Navigation.
  */
 class Navigation
 {
-    private Calculator $calculator;
+    private readonly Calculator $calculator;
 
     public function __construct(?Calculator $calculator = null)
     {
@@ -93,7 +94,7 @@ class Navigation
             return $this->calculator->nextDateByInterval($epoch, $periodicity, $skipInterval);
         } catch (IntervalException $exception) {
             Log::warning($exception->getMessage(), ['exception' => $exception]);
-        } catch (\Throwable $exception) {
+        } catch (Throwable $exception) {
             Log::error($exception->getMessage(), ['exception' => $exception]);
         }
 
@@ -420,7 +421,7 @@ class Navigation
             $currentEnd->{$function}(); // @phpstan-ignore-line
         }
 
-        if (null !== $maxDate && $currentEnd > $maxDate) {
+        if ($maxDate instanceof Carbon && $currentEnd > $maxDate) {
             return clone $maxDate;
         }
 
@@ -442,25 +443,13 @@ class Navigation
             return $range;
         }
 
-        switch ($range) {
-            default:
-                return $range;
-
-            case 'last7':
-                return '1W';
-
-            case 'last30':
-            case 'MTD':
-                return '1M';
-
-            case 'last90':
-            case 'QTD':
-                return '3M';
-
-            case 'last365':
-            case 'YTD':
-                return '1Y';
-        }
+        return match ($range) {
+            'last7'          => '1W',
+            'last30', 'MTD'  => '1M',
+            'last90', 'QTD'  => '3M',
+            'last365', 'YTD' => '1Y',
+            default          => $range,
+        };
     }
 
     /**
@@ -475,7 +464,7 @@ class Navigation
         $displayFormat = (string) trans('config.month_and_day_js', [], $locale);
         $diff          = $start->diffInMonths($end, true);
         // increment by month (for year)
-        if ($diff >= 1.0001) {
+        if ($diff >= 1.0001 && $diff < 12.001) {
             $increment     = 'addMonth';
             $displayFormat = (string) trans('config.month_js');
         }
@@ -506,14 +495,14 @@ class Navigation
         $format = 'Y-m-d';
         $diff   = $start->diffInMonths($end, true);
         // Log::debug(sprintf('preferredCarbonFormat(%s, %s) = %f', $start->format('Y-m-d'), $end->format('Y-m-d'), $diff));
-        if ($diff >= 1.001) {
+        if ($diff >= 1.001 && $diff < 12.001) {
             //            Log::debug(sprintf('Return Y-m because %s', $diff));
             $format = 'Y-m';
         }
 
         if ($diff >= 12.001) {
             //            Log::debug(sprintf('Return Y because %s', $diff));
-            $format = 'Y';
+            return 'Y';
         }
 
         return $format;
@@ -576,16 +565,16 @@ class Navigation
     public function preferredCarbonLocalizedFormat(Carbon $start, Carbon $end): string
     {
         $locale = app('steam')->getLocale();
-        $format = (string) trans('config.month_and_day_js', [], $locale);
-        if ($start->diffInMonths($end, true) > 1) {
-            $format = (string) trans('config.month_js', [], $locale);
+        $diff   = $start->diffInMonths($end, true);
+        if ($diff >= 1.001 && $diff < 12.001) {
+            return (string) trans('config.month_js', [], $locale);
         }
 
-        if ($start->diffInMonths($end, true) > 12) {
-            $format = (string) trans('config.year_js', [], $locale);
+        if ($diff >= 12.001) {
+            return (string) trans('config.year_js', [], $locale);
         }
 
-        return $format;
+        return (string) trans('config.month_and_day_js', [], $locale);
     }
 
     /**
@@ -594,16 +583,16 @@ class Navigation
      */
     public function preferredEndOfPeriod(Carbon $start, Carbon $end): string
     {
-        $format = 'endOfDay';
-        if ((int) $start->diffInMonths($end, true) > 1) {
-            $format = 'endOfMonth';
+        $diff = $start->diffInMonths($end, true);
+        if ($diff >= 1.001 && $diff < 12.001) {
+            return 'endOfMonth';
         }
 
-        if ((int) $start->diffInMonths($end, true) > 12) {
-            $format = 'endOfYear';
+        if ($diff >= 12.001) {
+            return 'endOfYear';
         }
 
-        return $format;
+        return 'endOfDay';
     }
 
     /**
@@ -612,16 +601,16 @@ class Navigation
      */
     public function preferredRangeFormat(Carbon $start, Carbon $end): string
     {
-        $format = '1D';
-        if ((int) $start->diffInMonths($end, true) > 1) {
-            $format = '1M';
+        $diff = $start->diffInMonths($end, true);
+        if ($diff >= 1.001 && $diff < 12.001) {
+            return '1M';
         }
 
-        if ((int) $start->diffInMonths($end, true) > 12) {
-            $format = '1Y';
+        if ($diff >= 12.001) {
+            return '1Y';
         }
 
-        return $format;
+        return '1D';
     }
 
     /**
@@ -630,16 +619,16 @@ class Navigation
      */
     public function preferredSqlFormat(Carbon $start, Carbon $end): string
     {
-        $format = '%Y-%m-%d';
-        if ((int) $start->diffInMonths($end, true) > 1) {
-            $format = '%Y-%m';
+        $diff = $start->diffInMonths($end, true);
+        if ($diff >= 1.001 && $diff < 12.001) {
+            return '%Y-%m';
         }
 
-        if ((int) $start->diffInMonths($end, true) > 12) {
-            $format = '%Y';
+        if ($diff >= 12.001) {
+            return '%Y';
         }
 
-        return $format;
+        return '%Y-%m-%d';
     }
 
     /**

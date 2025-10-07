@@ -87,14 +87,14 @@ class ReconcileController extends Controller
 
             return redirect(route('accounts.index', [config(sprintf('firefly.shortNamesByFullName.%s', $account->accountType->type))]));
         }
-        $currency        = $this->accountRepos->getAccountCurrency($account) ?? $this->defaultCurrency;
+        $currency        = $this->accountRepos->getAccountCurrency($account) ?? $this->primaryCurrency;
 
         // no start or end:
         $range           = app('navigation')->getViewRange(false);
 
         // get start and end
 
-        if (null === $start && null === $end) {
+        if (!$start instanceof Carbon && !$end instanceof Carbon) {
             /** @var Carbon $start */
             $start = clone session('start', app('navigation')->startOfPeriod(new Carbon(), $range));
 
@@ -204,7 +204,7 @@ class ReconcileController extends Controller
         }
 
         $reconciliation = $this->accountRepos->getReconciliation($account);
-        $currency       = $this->accountRepos->getAccountCurrency($account) ?? $this->defaultCurrency;
+        $currency       = $this->accountRepos->getAccountCurrency($account) ?? $this->primaryCurrency;
         $source         = $reconciliation;
         $destination    = $account;
         if (1 === bccomp($difference, '0')) {
@@ -225,11 +225,13 @@ class ReconcileController extends Controller
             ]
         );
         $submission     = [
-            'user'         => auth()->user()->id,
+            'user'         => auth()->user(),
+            'user_group'   => auth()->user()->userGroup,
             'group_title'  => null,
             'transactions' => [
                 [
-                    'user'                => auth()->user()->id,
+                    'user'                => auth()->user(),
+                    'user_group'          => auth()->user()->userGroup,
                     'type'                => strtolower(TransactionTypeEnum::RECONCILIATION->value),
                     'date'                => $end,
                     'order'               => 0,

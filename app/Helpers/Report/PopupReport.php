@@ -29,8 +29,8 @@ use FireflyIII\Models\Account;
 use FireflyIII\Models\Budget;
 use FireflyIII\Models\Category;
 use FireflyIII\Repositories\Account\AccountRepositoryInterface;
+use FireflyIII\Repositories\Currency\CurrencyRepositoryInterface;
 use FireflyIII\Repositories\Journal\JournalRepositoryInterface;
-use FireflyIII\Repositories\UserGroups\Currency\CurrencyRepositoryInterface;
 use Illuminate\Support\Collection;
 
 /**
@@ -45,7 +45,7 @@ class PopupReport implements PopupReportInterface
     {
         /** @var GroupCollectorInterface $collector */
         $collector = app(GroupCollectorInterface::class);
-        $collector->setAccounts(new Collection([$account]))
+        $collector->setAccounts(new Collection()->push($account))
             ->withAccountInformation()
             ->withBudgetInformation()
             ->withCategoryInformation()
@@ -72,7 +72,7 @@ class PopupReport implements PopupReportInterface
         /** @var GroupCollectorInterface $collector */
         $collector  = app(GroupCollectorInterface::class);
         $collector
-            ->setAccounts(new Collection([$account]))
+            ->setAccounts(new Collection()->push($account))
             ->setTypes([TransactionTypeEnum::WITHDRAWAL->value])
             ->withAccountInformation()
             ->withCategoryInformation()
@@ -149,10 +149,10 @@ class PopupReport implements PopupReportInterface
             ->setRange($attributes['startDate'], $attributes['endDate'])->withAccountInformation()
         ;
 
-        if (null !== $category) {
+        if ($category instanceof Category) {
             $collector->setCategory($category);
         }
-        if (null === $category) {
+        if (!$category instanceof Category) {
             $collector->withoutCategory();
         }
 
@@ -191,7 +191,7 @@ class PopupReport implements PopupReportInterface
         // $set = $attributes['accounts'] ?? new Collection;
         // $set->push($account);
 
-        $collector->setDestinationAccounts(new Collection([$account]))
+        $collector->setDestinationAccounts(new Collection()->push($account))
             ->setRange($attributes['startDate'], $attributes['endDate'])
             ->withAccountInformation()
             ->withBudgetInformation()
@@ -218,7 +218,7 @@ class PopupReport implements PopupReportInterface
         /** @var GroupCollectorInterface $collector */
         $collector  = app(GroupCollectorInterface::class);
         $collector
-            ->setSourceAccounts(new Collection([$account]))
+            ->setSourceAccounts(new Collection()->push($account))
             ->setDestinationAccounts($attributes['accounts'])
             ->setRange($attributes['startDate'], $attributes['endDate'])
             ->setTypes([TransactionTypeEnum::DEPOSIT->value, TransactionTypeEnum::TRANSFER->value])

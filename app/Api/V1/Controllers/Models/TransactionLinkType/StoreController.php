@@ -24,15 +24,16 @@ declare(strict_types=1);
 
 namespace FireflyIII\Api\V1\Controllers\Models\TransactionLinkType;
 
+use Illuminate\Support\Facades\Validator;
 use FireflyIII\Api\V1\Controllers\Controller;
 use FireflyIII\Api\V1\Requests\Models\TransactionLinkType\StoreRequest;
-use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Repositories\LinkType\LinkTypeRepositoryInterface;
 use FireflyIII\Repositories\User\UserRepositoryInterface;
 use FireflyIII\Support\Http\Api\TransactionFilter;
 use FireflyIII\Transformers\LinkTypeTransformer;
 use FireflyIII\User;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Validation\ValidationException;
 use League\Fractal\Resource\Item;
 
 /**
@@ -70,7 +71,7 @@ class StoreController extends Controller
      *
      * Store new object.
      *
-     * @throws FireflyException
+     * @throws ValidationException
      */
     public function store(StoreRequest $request): JsonResponse
     {
@@ -81,7 +82,7 @@ class StoreController extends Controller
         if (!$this->userRepository->hasRole($admin, 'owner')) {
             // access denied:
             $messages = ['name' => '200005: You need the "owner" role to do this.'];
-            \Validator::make([], $rules, $messages)->validate();
+            Validator::make([], $rules, $messages)->validate();
         }
         $data        = $request->getAll();
         // if currency ID is 0, find the currency by the code:

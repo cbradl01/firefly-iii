@@ -33,10 +33,9 @@ use FireflyIII\Repositories\Journal\JournalRepository;
 use FireflyIII\Repositories\Journal\JournalRepositoryInterface;
 use FireflyIII\Repositories\TransactionGroup\TransactionGroupRepository;
 use FireflyIII\Repositories\TransactionGroup\TransactionGroupRepositoryInterface;
-use FireflyIII\Repositories\UserGroups\Journal\JournalRepository as GroupJournalRepository;
-use FireflyIII\Repositories\UserGroups\Journal\JournalRepositoryInterface as GroupJournalRepositoryInterface;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\ServiceProvider;
+use Override;
 
 /**
  * Class JournalServiceProvider.
@@ -51,6 +50,7 @@ class JournalServiceProvider extends ServiceProvider
     /**
      * Register the application services.
      */
+    #[Override]
     public function register(): void
     {
         $this->registerRepository();
@@ -64,8 +64,7 @@ class JournalServiceProvider extends ServiceProvider
     private function registerRepository(): void
     {
         $this->app->bind(
-            JournalRepositoryInterface::class,
-            static function (Application $app) {
+            static function (Application $app): JournalRepositoryInterface {
                 /** @var JournalRepositoryInterface $repository */
                 $repository = app(JournalRepository::class);
                 if ($app->auth->check()) { // @phpstan-ignore-line (phpstan does not understand the reference to auth)
@@ -76,23 +75,9 @@ class JournalServiceProvider extends ServiceProvider
             }
         );
 
-        $this->app->bind(
-            GroupJournalRepositoryInterface::class,
-            static function (Application $app) {
-                /** @var GroupJournalRepositoryInterface $repository */
-                $repository = app(GroupJournalRepository::class);
-                if ($app->auth->check()) { // @phpstan-ignore-line (phpstan does not understand the reference to auth)
-                    $repository->setUser(auth()->user());
-                }
-
-                return $repository;
-            }
-        );
-
         // also bind new API repository
         $this->app->bind(
-            JournalAPIRepositoryInterface::class,
-            static function (Application $app) {
+            static function (Application $app): JournalAPIRepositoryInterface {
                 /** @var JournalAPIRepositoryInterface $repository */
                 $repository = app(JournalAPIRepository::class);
                 if ($app->auth->check()) { // @phpstan-ignore-line (phpstan does not understand the reference to auth)
@@ -105,8 +90,7 @@ class JournalServiceProvider extends ServiceProvider
 
         // also bind new CLI repository
         $this->app->bind(
-            JournalCLIRepositoryInterface::class,
-            static function (Application $app) {
+            static function (Application $app): JournalCLIRepositoryInterface {
                 /** @var JournalCLIRepositoryInterface $repository */
                 $repository = app(JournalCLIRepository::class);
                 if ($app->auth->check()) { // @phpstan-ignore-line (phpstan does not understand the reference to auth)
@@ -124,8 +108,7 @@ class JournalServiceProvider extends ServiceProvider
     private function registerGroupRepository(): void
     {
         $this->app->bind(
-            TransactionGroupRepositoryInterface::class,
-            static function (Application $app) {
+            static function (Application $app): TransactionGroupRepositoryInterface {
                 /** @var TransactionGroupRepositoryInterface $repository */
                 $repository = app(TransactionGroupRepository::class);
                 if ($app->auth->check()) { // @phpstan-ignore-line (phpstan does not understand the reference to auth)
@@ -140,8 +123,7 @@ class JournalServiceProvider extends ServiceProvider
     private function registerGroupCollector(): void
     {
         $this->app->bind(
-            GroupCollectorInterface::class,
-            static function (Application $app) {
+            static function (Application $app): GroupCollectorInterface {
                 /** @var GroupCollectorInterface $collector */
                 $collector = app(GroupCollector::class);
                 if ($app->auth->check()) { // @phpstan-ignore-line (phpstan does not understand the reference to auth)

@@ -27,7 +27,7 @@ namespace FireflyIII\Api\V1\Controllers\Models\TransactionCurrency;
 use FireflyIII\Api\V1\Controllers\Controller;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Models\TransactionCurrency;
-use FireflyIII\Repositories\UserGroups\Currency\CurrencyRepositoryInterface;
+use FireflyIII\Repositories\Currency\CurrencyRepositoryInterface;
 use FireflyIII\Support\Http\Api\AccountFilter;
 use FireflyIII\Support\Http\Api\TransactionFilter;
 use FireflyIII\Transformers\CurrencyTransformer;
@@ -107,7 +107,7 @@ class ShowController extends Controller
         /** @var User $user */
         $user        = auth()->user();
         $manager     = $this->getManager();
-        $this->parameters->set('nativeCurrency', $this->nativeCurrency);
+        $this->parameters->set('primaryCurrency', $this->primaryCurrency);
 
         // update fields with user info.
         $currency->refreshForUser($user);
@@ -122,19 +122,16 @@ class ShowController extends Controller
     }
 
     /**
-     * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/currencies/getNativeCurrency
-     *
      * Show a currency.
      *
      * @throws FireflyException
      */
-    public function showDefault(): JsonResponse
+    public function showPrimary(): JsonResponse
     {
         /** @var User $user */
         $user        = auth()->user();
         $manager     = $this->getManager();
-        $currency    = $this->nativeCurrency;
+        $currency    = $this->primaryCurrency;
 
         // update fields with user info.
         $currency->refreshForUser($user);

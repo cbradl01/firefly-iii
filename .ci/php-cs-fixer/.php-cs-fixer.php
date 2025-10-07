@@ -19,26 +19,25 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use PhpCsFixer\Runner\Parallel\ParallelConfigFactory;
-
 $current = __DIR__;
 
 $paths = [
     $current . '/../../app',
     $current . '/../../config',
-    $current . '/../../database',
     $current . '/../../routes',
     $current . '/../../tests',
-    $current . '/../../resources/lang/en_US',
 ];
 
 $finder = PhpCsFixer\Finder::create()
                            ->in($paths);
 
 
-$config = new PhpCsFixer\Config();
-$config->setParallelConfig(ParallelConfigFactory::detect());
+$config = (new PhpCsFixer\Config())
+        // ->setUnsupportedPhpVersionAllowed(true) // use this when PHP 8.5 comes out.
+        ->setParallelConfig(PhpCsFixer\Runner\Parallel\ParallelConfigFactory::detect())
+        ;
 return $config->setRules(
+
     [
         // rule sets
         '@PHP83Migration'               => true,
@@ -61,9 +60,15 @@ return $config->setRules(
         'comment_to_phpdoc'             => false, // breaks phpstan lines in combination with PHPStorm.
         'type_declaration_spaces'       => false,
         'cast_spaces'                   => false,
-        'phpdoc_to_comment' => false, // do not overrule single line comment style, breaks phpstan.
+
+        // enabled rules
+        'global_namespace_import' => true, // matches with rector.
 
         // complex rules
+        'phpdoc_to_comment' => ['ignored_tags' => ['var']],
+        'php_unit_test_case_static_method_calls' => [
+            'call_type' => 'this',
+        ],
         'array_syntax'                  => ['syntax' => 'short'],
         'binary_operator_spaces'        => [
             'default'   => 'at_least_single_space',
@@ -73,5 +78,7 @@ return $config->setRules(
                 '??=' => 'align_single_space_minimal_by_scope',
             ],
         ],
-    ])
+    ]
+
+)
               ->setFinder($finder);

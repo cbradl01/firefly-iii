@@ -29,8 +29,12 @@ use FireflyIII\Models\TransactionCurrency;
 use FireflyIII\Models\TransactionJournal;
 use FireflyIII\Models\UserGroup;
 use FireflyIII\Support\Facades\Preferences;
+use FireflyIII\Support\Facades\Steam;
+use FireflyIII\Support\Singleton\PreferencesSingleton;
 use FireflyIII\User;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
+use NumberFormatter;
 
 /**
  * Class Amount.
@@ -49,61 +53,6 @@ class Amount
     }
 
     /**
-     * Experimental function to see if we can quickly and quietly get the amount from a journal.
-     * This depends on the user's default currency and the wish to have it converted.
-     */
-    public function getAmountFromJournal(array $journal): string
-    {
-        $convertToNative = $this->convertToNative();
-        $currency        = $this->getNativeCurrency();
-        $field           = $convertToNative && $currency->id !== $journal['currency_id'] ? 'native_amount' : 'amount';
-        $amount          = $journal[$field] ?? '0';
-        // Log::debug(sprintf('Field is %s, amount is %s', $field, $amount));
-        // fallback, the transaction has a foreign amount in $currency.
-        if ($convertToNative && null !== $journal['foreign_amount'] && $currency->id === (int) $journal['foreign_currency_id']) {
-            $amount = $journal['foreign_amount'];
-            // Log::debug(sprintf('Overruled, amount is now %s', $amount));
-        }
-
-        return (string) $amount;
-    }
-
-    public function convertToNative(?User $user = null): bool
-    {
-        if (null === $user) {
-            return true === Preferences::get('convert_to_native', false)->data && true === config('cer.enabled');
-            //            Log::debug(sprintf('convertToNative [a]: %s', var_export($result, true)));
-        }
-
-        return true === Preferences::getForUser($user, 'convert_to_native', false)->data && true === config('cer.enabled');
-        // Log::debug(sprintf('convertToNative [b]: %s', var_export($result, true)));
-    }
-
-    /**
-     * Experimental function to see if we can quickly and quietly get the amount from a journal.
-     * This depends on the user's default currency and the wish to have it converted.
-     */
-    public function getAmountFromJournalObject(TransactionJournal $journal): string
-    {
-        $convertToNative   = $this->convertToNative();
-        $currency          = $this->getNativeCurrency();
-        $field             = $convertToNative && $currency->id !== $journal->transaction_currency_id ? 'native_amount' : 'amount';
-
-        /** @var null|Transaction $sourceTransaction */
-        $sourceTransaction = $journal->transactions()->where('amount', '<', 0)->first();
-        if (null === $sourceTransaction) {
-            return '0';
-        }
-        $amount            = $sourceTransaction->{$field} ?? '0';
-        if ((int) $sourceTransaction->foreign_currency_id === $currency->id) {
-            // use foreign amount instead!
-            $amount = (string) $sourceTransaction->foreign_amount; // hard coded to be foreign amount.
-        }
-
-        return $amount;
-    }
-
-    /**
      * This method will properly format the given number, in color or "black and white",
      * as a currency, given two things: the currency required and the current locale.
      *
@@ -111,15 +60,15 @@ class Amount
      */
     public function formatFlat(string $symbol, int $decimalPlaces, string $amount, ?bool $coloured = null): string
     {
-        $locale  = app('steam')->getLocale();
-        $rounded = app('steam')->bcround($amount, $decimalPlaces);
+        $locale  = Steam::getLocale();
+        $rounded = Steam::bcround($amount, $decimalPlaces);
         $coloured ??= true;
 
-        $fmt     = new \NumberFormatter($locale, \NumberFormatter::CURRENCY);
-        $fmt->setSymbol(\NumberFormatter::CURRENCY_SYMBOL, $symbol);
-        $fmt->setAttribute(\NumberFormatter::MIN_FRACTION_DIGITS, $decimalPlaces);
-        $fmt->setAttribute(\NumberFormatter::MAX_FRACTION_DIGITS, $decimalPlaces);
-        $result  = (string) $fmt->format((float) $rounded); // intentional float
+        $fmt     = new NumberFormatter($locale, NumberFormatter::CURRENCY);
+        $fmt->setSymbol(NumberFormatter::CURRENCY_SYMBOL, $symbol);
+        $fmt->setAttribute(NumberFormatter::MIN_FRACTION_DIGITS, $decimalPlaces);
+        $fmt->setAttribute(NumberFormatter::MAX_FRACTION_DIGITS, $decimalPlaces);
+        $result  = (string)$fmt->format((float)$rounded); // intentional float
 
         if (true === $coloured) {
             if (1 === bccomp($rounded, '0')) {
@@ -137,7 +86,7 @@ class Amount
 
     public function formatByCurrencyId(int $currencyId, string $amount, ?bool $coloured = null): string
     {
-        $format = TransactionCurrency::find($currencyId);
+        $format = $this->getTransactionCurrencyById($currencyId);
 
         return $this->formatFlat($format->symbol, $format->decimal_places, $amount, $coloured);
     }
@@ -147,75 +96,165 @@ class Amount
         return TransactionCurrency::orderBy('code', 'ASC')->get();
     }
 
-    public function getCurrencies(): Collection
-    {
-        /** @var User $user */
-        $user = auth()->user();
-
-        return $user->currencies()->orderBy('code', 'ASC')->get();
-    }
-
     /**
-     * @deprecated
+     * Experimental function to see if we can quickly and quietly get the amount from a journal.
+     * This depends on the user's default currency and the wish to have it converted.
      */
-    public function getDefaultCurrency(): TransactionCurrency
+    public function getAmountFromJournal(array $journal): string
     {
-        return $this->getNativeCurrency();
+        $convertToPrimary = $this->convertToPrimary();
+        $currency         = $this->getPrimaryCurrency();
+        $field            = $convertToPrimary && $currency->id !== $journal['currency_id'] ? 'pc_amount' : 'amount';
+        $amount           = $journal[$field] ?? '0';
+        // Log::debug(sprintf('Field is %s, amount is %s', $field, $amount));
+        // fallback, the transaction has a foreign amount in $currency.
+        if ($convertToPrimary && null !== $journal['foreign_amount'] && $currency->id === (int)$journal['foreign_currency_id']) {
+            $amount = $journal['foreign_amount'];
+            // Log::debug(sprintf('Overruled, amount is now %s', $amount));
+        }
+
+        return (string)$amount;
     }
 
-    public function getNativeCurrency(): TransactionCurrency
+    public function getTransactionCurrencyById(int $currencyId): TransactionCurrency
+    {
+        $instance = PreferencesSingleton::getInstance();
+        $key      = sprintf('transaction_currency_%d', $currencyId);
+
+        /** @var null|TransactionCurrency $pref */
+        $pref     = $instance->getPreference($key);
+        if (null !== $pref) {
+            return $pref;
+        }
+        $currency = TransactionCurrency::find($currencyId);
+        if (null === $currency) {
+            $message = sprintf('Could not find a transaction currency with ID #%d', $currencyId);
+            Log::error($message);
+
+            throw new FireflyException($message);
+        }
+        $instance->setPreference($key, $currency);
+
+        return $currency;
+    }
+
+    public function getTransactionCurrencyByCode(string $code): TransactionCurrency
+    {
+        $instance = PreferencesSingleton::getInstance();
+        $key      = sprintf('transaction_currency_%s', $code);
+
+        /** @var null|TransactionCurrency $pref */
+        $pref     = $instance->getPreference($key);
+        if (null !== $pref) {
+            return $pref;
+        }
+        $currency = TransactionCurrency::whereCode($code)->first();
+        if (null === $currency) {
+            $message = sprintf('Could not find a transaction currency with code "%s"', $code);
+            Log::error($message);
+
+            throw new FireflyException($message);
+        }
+        $instance->setPreference($key, $currency);
+
+        return $currency;
+    }
+
+    public function convertToPrimary(?User $user = null): bool
+    {
+        $instance = PreferencesSingleton::getInstance();
+        if (!$user instanceof User) {
+            $pref = $instance->getPreference('convert_to_primary_no_user');
+            if (null === $pref) {
+                $res = true === Preferences::get('convert_to_primary', false)->data && true === config('cer.enabled');
+                $instance->setPreference('convert_to_primary_no_user', $res);
+
+                return $res;
+            }
+
+            return $pref;
+        }
+        $key      = sprintf('convert_to_primary_%d', $user->id);
+        $pref     = $instance->getPreference($key);
+        if (null === $pref) {
+            $res = true === Preferences::getForUser($user, 'convert_to_primary', false)->data && true === config('cer.enabled');
+            $instance->setPreference($key, $res);
+
+            return $res;
+        }
+
+        return $pref;
+    }
+
+    public function getPrimaryCurrency(): TransactionCurrency
     {
         if (auth()->check()) {
             /** @var User $user */
             $user = auth()->user();
             if (null !== $user->userGroup) {
-                return $this->getNativeCurrencyByUserGroup($user->userGroup);
+                return $this->getPrimaryCurrencyByUserGroup($user->userGroup);
             }
         }
 
         return $this->getSystemCurrency();
     }
 
-    /**
-     * @deprecated
-     */
-    public function getDefaultCurrencyByUserGroup(UserGroup $userGroup): TransactionCurrency
+    public function getPrimaryCurrencyByUserGroup(UserGroup $userGroup): TransactionCurrency
     {
-        return $this->getNativeCurrencyByUserGroup($userGroup);
-    }
-
-    public function getNativeCurrencyByUserGroup(UserGroup $userGroup): TransactionCurrency
-    {
-        $cache  = new CacheProperties();
-        $cache->addProperty('getNativeCurrencyByGroup');
+        $cache   = new CacheProperties();
+        $cache->addProperty('getPrimaryCurrencyByGroup');
         $cache->addProperty($userGroup->id);
         if ($cache->has()) {
             return $cache->get();
         }
 
-        /** @var null|TransactionCurrency $native */
-        $native = $userGroup->currencies()->where('group_default', true)->first();
-        if (null === $native) {
-            $native = $this->getSystemCurrency();
+        /** @var null|TransactionCurrency $primary */
+        $primary = $userGroup->currencies()->where('group_default', true)->first();
+        if (null === $primary) {
+            $primary = $this->getSystemCurrency();
             // could be the user group has no default right now.
-            $userGroup->currencies()->sync([$native->id => ['group_default' => true]]);
+            $userGroup->currencies()->sync([$primary->id => ['group_default' => true]]);
         }
-        $cache->store($native);
+        $cache->store($primary);
 
-        return $native;
+        return $primary;
     }
 
     public function getSystemCurrency(): TransactionCurrency
     {
-        return TransactionCurrency::where('code', 'EUR')->first();
+        return TransactionCurrency::whereNull('deleted_at')->where('code', 'EUR')->first();
     }
 
     /**
-     * @deprecated use getDefaultCurrencyByUserGroup instead
+     * Experimental function to see if we can quickly and quietly get the amount from a journal.
+     * This depends on the user's default currency and the wish to have it converted.
      */
-    public function getDefaultCurrencyByUser(User $user): TransactionCurrency
+    public function getAmountFromJournalObject(TransactionJournal $journal): string
     {
-        return $this->getDefaultCurrencyByUserGroup($user->userGroup);
+        $convertToPrimary  = $this->convertToPrimary();
+        $currency          = $this->getPrimaryCurrency();
+        $field             = $convertToPrimary && $currency->id !== $journal->transaction_currency_id ? 'pc_amount' : 'amount';
+
+        /** @var null|Transaction $sourceTransaction */
+        $sourceTransaction = $journal->transactions()->where('amount', '<', 0)->first();
+        if (null === $sourceTransaction) {
+            return '0';
+        }
+        $amount            = $sourceTransaction->{$field} ?? '0';
+        if ((int)$sourceTransaction->foreign_currency_id === $currency->id) {
+            // use foreign amount instead!
+            $amount = (string)$sourceTransaction->foreign_amount; // hard coded to be foreign amount.
+        }
+
+        return $amount;
+    }
+
+    public function getCurrencies(): Collection
+    {
+        /** @var User $user */
+        $user = auth()->user();
+
+        return $user->currencies()->orderBy('code', 'ASC')->get();
     }
 
     /**
@@ -249,8 +288,8 @@ class Amount
     private function getLocaleInfo(): array
     {
         // get config from preference, not from translation:
-        $locale                    = app('steam')->getLocale();
-        $array                     = app('steam')->getLocaleArray($locale);
+        $locale                    = Steam::getLocale();
+        $array                     = Steam::getLocaleArray($locale);
 
         setlocale(LC_MONETARY, $array);
         $info                      = localeconv();
@@ -262,10 +301,10 @@ class Amount
         $info['n_sep_by_space']    = $this->getLocaleField($info, 'n_sep_by_space');
         $info['p_sep_by_space']    = $this->getLocaleField($info, 'p_sep_by_space');
 
-        $fmt                       = new \NumberFormatter($locale, \NumberFormatter::CURRENCY);
+        $fmt                       = new NumberFormatter($locale, NumberFormatter::CURRENCY);
 
-        $info['mon_decimal_point'] = $fmt->getSymbol(\NumberFormatter::MONETARY_SEPARATOR_SYMBOL);
-        $info['mon_thousands_sep'] = $fmt->getSymbol(\NumberFormatter::MONETARY_GROUPING_SEPARATOR_SYMBOL);
+        $info['mon_decimal_point'] = $fmt->getSymbol(NumberFormatter::MONETARY_SEPARATOR_SYMBOL);
+        $info['mon_thousands_sep'] = $fmt->getSymbol(NumberFormatter::MONETARY_GROUPING_SEPARATOR_SYMBOL);
 
         return $info;
     }
@@ -285,7 +324,7 @@ class Amount
     public static function getAmountJsConfig(bool $sepBySpace, int $signPosn, string $sign, bool $csPrecedes): string
     {
         // negative first:
-        $space  = ' ';
+        $space = ' ';
 
         // require space between symbol and amount?
         if (false === $sepBySpace) {
@@ -294,11 +333,11 @@ class Amount
 
         // there are five possible positions for the "+" or "-" sign (if it is even used)
         // pos_a and pos_e could be the ( and ) symbol.
-        $posA   = ''; // before everything
-        $posB   = ''; // before currency symbol
-        $posC   = ''; // after currency symbol
-        $posD   = ''; // before amount
-        $posE   = ''; // after everything
+        $posA  = ''; // before everything
+        $posB  = ''; // before currency symbol
+        $posC  = ''; // after currency symbol
+        $posD  = ''; // before amount
+        $posE  = ''; // after everything
 
         // format would be (currency before amount)
         // AB%sC_D%vE
@@ -339,14 +378,10 @@ class Amount
                 $posC = $sign;
         }
 
-        // default is amount before currency
-        $format = $posA.$posD.'%v'.$space.$posB.'%s'.$posC.$posE;
-
         if ($csPrecedes) {
-            // alternative is currency before amount
-            $format = $posA.$posB.'%s'.$posC.$space.$posD.'%v'.$posE;
+            return $posA.$posB.'%s'.$posC.$space.$posD.'%v'.$posE;
         }
 
-        return $format;
+        return $posA.$posD.'%v'.$space.$posB.'%s'.$posC.$posE;
     }
 }

@@ -27,6 +27,7 @@ use FireflyIII\Repositories\LinkType\LinkTypeRepository;
 use FireflyIII\Repositories\LinkType\LinkTypeRepositoryInterface;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\ServiceProvider;
+use Override;
 
 /**
  * Class AdminServiceProvider
@@ -41,6 +42,7 @@ class AdminServiceProvider extends ServiceProvider
     /**
      * Register the application services.
      */
+    #[Override]
     public function register(): void
     {
         $this->linkType();
@@ -52,8 +54,7 @@ class AdminServiceProvider extends ServiceProvider
     private function linkType(): void
     {
         $this->app->bind(
-            LinkTypeRepositoryInterface::class,
-            static function (Application $app) {
+            static function (Application $app): LinkTypeRepositoryInterface {
                 /** @var LinkTypeRepository $repository */
                 $repository = app(LinkTypeRepository::class);
                 // reference to auth is not understood by phpstan.

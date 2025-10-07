@@ -23,6 +23,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Requests;
 
+use Illuminate\Validation\Validator;
 use Carbon\Carbon;
 use Exception;
 use FireflyIII\Exceptions\FireflyException;
@@ -34,7 +35,8 @@ use FireflyIII\Support\Request\ChecksLogin;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Validation\Validator;
+
+use function Safe\preg_match;
 
 /**
  * Class CategoryFormRequest.
@@ -144,10 +146,10 @@ class ReportFormRequest extends FormRequest
             // if regex for YYYY-MM-DD:
             $pattern = '/^(19|20)\d\d-(0[1-9]|1[012])-(0[1-9]|[12][\d]|3[01])$/';
             $result  = preg_match($pattern, $string);
-            if (false !== $result && 0 !== $result) {
+            if (0 !== $result) {
                 try {
                     $date = new Carbon($parts[1]);
-                } catch (\Exception $e) { // intentional generic exception
+                } catch (Exception $e) { // intentional generic exception
                     $error = sprintf('"%s" is not a valid date range: %s', $range, $e->getMessage());
                     app('log')->error($error);
                     app('log')->error($e->getTraceAsString());
@@ -182,10 +184,10 @@ class ReportFormRequest extends FormRequest
             // if regex for YYYY-MM-DD:
             $pattern = '/^(19|20)\d\d-(0[1-9]|1[012])-(0[1-9]|[12][\d]|3[01])$/';
             $result  = preg_match($pattern, $string);
-            if (false !== $result && 0 !== $result) {
+            if (0 !== $result) {
                 try {
                     $date = new Carbon($parts[0]);
-                } catch (\Exception $e) { // intentional generic exception
+                } catch (Exception $e) { // intentional generic exception
                     $error = sprintf('"%s" is not a valid date range: %s', $range, $e->getMessage());
                     app('log')->error($error);
                     app('log')->error($e->getTraceAsString());
@@ -251,7 +253,7 @@ class ReportFormRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         if ($validator->fails()) {
-            Log::channel('audit')->error(sprintf('Validation errors in %s', __CLASS__), $validator->errors()->toArray());
+            Log::channel('audit')->error(sprintf('Validation errors in %s', self::class), $validator->errors()->toArray());
         }
     }
 }

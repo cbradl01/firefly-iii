@@ -33,24 +33,27 @@ use FireflyIII\Models\AccountMeta;
 use FireflyIII\Models\AccountType;
 use FireflyIII\Models\Attachment;
 use FireflyIII\Models\Location;
-use FireflyIII\Models\Transaction;
 use FireflyIII\Models\TransactionCurrency;
 use FireflyIII\Models\TransactionGroup;
 use FireflyIII\Models\TransactionJournal;
 use FireflyIII\Services\Internal\Destroy\AccountDestroyService;
 use FireflyIII\Services\Internal\Update\AccountUpdateService;
+use FireflyIII\Support\Facades\Amount;
 use FireflyIII\Support\Facades\Steam;
+use FireflyIII\Support\Repositories\UserGroup\UserGroupInterface;
 use FireflyIII\Support\Repositories\UserGroup\UserGroupTrait;
-use FireflyIII\User;
-use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Storage;
+use Override;
+
+use function Safe\json_encode;
 
 /**
  * Class AccountRepository.
  */
-class AccountRepository implements AccountRepositoryInterface
+class AccountRepository implements AccountRepositoryInterface, UserGroupInterface
 {
     use UserGroupTrait;
 
@@ -163,6 +166,12 @@ class AccountRepository implements AccountRepositoryInterface
         return $account;
     }
 
+    #[Override]
+    public function getAccountBalances(Account $account): Collection
+    {
+        return $account->accountBalances;
+    }
+
     /**
      * Return account type or null if not found.
      */
@@ -210,8 +219,8 @@ class AccountRepository implements AccountRepositoryInterface
     {
         $set  = $account->attachments()->get();
 
-        /** @var \Storage $disk */
-        $disk = \Storage::disk('upload');
+        /** @var Storage $disk */
+        $disk = Storage::disk('upload');
 
         return $set->each(
             static function (Attachment $attachment) use ($disk) { // @phpstan-ignore-line
@@ -237,13 +246,6 @@ class AccountRepository implements AccountRepositoryInterface
         $factory->setUser($this->user);
 
         return $factory->findOrCreate('Cash account', $type->type);
-    }
-
-    public function setUser(null|Authenticatable|User $user): void
-    {
-        if ($user instanceof User) {
-            $this->user = $user;
-        }
     }
 
     public function getCreditTransactionGroup(Account $account): ?TransactionGroup
@@ -294,7 +296,7 @@ class AccountRepository implements AccountRepositoryInterface
     /**
      * Returns the amount of the opening balance for this account.
      */
-    public function getOpeningBalanceAmount(Account $account, bool $convertToNative): ?string
+    public function getOpeningBalanceAmount(Account $account, bool $convertToPrimary): ?string
     {
         $journal     = TransactionJournal::leftJoin('transactions', 'transactions.transaction_journal_id', '=', 'transaction_journals.id')
             ->where('transactions.account_id', $account->id)
@@ -308,7 +310,7 @@ class AccountRepository implements AccountRepositoryInterface
         if (null === $transaction) {
             return null;
         }
-        if ($convertToNative) {
+        if ($convertToPrimary) {
             return $transaction->native_amount ?? '0';
         }
 
@@ -356,7 +358,7 @@ class AccountRepository implements AccountRepositoryInterface
         if (AccountTypeEnum::ASSET->value !== $account->accountType->type) {
             throw new FireflyException(sprintf('%s is not an asset account.', $account->name));
         }
-        $currency = $this->getAccountCurrency($account) ?? app('amount')->getNativeCurrency();
+        $currency = $this->getAccountCurrency($account) ?? app('amount')->getPrimaryCurrency();
         $name     = trans('firefly.reconciliation_account_name', ['name' => $account->name, 'currency' => $currency->code]);
 
         /** @var AccountType $type */
@@ -399,7 +401,7 @@ class AccountRepository implements AccountRepositoryInterface
         }
         $currencyId = (int) $this->getMetaValue($account, 'currency_id');
         if ($currencyId > 0) {
-            return TransactionCurrency::find($currencyId);
+            return Amount::getTransactionCurrencyById($currencyId);
         }
 
         return null;
@@ -411,9 +413,7 @@ class AccountRepository implements AccountRepositoryInterface
     public function getMetaValue(Account $account, string $field): ?string
     {
         $result = $account->accountMeta->filter(
-            static function (AccountMeta $meta) use ($field) {
-                return strtolower($meta->name) === strtolower($field);
-            }
+            static fn (AccountMeta $meta) => strtolower($meta->name) === strtolower($field)
         );
         if (0 === $result->count()) {
             return null;
@@ -479,25 +479,32 @@ class AccountRepository implements AccountRepositoryInterface
 
     public function getAccountsByType(array $types, ?array $sort = []): Collection
     {
-        $res   = array_intersect([AccountTypeEnum::ASSET->value, AccountTypeEnum::MORTGAGE->value, AccountTypeEnum::LOAN->value, AccountTypeEnum::DEBT->value], $types);
-        $query = $this->user->accounts();
+        $res     = array_intersect([AccountTypeEnum::ASSET->value, AccountTypeEnum::MORTGAGE->value, AccountTypeEnum::LOAN->value, AccountTypeEnum::DEBT->value], $types);
+        $query   = $this->user->accounts();
         if (0 !== count($types)) {
             $query->accountTypeIn($types);
         }
 
-        // add sort parameters. At this point they're filtered to allowed fields to sort by:
+        // add sort parameters
+        $allowed = config('firefly.allowed_db_sort_parameters.Account', []);
+        $sorted  = 0;
         if (0 !== count($sort)) {
             foreach ($sort as $param) {
-                $query->orderBy($param[0], $param[1]);
+                if (in_array($param[0], $allowed, true)) {
+                    $query->orderBy($param[0], $param[1]);
+                    ++$sorted;
+                }
             }
         }
 
-        if (0 === count($sort)) {
+        if (0 === $sorted) {
             if (0 !== count($res)) {
                 $query->orderBy('accounts.order', 'ASC');
             }
             $query->orderBy('accounts.active', 'DESC');
             $query->orderBy('accounts.name', 'ASC');
+            $query->orderBy('accounts.account_type_id', 'ASC');
+            $query->orderBy('accounts.id', 'ASC');
         }
 
         return $query->get(['accounts.*']);
@@ -533,6 +540,44 @@ class AccountRepository implements AccountRepositoryInterface
         }
 
         return null;
+    }
+
+    #[Override]
+    public function periodCollection(Account $account, Carbon $start, Carbon $end): array
+    {
+        return $account->transactions()
+            ->leftJoin('transaction_journals', 'transaction_journals.id', '=', 'transactions.transaction_journal_id')
+            ->leftJoin('transaction_types', 'transaction_types.id', '=', 'transaction_journals.transaction_type_id')
+            ->leftJoin('transaction_currencies', 'transaction_currencies.id', '=', 'transactions.transaction_currency_id')
+            ->leftJoin('transaction_currencies as foreign_currencies', 'foreign_currencies.id', '=', 'transactions.foreign_currency_id')
+            ->where('transaction_journals.date', '>=', $start)
+            ->where('transaction_journals.date', '<=', $end)
+            ->get([
+                // currencies
+                'transaction_currencies.id as currency_id',
+                'transaction_currencies.code as currency_code',
+                'transaction_currencies.name as currency_name',
+                'transaction_currencies.symbol as currency_symbol',
+                'transaction_currencies.decimal_places as currency_decimal_places',
+
+                // foreign
+                'foreign_currencies.id as foreign_currency_id',
+                'foreign_currencies.code as foreign_currency_code',
+                'foreign_currencies.name as foreign_currency_name',
+                'foreign_currencies.symbol as foreign_currency_symbol',
+                'foreign_currencies.decimal_places as foreign_currency_decimal_places',
+
+                // fields
+                'transaction_journals.date',
+                'transaction_types.type',
+                'transaction_journals.transaction_currency_id',
+                'transactions.amount',
+                'transactions.native_amount as pc_amount',
+                'transactions.foreign_amount',
+            ])
+            ->toArray()
+        ;
+
     }
 
     public function resetAccountOrder(): void

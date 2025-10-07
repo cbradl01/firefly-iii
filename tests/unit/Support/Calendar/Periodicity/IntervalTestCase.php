@@ -25,10 +25,20 @@ declare(strict_types=1);
 namespace Tests\unit\Support\Calendar\Periodicity;
 
 use FireflyIII\Support\Calendar\Periodicity\Interval;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\integration\TestCase;
 
 abstract class IntervalTestCase extends TestCase
 {
+    abstract public static function provideIntervals(): array;
+
+    #[DataProvider('provider')]
+    public function testGivenAnEpochWhenCallTheNextDateThenReturnsTheExpectedDateSuccessful(IntervalProvider $provider): void
+    {
+        $period = static::factory()->nextDate($provider->epoch);
+        $this->assertSame($provider->expected->toDateString(), $period->toDateString());
+    }
+
     public static function provider(): iterable
     {
         $intervals = static::provideIntervals();
@@ -37,17 +47,6 @@ abstract class IntervalTestCase extends TestCase
         foreach ($intervals as $interval) {
             yield "{$interval->label}" => [$interval];
         }
-    }
-
-    abstract public static function provideIntervals(): array;
-
-    /**
-     * @dataProvider provider
-     */
-    public function testGivenAnEpochWhenCallTheNextDateThenReturnsTheExpectedDateSuccessful(IntervalProvider $provider): void
-    {
-        $period = static::factory()->nextDate($provider->epoch);
-        self::assertSame($provider->expected->toDateString(), $period->toDateString());
     }
 
     abstract public static function factory(): Interval;

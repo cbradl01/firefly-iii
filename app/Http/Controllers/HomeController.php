@@ -23,6 +23,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Controllers;
 
+use Exception;
 use Carbon\Carbon;
 use Carbon\Exceptions\InvalidFormatException;
 use FireflyIII\Enums\AccountTypeEnum;
@@ -57,7 +58,7 @@ class HomeController extends Controller
     /**
      * Change index date range.
      *
-     * @throws \Exception
+     * @throws Exception
      */
     public function dateRange(Request $request): JsonResponse
     {
@@ -67,7 +68,7 @@ class HomeController extends Controller
         try {
             $stringStart = e((string) $request->get('start'));
             $start       = Carbon::createFromFormat('Y-m-d', $stringStart);
-        } catch (InvalidFormatException $e) {
+        } catch (InvalidFormatException) {
             app('log')->error(sprintf('Start: could not parse date string "%s" so ignore it.', $stringStart));
             $start = Carbon::now()->startOfMonth();
         }
@@ -75,7 +76,7 @@ class HomeController extends Controller
         try {
             $stringEnd = e((string) $request->get('end'));
             $end       = Carbon::createFromFormat('Y-m-d', $stringEnd);
-        } catch (InvalidFormatException $e) {
+        } catch (InvalidFormatException) {
             app('log')->error(sprintf('End could not parse date string "%s" so ignore it.', $stringEnd));
             $end = Carbon::now()->endOfMonth();
         }
@@ -169,7 +170,7 @@ class HomeController extends Controller
         foreach ($accounts as $account) {
             /** @var GroupCollectorInterface $collector */
             $collector      = app(GroupCollectorInterface::class);
-            $collector->setAccounts(new Collection([$account]))->withAccountInformation()->setRange($start, $end)->setLimit(10)->setPage(1);
+            $collector->setAccounts(new Collection()->push($account))->withAccountInformation()->setRange($start, $end)->setLimit(10)->setPage(1);
             $set            = $collector->getExtractedJournals();
             $transactions[] = ['transactions' => $set, 'account' => $account];
         }

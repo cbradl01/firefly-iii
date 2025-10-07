@@ -24,6 +24,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Controllers\Budget;
 
+use FireflyIII\Models\AutoBudget;
 use FireflyIII\Enums\AutoBudgetType;
 use FireflyIII\Helpers\Attachments\AttachmentHelperInterface;
 use FireflyIII\Http\Controllers\Controller;
@@ -93,9 +94,10 @@ class EditController extends Controller
         $hasOldInput       = null !== $request->old('_token');
         $preFilled         = [
             'active'                  => $hasOldInput ? (bool) $request->old('active') : $budget->active,
-            'auto_budget_currency_id' => $hasOldInput ? (int) $request->old('auto_budget_currency_id') : $this->defaultCurrency->id,
+            'auto_budget_currency_id' => $hasOldInput ? (int) $request->old('auto_budget_currency_id') : $this->primaryCurrency->id,
+            'notes'                   => $this->repository->getNoteText($budget),
         ];
-        if (null !== $autoBudget) {
+        if ($autoBudget instanceof AutoBudget) {
             $amount                          = $hasOldInput ? $request->old('auto_budget_amount') : $autoBudget->amount;
             if (is_array($amount)) {
                 $amount = '0';

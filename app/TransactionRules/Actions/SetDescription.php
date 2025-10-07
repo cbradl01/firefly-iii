@@ -27,6 +27,8 @@ use FireflyIII\Events\TriggeredAuditLog;
 use FireflyIII\Models\RuleAction;
 use FireflyIII\Models\TransactionJournal;
 use FireflyIII\TransactionRules\Traits\RefreshNotesTrait;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Class SetDescription.
@@ -35,15 +37,10 @@ class SetDescription implements ActionInterface
 {
     use RefreshNotesTrait;
 
-    private RuleAction $action;
-
     /**
      * TriggerInterface constructor.
      */
-    public function __construct(RuleAction $action)
-    {
-        $this->action = $action;
-    }
+    public function __construct(private RuleAction $action) {}
 
     public function actOnArray(array $journal): bool
     {
@@ -55,9 +52,14 @@ class SetDescription implements ActionInterface
         $after  = $this->action->getValue($journal);
 
         // replace newlines.
-        $after  = str_replace(["\r", "\n", "\t", "\036", "\025"], '', $after);
+        $after  = trim(str_replace(["\r", "\n", "\t", "\036", "\025"], '', $after));
 
-        \DB::table('transaction_journals')
+        if ('' === $after) {
+            Log::warning('Action resulted in an empty description, reset to default value.');
+            $after = '(no description)';
+        }
+
+        DB::table('transaction_journals')
             ->where('id', '=', $journal['transaction_journal_id'])
             ->update(['description' => $after])
         ;

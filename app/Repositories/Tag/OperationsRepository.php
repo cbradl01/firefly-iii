@@ -28,16 +28,16 @@ use Carbon\Carbon;
 use FireflyIII\Enums\TransactionTypeEnum;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Helpers\Collector\GroupCollectorInterface;
-use FireflyIII\User;
-use Illuminate\Contracts\Auth\Authenticatable;
+use FireflyIII\Support\Repositories\UserGroup\UserGroupInterface;
+use FireflyIII\Support\Repositories\UserGroup\UserGroupTrait;
 use Illuminate\Support\Collection;
 
 /**
  * Class OperationsRepository
  */
-class OperationsRepository implements OperationsRepositoryInterface
+class OperationsRepository implements OperationsRepositoryInterface, UserGroupInterface
 {
-    private User $user;
+    use UserGroupTrait;
 
     /**
      * This method returns a list of all the withdrawal transaction journals (as arrays) set in that period
@@ -50,14 +50,14 @@ class OperationsRepository implements OperationsRepositoryInterface
         $collector      = app(GroupCollectorInterface::class);
         $collector->setUser($this->user)->setRange($start, $end)->setTypes([TransactionTypeEnum::WITHDRAWAL->value]);
         $tagIds         = [];
-        if (null !== $accounts && $accounts->count() > 0) {
+        if ($accounts instanceof Collection && $accounts->count() > 0) {
             $collector->setAccounts($accounts);
         }
-        if (null !== $tags && $tags->count() > 0) {
+        if ($tags instanceof Collection && $tags->count() > 0) {
             $collector->setTags($tags);
             $tagIds = $tags->pluck('id')->toArray();
         }
-        if (null === $tags || 0 === $tags->count()) {
+        if (!$tags instanceof Collection || 0 === $tags->count()) {
             $collector->setTags($this->getTags());
             $tagIds = $this->getTags()->pluck('id')->toArray();
         }
@@ -114,13 +114,6 @@ class OperationsRepository implements OperationsRepositoryInterface
         return $array;
     }
 
-    public function setUser(null|Authenticatable|User $user): void
-    {
-        if ($user instanceof User) {
-            $this->user = $user;
-        }
-    }
-
     private function getTags(): Collection
     {
         /** @var TagRepositoryInterface $repository */
@@ -140,14 +133,14 @@ class OperationsRepository implements OperationsRepositoryInterface
         $collector      = app(GroupCollectorInterface::class);
         $collector->setUser($this->user)->setRange($start, $end)->setTypes([TransactionTypeEnum::DEPOSIT->value]);
         $tagIds         = [];
-        if (null !== $accounts && $accounts->count() > 0) {
+        if ($accounts instanceof Collection && $accounts->count() > 0) {
             $collector->setAccounts($accounts);
         }
-        if (null !== $tags && $tags->count() > 0) {
+        if ($tags instanceof Collection && $tags->count() > 0) {
             $collector->setTags($tags);
             $tagIds = $tags->pluck('id')->toArray();
         }
-        if (null === $tags || 0 === $tags->count()) {
+        if (!$tags instanceof Collection || 0 === $tags->count()) {
             $collector->setTags($this->getTags());
             $tagIds = $this->getTags()->pluck('id')->toArray();
         }

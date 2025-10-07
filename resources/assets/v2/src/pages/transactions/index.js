@@ -24,10 +24,8 @@ import i18next from "i18next";
 import {format} from "date-fns";
 import formatMoney from "../../util/format-money.js";
 
-import '@ag-grid-community/styles/ag-grid.css';
-import '@ag-grid-community/styles/ag-theme-alpine.css';
 import '../../css/grid-ff3-theme.css';
-import Get from "../../api/v2/model/transaction/get.js";
+import Get from "../../api/v1/model/transaction/get.js";
 
 let index = function () {
     return {
@@ -73,7 +71,7 @@ let index = function () {
         init() {
             // TODO need date range.
             // TODO handle page number
-            this.getTransactions(this.page);``
+            this.getTransactions(this.page);
 
             // Your Javascript code to create the grid
             // dataTable = createGrid(document.querySelector('#grid'), gridOptions);

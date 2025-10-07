@@ -32,21 +32,17 @@ use FireflyIII\Models\Transaction;
 use FireflyIII\Models\TransactionJournal;
 use FireflyIII\Repositories\Account\AccountRepositoryInterface;
 use FireflyIII\User;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Class SetDestinationToCashAccount
  */
 class SetDestinationToCashAccount implements ActionInterface
 {
-    private RuleAction $action;
-
     /**
      * TriggerInterface constructor.
      */
-    public function __construct(RuleAction $action)
-    {
-        $this->action = $action;
-    }
+    public function __construct(private readonly RuleAction $action) {}
 
     public function actOnArray(array $journal): bool
     {
@@ -108,7 +104,7 @@ class SetDestinationToCashAccount implements ActionInterface
         event(new TriggeredAuditLog($this->action->rule, $object, 'set_destination', null, $cashAccount->name));
 
         // update destination transaction with new destination account:
-        \DB::table('transactions')
+        DB::table('transactions')
             ->where('transaction_journal_id', '=', $object->id)
             ->where('amount', '>', 0)
             ->update(['account_id' => $cashAccount->id])

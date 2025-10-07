@@ -35,6 +35,8 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Routing\Redirector;
 use Illuminate\View\View;
 
+use function Safe\parse_url;
+
 /**
  * Class EditController
  */
@@ -82,10 +84,9 @@ class EditController extends Controller
         $title                      = $transactionGroup->transactionJournals()->count() > 1 ? $transactionGroup->title : $transactionGroup->transactionJournals()->first()->description;
         $subTitle                   = (string) trans('firefly.edit_transaction_title', ['description' => $title]);
         $subTitleIcon               = 'fa-plus';
-        $defaultCurrency            = $this->defaultCurrency;
         $cash                       = $repository->getCashAccount();
         $previousUrl                = $this->rememberPreviousUrl('transactions.edit.url');
-        $parts                      = parse_url($previousUrl);
+        $parts                      = parse_url((string) $previousUrl);
         $search                     = sprintf('?%s', $parts['query'] ?? '');
         $previousUrl                = str_replace($search, '', $previousUrl);
 
@@ -112,26 +113,7 @@ class EditController extends Controller
         $latitude                   = config('firefly.default_location.latitude');
         $zoomLevel                  = config('firefly.default_location.zoom_level');
 
-        return view(
-            'transactions.edit',
-            compact(
-                'cash',
-                'allowedSourceDests',
-                'expectedSourceTypes',
-                'optionalDateFields',
-                'longitude',
-                'latitude',
-                'zoomLevel',
-                'optionalFields',
-                'subTitle',
-                'subTitleIcon',
-                'transactionGroup',
-                'allowedOpposingTypes',
-                'accountToTypes',
-                'defaultCurrency',
-                'previousUrl'
-            )
-        );
+        return view('transactions.edit', compact('cash', 'allowedSourceDests', 'expectedSourceTypes', 'optionalDateFields', 'longitude', 'latitude', 'zoomLevel', 'optionalFields', 'subTitle', 'subTitleIcon', 'transactionGroup', 'allowedOpposingTypes', 'accountToTypes', 'previousUrl'));
     }
 
     public function unreconcile(TransactionJournal $journal): JsonResponse

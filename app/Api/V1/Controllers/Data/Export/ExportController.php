@@ -26,9 +26,13 @@ namespace FireflyIII\Api\V1\Controllers\Data\Export;
 
 use FireflyIII\Api\V1\Controllers\Controller;
 use FireflyIII\Api\V1\Requests\Data\Export\ExportRequest;
+use FireflyIII\Enums\UserRoleEnum;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Support\Export\ExportDataGenerator;
 use Illuminate\Http\Response as LaravelResponse;
+use Safe\Exceptions\DatetimeException;
+
+use function Safe\date;
 
 /**
  * Class ExportController
@@ -36,6 +40,7 @@ use Illuminate\Http\Response as LaravelResponse;
 class ExportController extends Controller
 {
     private ExportDataGenerator $exporter;
+    protected array $acceptedRoles = [UserRoleEnum::READ_ONLY];
 
     /**
      * ExportController constructor.
@@ -45,8 +50,10 @@ class ExportController extends Controller
         parent::__construct();
         $this->middleware(
             function ($request, $next) {
+                $this->validateUserGroup($request);
                 $this->exporter = app(ExportDataGenerator::class);
-                $this->exporter->setUser(auth()->user());
+                $this->exporter->setUserGroup($this->userGroup);
+                $this->exporter->setUser($this->user);
 
                 return $next($request);
             }
@@ -54,9 +61,6 @@ class ExportController extends Controller
     }
 
     /**
-     * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/data/exportAccounts
-     *
      * @throws FireflyException
      *
      * @SuppressWarnings("PHPMD.UnusedFormalParameter")
@@ -70,6 +74,7 @@ class ExportController extends Controller
 
     /**
      * @throws FireflyException
+     * @throws DatetimeException
      */
     private function returnExport(string $key): LaravelResponse
     {
@@ -88,16 +93,13 @@ class ExportController extends Controller
             ->header('Expires', '0')
             ->header('Cache-Control', 'must-revalidate, post-check=0, pre-check=0')
             ->header('Pragma', 'public')
-            ->header('Content-Length', (string) strlen($data[$key]))
+            ->header('Content-Length', (string) strlen((string) $data[$key]))
         ;
 
         return $response;
     }
 
     /**
-     * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/data/exportBills
-     *
      * @throws FireflyException
      *
      * @SuppressWarnings("PHPMD.UnusedFormalParameter")
@@ -110,9 +112,6 @@ class ExportController extends Controller
     }
 
     /**
-     * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/data/exportBudgets
-     *
      * @throws FireflyException
      *
      * @SuppressWarnings("PHPMD.UnusedFormalParameter")
@@ -125,9 +124,6 @@ class ExportController extends Controller
     }
 
     /**
-     * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/data/exportCategories
-     *
      * @throws FireflyException
      *
      * @SuppressWarnings("PHPMD.UnusedFormalParameter")
@@ -140,9 +136,6 @@ class ExportController extends Controller
     }
 
     /**
-     * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/data/exportPiggies
-     *
      * @throws FireflyException
      *
      * @SuppressWarnings("PHPMD.UnusedFormalParameter")
@@ -155,9 +148,6 @@ class ExportController extends Controller
     }
 
     /**
-     * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/data/exportRecurring
-     *
      * @throws FireflyException
      *
      * @SuppressWarnings("PHPMD.UnusedFormalParameter")
@@ -170,9 +160,6 @@ class ExportController extends Controller
     }
 
     /**
-     * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/data/exportRules
-     *
      * @throws FireflyException
      *
      * @SuppressWarnings("PHPMD.UnusedFormalParameter")
@@ -185,9 +172,6 @@ class ExportController extends Controller
     }
 
     /**
-     * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/data/exportTags
-     *
      * @throws FireflyException
      *
      * @SuppressWarnings("PHPMD.UnusedFormalParameter")
@@ -200,9 +184,6 @@ class ExportController extends Controller
     }
 
     /**
-     * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/data/exportTransactions
-     *
      * @throws FireflyException
      */
     public function transactions(ExportRequest $request): LaravelResponse

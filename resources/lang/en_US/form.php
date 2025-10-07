@@ -26,7 +26,7 @@ declare(strict_types=1);
 
 return [
     // new user:
-    'administration_currency'      => 'Native currency',
+    'administration_currency'      => 'Primary currency',
     'bank_name'                    => 'Bank name',
     'bank_balance'                 => 'Balance',
     'current_balance'              => 'Current balance',
@@ -64,7 +64,7 @@ return [
     'budget_id'                    => 'Budget',
     'bill_id'                      => 'Subscription',
     'opening_balance'              => 'Opening balance',
-    'tagMode'                      => 'Tag mode',
+    'tag_mode'                      => 'Tag mode',
     'virtual_balance'              => 'Virtual balance',
 
 

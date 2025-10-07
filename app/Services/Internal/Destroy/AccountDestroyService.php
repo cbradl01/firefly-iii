@@ -32,6 +32,7 @@ use FireflyIII\Models\Transaction;
 use FireflyIII\Models\TransactionJournal;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
+use stdClass;
 
 /**
  * Class AccountDestroyService
@@ -43,12 +44,12 @@ class AccountDestroyService
         // find and delete opening balance journal + opposing account
         $this->destroyOpeningBalance($account);
 
-        if (null !== $moveTo) {
+        if ($moveTo instanceof Account) {
             $this->moveTransactions($account, $moveTo);
             $this->updateRecurrences($account, $moveTo);
         }
         // delete recurring transactions with this account:
-        if (null === $moveTo) {
+        if (!$moveTo instanceof Account) {
             $this->destroyRecurrences($account);
         }
 
@@ -105,12 +106,9 @@ class AccountDestroyService
     public function moveTransactions(Account $account, Account $moveTo): void
     {
         app('log')->debug(sprintf('Move from account #%d to #%d', $account->id, $moveTo->id));
-        \DB::table('transactions')->where('account_id', $account->id)->update(['account_id' => $moveTo->id]);
+        DB::table('transactions')->where('account_id', $account->id)->update(['account_id' => $moveTo->id]);
 
-        $collection = Transaction::groupBy('transaction_journal_id', 'account_id')
-            ->where('account_id', $moveTo->id)
-            ->get(['transaction_journal_id', 'account_id', \DB::raw('count(*) as the_count')]) // @phpstan-ignore-line
-        ;
+        $collection = Transaction::groupBy('transaction_journal_id', 'account_id')->where('account_id', $moveTo->id)->get(['transaction_journal_id', 'account_id', DB::raw('count(*) as the_count')]);
         if (0 === $collection->count()) {
             return;
         }
@@ -119,7 +117,7 @@ class AccountDestroyService
         $service    = app(JournalDestroyService::class);
         $user       = $account->user;
 
-        /** @var \stdClass $row */
+        /** @var stdClass $row */
         foreach ($collection as $row) {
             if ((int) $row->the_count > 1) {
                 $journalId = $row->transaction_journal_id;

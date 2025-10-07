@@ -30,6 +30,7 @@ use FireflyIII\Models\CurrencyExchangeRate;
 use FireflyIII\Models\TransactionCurrency;
 use FireflyIII\Models\UserGroup;
 use FireflyIII\Support\CacheProperties;
+use FireflyIII\Support\Facades\Amount;
 use FireflyIII\Support\Facades\Steam;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -51,11 +52,6 @@ class ExchangeRateConverter
         if (auth()->check()) {
             $this->userGroup = auth()->user()->userGroup;
         }
-    }
-
-    public function setUserGroup(UserGroup $userGroup): void
-    {
-        $this->userGroup = $userGroup;
     }
 
     /**
@@ -84,12 +80,12 @@ class ExchangeRateConverter
     public function getCurrencyRate(TransactionCurrency $from, TransactionCurrency $to, Carbon $date): string
     {
         if (false === $this->enabled()) {
-            Log::debug('ExchangeRateConverter: disabled, return "1".');
+            // Log::debug('ExchangeRateConverter: disabled, return "1".');
 
             return '1';
         }
         if ($from->id === $to->id) {
-            Log::debug('ExchangeRateConverter: From and to are the same, return "1".');
+            //            Log::debug('ExchangeRateConverter: From and to are the same, return "1".');
 
             return '1';
         }
@@ -108,7 +104,7 @@ class ExchangeRateConverter
 
         // find in cache
         if (null !== $res) {
-            Log::debug(sprintf('ExchangeRateConverter: Return cached rate from %s to %s on %s.', $from->code, $to->code, $date->format('Y-m-d')));
+            Log::debug(sprintf('ExchangeRateConverter: Return cached rate (%s) from %s to %s on %s.', $res, $from->code, $to->code, $date->format('Y-m-d')));
 
             return $res;
         }
@@ -269,11 +265,8 @@ class ExchangeRateConverter
         if ($cache->has()) {
             return (int) $cache->get();
         }
-        $euro  = TransactionCurrency::whereCode('EUR')->first();
+        $euro  = Amount::getTransactionCurrencyByCode('EUR');
         ++$this->queryCount;
-        if (null === $euro) {
-            throw new FireflyException('Cannot find EUR in system, cannot do currency conversion.');
-        }
         $cache->store($euro->id);
 
         return $euro->id;
@@ -282,6 +275,11 @@ class ExchangeRateConverter
     public function setIgnoreSettings(bool $ignoreSettings): void
     {
         $this->ignoreSettings = $ignoreSettings;
+    }
+
+    public function setUserGroup(UserGroup $userGroup): void
+    {
+        $this->userGroup = $userGroup;
     }
 
     public function summarize(): void

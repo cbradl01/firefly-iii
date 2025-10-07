@@ -24,6 +24,8 @@ declare(strict_types=1);
 
 namespace FireflyIII\Api\V1\Requests\Data\Bulk;
 
+use Illuminate\Validation\Validator;
+use JsonException;
 use FireflyIII\Enums\ClauseType;
 use FireflyIII\Rules\IsValidBulkClause;
 use FireflyIII\Support\Request\ChecksLogin;
@@ -31,7 +33,8 @@ use FireflyIII\Support\Request\ConvertsDataTypes;
 use FireflyIII\Validation\Api\Data\Bulk\ValidatesBulkTransactionQuery;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Validation\Validator;
+
+use function Safe\json_decode;
 
 /**
  * Class TransactionRequest
@@ -50,9 +53,9 @@ class TransactionRequest extends FormRequest
             $data = [
                 'query' => json_decode($this->get('query'), true, 8, JSON_THROW_ON_ERROR),
             ];
-        } catch (\JsonException $e) {
-            // dont really care. the validation should catch invalid json.
-            app('log')->error($e->getMessage());
+        } catch (JsonException $e) {
+            // don't really care. the validation should catch invalid json.
+            Log::error($e->getMessage());
         }
 
         return $data;
@@ -74,7 +77,7 @@ class TransactionRequest extends FormRequest
             }
         );
         if ($validator->fails()) {
-            Log::channel('audit')->error(sprintf('Validation errors in %s', __CLASS__), $validator->errors()->toArray());
+            Log::channel('audit')->error(sprintf('Validation errors in %s', self::class), $validator->errors()->toArray());
         }
     }
 }

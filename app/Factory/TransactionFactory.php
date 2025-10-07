@@ -32,6 +32,7 @@ use FireflyIII\Models\TransactionJournal;
 use FireflyIII\Rules\UniqueIban;
 use FireflyIII\Services\Internal\Update\AccountUpdateService;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\Validator;
 
 /**
  * Class TransactionFactory
@@ -41,7 +42,7 @@ class TransactionFactory
     private Account              $account;
     private array                $accountInformation;
     private TransactionCurrency  $currency;
-    private ?TransactionCurrency $foreignCurrency;
+    private ?TransactionCurrency $foreignCurrency = null;
     private TransactionJournal   $journal;
     private bool                 $reconciled;
 
@@ -117,7 +118,7 @@ class TransactionFactory
         );
 
         // do foreign currency thing: add foreign currency info to $one and $two if necessary.
-        if (null !== $this->foreignCurrency
+        if ($this->foreignCurrency instanceof TransactionCurrency
             && null !== $foreignAmount
             && $this->foreignCurrency->id !== $this->currency->id) {
             $result->foreign_currency_id = $this->foreignCurrency->id;
@@ -152,7 +153,7 @@ class TransactionFactory
             return;
         }
         // validate info:
-        $validator = \Validator::make(['iban' => $this->accountInformation['iban']], [
+        $validator = Validator::make(['iban' => $this->accountInformation['iban']], [
             'iban' => ['required', new UniqueIban($this->account, $this->account->accountType->type)],
         ]);
         if ($validator->fails()) {

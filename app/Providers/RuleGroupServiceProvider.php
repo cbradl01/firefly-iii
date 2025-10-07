@@ -27,6 +27,7 @@ use FireflyIII\Repositories\RuleGroup\RuleGroupRepository;
 use FireflyIII\Repositories\RuleGroup\RuleGroupRepositoryInterface;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\ServiceProvider;
+use Override;
 
 /**
  * Class RuleGroupServiceProvider.
@@ -41,11 +42,11 @@ class RuleGroupServiceProvider extends ServiceProvider
     /**
      * Register the application services.
      */
+    #[Override]
     public function register(): void
     {
         $this->app->bind(
-            RuleGroupRepositoryInterface::class,
-            static function (Application $app) {
+            static function (Application $app): RuleGroupRepositoryInterface {
                 /** @var RuleGroupRepository $repository */
                 $repository = app(RuleGroupRepository::class);
                 if ($app->auth->check()) { // @phpstan-ignore-line (phpstan does not understand the reference to auth)

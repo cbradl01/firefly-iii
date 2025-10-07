@@ -24,15 +24,25 @@ declare(strict_types=1);
 
 namespace FireflyIII\Repositories\Budget;
 
+use Deprecated;
 use Carbon\Carbon;
+use FireflyIII\Enums\UserRoleEnum;
 use FireflyIII\Models\AvailableBudget;
 use FireflyIII\Models\TransactionCurrency;
+use FireflyIII\Models\UserGroup;
 use FireflyIII\User;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Support\Collection;
 
 /**
  * Interface AvailableBudgetRepositoryInterface
+ *
+ * @method setUserGroup(UserGroup $group)
+ * @method getUserGroup()
+ * @method getUser()
+ * @method checkUserGroupAccess(UserRoleEnum $role)
+ * @method setUser(null|Authenticatable|User $user)
+ * @method setUserGroupById(int $userGroupId)
  */
 interface AvailableBudgetRepositoryInterface
 {
@@ -57,9 +67,7 @@ interface AvailableBudgetRepositoryInterface
      */
     public function get(?Carbon $start = null, ?Carbon $end = null): Collection;
 
-    /**
-     * @deprecated
-     */
+    #[Deprecated]
     public function getAvailableBudget(TransactionCurrency $currency, Carbon $start, Carbon $end): string;
 
     public function getAvailableBudgetWithCurrency(Carbon $start, Carbon $end): array;
@@ -81,12 +89,8 @@ interface AvailableBudgetRepositoryInterface
      */
     public function getByCurrencyDate(Carbon $start, Carbon $end, TransactionCurrency $currency): ?AvailableBudget;
 
-    /**
-     * @deprecated
-     */
+    #[Deprecated]
     public function setAvailableBudget(TransactionCurrency $currency, Carbon $start, Carbon $end, string $amount): AvailableBudget;
-
-    public function setUser(null|Authenticatable|User $user): void;
 
     public function store(array $data): ?AvailableBudget;
 

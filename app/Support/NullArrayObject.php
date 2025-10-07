@@ -24,24 +24,22 @@ declare(strict_types=1);
 
 namespace FireflyIII\Support;
 
+use ArrayObject;
+
 /**
  * Class NullArrayObject
  */
-class NullArrayObject extends \ArrayObject
+class NullArrayObject extends ArrayObject
 {
-    /** @var null|mixed */
-    public $default;
-
     /**
      * NullArrayObject constructor.
      *
      * @param null $default
      */
     /** @phpstan-ignore-next-line */
-    public function __construct(array $array, $default = null)
+    public function __construct(array $array, public $default = null)
     {
         parent::__construct($array);
-        $this->default = $default;
     }
 
     /**

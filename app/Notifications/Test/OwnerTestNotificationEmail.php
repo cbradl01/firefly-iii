@@ -25,6 +25,7 @@ declare(strict_types=1);
 namespace FireflyIII\Notifications\Test;
 
 use FireflyIII\Notifications\Notifiables\OwnerNotifiable;
+use FireflyIII\Support\Facades\FireflyConfig;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
@@ -52,7 +53,7 @@ class OwnerTestNotificationEmail extends Notification
     {
         $address = (string) config('firefly.site_owner');
 
-        return (new MailMessage())
+        return new MailMessage()
             ->markdown('emails.admin-test', ['email' => $address])
             ->subject((string) trans('email.admin_test_subject'))
         ;
@@ -63,6 +64,11 @@ class OwnerTestNotificationEmail extends Notification
      */
     public function via(OwnerNotifiable $notifiable): array
     {
+        $isDemoSite = FireflyConfig::get('is_demo_site', false)->data;
+        if (true === $isDemoSite) {
+            return [];
+        }
+
         return ['mail'];
     }
 }

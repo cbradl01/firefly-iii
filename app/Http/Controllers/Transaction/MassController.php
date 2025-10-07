@@ -23,6 +23,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Controllers\Transaction;
 
+use InvalidArgumentException;
 use Carbon\Carbon;
 use FireflyIII\Enums\AccountTypeEnum;
 use FireflyIII\Enums\TransactionTypeEnum;
@@ -141,8 +142,8 @@ class MassController extends Controller
         // reverse amounts
         foreach ($journals as $index => $journal) {
             $journals[$index]['amount']         = app('steam')->bcround(app('steam')->positive($journal['amount']), $journal['currency_decimal_places']);
-            $journals[$index]['foreign_amount'] = null === $journal['foreign_amount'] ?
-                null : app('steam')->positive($journal['foreign_amount']);
+            $journals[$index]['foreign_amount'] = null === $journal['foreign_amount']
+                ? null : app('steam')->positive($journal['foreign_amount']);
         }
 
         $this->rememberPreviousUrl('transactions.mass-edit.url');
@@ -173,7 +174,7 @@ class MassController extends Controller
             try {
                 $this->updateJournal($integer, $request);
                 ++$count;
-            } catch (FireflyException $e) {
+            } catch (FireflyException) {
                 // @ignoreException
             }
         }
@@ -190,15 +191,15 @@ class MassController extends Controller
      */
     private function updateJournal(int $journalId, MassEditJournalRequest $request): void
     {
-        $journal = $this->repository->find($journalId);
-        if (null === $journal) {
+        $journal           = $this->repository->find($journalId);
+        if (!$journal instanceof TransactionJournal) {
             throw new FireflyException(sprintf('Trying to edit non-existent or deleted journal #%d', $journalId));
         }
-        $service = app(JournalUpdateService::class);
+        $service           = app(JournalUpdateService::class);
         // for each field, call the update service.
         $service->setTransactionJournal($journal);
 
-        $data    = [
+        $data              = [
             'date'             => $this->getDateFromRequest($request, $journal->id, 'date'),
             'description'      => $this->getStringFromRequest($request, $journal->id, 'description'),
             'source_id'        => $this->getIntFromRequest($request, $journal->id, 'source_id'),
@@ -216,7 +217,8 @@ class MassController extends Controller
         $service->setData($data);
         $service->update();
         // trigger rules
-        event(new UpdatedTransactionGroup($journal->transactionGroup, true, true));
+        $runRecalculations = $service->isCompareHashChanged();
+        event(new UpdatedTransactionGroup($journal->transactionGroup, true, true, $runRecalculations));
     }
 
     private function getDateFromRequest(MassEditJournalRequest $request, int $journalId, string $key): ?Carbon
@@ -231,7 +233,7 @@ class MassController extends Controller
 
         try {
             $carbon = Carbon::parse($value[$journalId]);
-        } catch (\InvalidArgumentException $e) {
+        } catch (InvalidArgumentException $e) {
             Log::warning(sprintf('Could not parse "%s" but dont mind', $value[$journalId]));
             Log::warning($e->getMessage());
 

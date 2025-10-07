@@ -24,13 +24,13 @@ declare(strict_types=1);
 
 namespace FireflyIII\Api\V1\Requests\Models\AvailableBudget;
 
+use Illuminate\Validation\Validator;
 use Carbon\Carbon;
 use FireflyIII\Rules\IsValidPositiveAmount;
 use FireflyIII\Support\Request\ChecksLogin;
 use FireflyIII\Support\Request\ConvertsDataTypes;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Validation\Validator;
 
 /**
  * Class Request
@@ -66,8 +66,8 @@ class Request extends FormRequest
             'currency_id'   => 'numeric|exists:transaction_currencies,id',
             'currency_code' => 'min:3|max:51|exists:transaction_currencies,code',
             'amount'        => ['nullable', new IsValidPositiveAmount()],
-            'start'         => 'date|after:1900-01-01|before:2099-12-31',
-            'end'           => 'date|after:1900-01-01|before:2099-12-31',
+            'start'         => 'date|after:1970-01-02|before:2038-01-17',
+            'end'           => 'date|after:1970-01-02|before:2038-01-17',
         ];
     }
 
@@ -90,7 +90,7 @@ class Request extends FormRequest
             }
         );
         if ($validator->fails()) {
-            Log::channel('audit')->error(sprintf('Validation errors in %s', __CLASS__), $validator->errors()->toArray());
+            Log::channel('audit')->error(sprintf('Validation errors in %s', self::class), $validator->errors()->toArray());
         }
     }
 }

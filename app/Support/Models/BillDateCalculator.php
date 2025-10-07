@@ -83,7 +83,7 @@ class BillDateCalculator
             // AND date is after last paid date
             if (
                 $nextExpectedMatch->gte($earliest) // date is after "earliest possible date"
-                && (null === $lastPaid || $nextExpectedMatch->gt($lastPaid)) // date is after last paid date, if that date is not NULL
+                && (!$lastPaid instanceof Carbon || $nextExpectedMatch->gt($lastPaid)) // date is after last paid date, if that date is not NULL
             ) {
                 Log::debug('Add date to set, because it is after earliest possible date and after last paid date.');
                 $set->push(clone $nextExpectedMatch);
@@ -110,17 +110,15 @@ class BillDateCalculator
             $currentStart      = clone $nextExpectedMatch;
 
             ++$loop;
-            if ($loop > 12) {
-                Log::debug('Loop is more than 12, so we break.');
+            if ($loop > 31) {
+                Log::debug('Loop is more than 31, so we break.');
 
                 break;
             }
         }
         Log::debug('end of loop');
         $simple             = $set->map( // @phpstan-ignore-line
-            static function (Carbon $date) {
-                return $date->format('Y-m-d');
-            }
+            static fn (Carbon $date) => $date->format('Y-m-d')
         );
         Log::debug(sprintf('Found %d pay dates', $set->count()), $simple->toArray());
 

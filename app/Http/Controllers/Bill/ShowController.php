@@ -30,9 +30,11 @@ use FireflyIII\Http\Controllers\Controller;
 use FireflyIII\Models\Attachment;
 use FireflyIII\Models\Bill;
 use FireflyIII\Repositories\Bill\BillRepositoryInterface;
+use FireflyIII\Support\JsonApi\Enrichments\SubscriptionEnrichment;
 use FireflyIII\TransactionRules\Engine\RuleEngineInterface;
 use FireflyIII\Transformers\AttachmentTransformer;
 use FireflyIII\Transformers\BillTransformer;
+use FireflyIII\User;
 use Illuminate\Contracts\View\Factory;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -142,6 +144,17 @@ class ShowController extends Controller
         $parameters->set('start', $start);
         $parameters->set('end', $end);
 
+        // enrich
+        /** @var User $admin */
+        $admin                      = auth()->user();
+        $enrichment                 = new SubscriptionEnrichment();
+        $enrichment->setUser($admin);
+        $enrichment->setStart($start);
+        $enrichment->setEnd($end);
+
+        /** @var Bill $bill */
+        $bill                       = $enrichment->enrichSingle($bill);
+
         /** @var BillTransformer $transformer */
         $transformer                = app(BillTransformer::class);
         $transformer->setParameters($parameters);
@@ -166,9 +179,7 @@ class ShowController extends Controller
             /** @var AttachmentTransformer $transformer */
             $transformer = app(AttachmentTransformer::class);
             $attachments = $collection->each(
-                static function (Attachment $attachment) use ($transformer) {
-                    return $transformer->transform($attachment);
-                }
+                static fn (Attachment $attachment) => $transformer->transform($attachment)
             );
         }
 

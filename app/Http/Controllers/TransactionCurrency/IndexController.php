@@ -26,8 +26,8 @@ namespace FireflyIII\Http\Controllers\TransactionCurrency;
 
 use FireflyIII\Http\Controllers\Controller;
 use FireflyIII\Models\TransactionCurrency;
+use FireflyIII\Repositories\Currency\CurrencyRepositoryInterface;
 use FireflyIII\Repositories\User\UserRepositoryInterface;
-use FireflyIII\Repositories\UserGroups\Currency\CurrencyRepositoryInterface;
 use FireflyIII\User;
 use Illuminate\Contracts\View\Factory;
 use Illuminate\Http\Request;
@@ -74,10 +74,10 @@ class IndexController extends Controller
         // order so default and enabled are on top:
         $collection = $collection->sortBy(
             static function (TransactionCurrency $currency) {
-                $native  = true === $currency->userGroupNative ? 0 : 1;
+                $primary = true === $currency->userGroupNative ? 0 : 1;
                 $enabled = true === $currency->userGroupEnabled ? 0 : 1;
 
-                return sprintf('%s-%s-%s', $native, $enabled, $currency->code);
+                return sprintf('%s-%s-%s', $primary, $enabled, $currency->code);
             }
         );
         $total      = $collection->count();

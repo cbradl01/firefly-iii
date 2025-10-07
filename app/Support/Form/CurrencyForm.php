@@ -26,8 +26,9 @@ namespace FireflyIII\Support\Form;
 
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Models\TransactionCurrency;
-use FireflyIII\Repositories\UserGroups\Currency\CurrencyRepositoryInterface;
+use FireflyIII\Repositories\Currency\CurrencyRepositoryInterface;
 use Illuminate\Support\Collection;
+use Throwable;
 
 /**
  * Class CurrencyForm
@@ -49,9 +50,9 @@ class CurrencyForm
     }
 
     /**
-     * @throws FireflyException
-     *
      * @phpstan-param view-string $view
+     *
+     * @throws FireflyException
      */
     protected function currencyField(string $name, string $view, mixed $value = null, ?array $options = null): string
     {
@@ -60,7 +61,7 @@ class CurrencyForm
         $classes         = $this->getHolderClasses($name);
         $value           = $this->fillFieldValue($name, $value);
         $options['step'] = 'any';
-        $defaultCurrency = $options['currency'] ?? app('amount')->getNativeCurrency();
+        $primaryCurrency = $options['currency'] ?? app('amount')->getPrimaryCurrency();
 
         /** @var Collection $currencies */
         $currencies      = app('amount')->getCurrencies();
@@ -71,15 +72,15 @@ class CurrencyForm
             $preFilled = [];
         }
         $key             = 'amount_currency_id_'.$name;
-        $sentCurrencyId  = array_key_exists($key, $preFilled) ? (int) $preFilled[$key] : $defaultCurrency->id;
+        $sentCurrencyId  = array_key_exists($key, $preFilled) ? (int) $preFilled[$key] : $primaryCurrency->id;
 
         app('log')->debug(sprintf('Sent currency ID is %d', $sentCurrencyId));
 
         // find this currency in set of currencies:
         foreach ($currencies as $currency) {
             if ($currency->id === $sentCurrencyId) {
-                $defaultCurrency = $currency;
-                app('log')->debug(sprintf('default currency is now %s', $defaultCurrency->code));
+                $primaryCurrency = $currency;
+                app('log')->debug(sprintf('default currency is now %s', $primaryCurrency->code));
 
                 break;
             }
@@ -87,12 +88,12 @@ class CurrencyForm
 
         // make sure value is formatted nicely:
         if (null !== $value && '' !== $value) {
-            $value = app('steam')->bcround($value, $defaultCurrency->decimal_places);
+            $value = app('steam')->bcround($value, $primaryCurrency->decimal_places);
         }
 
         try {
-            $html = view('form.'.$view, compact('defaultCurrency', 'currencies', 'classes', 'name', 'label', 'value', 'options'))->render();
-        } catch (\Throwable $e) {
+            $html = view('form.'.$view, compact('primaryCurrency', 'currencies', 'classes', 'name', 'label', 'value', 'options'))->render();
+        } catch (Throwable $e) {
             app('log')->debug(sprintf('Could not render currencyField(): %s', $e->getMessage()));
             $html = 'Could not render currencyField.';
 
@@ -128,7 +129,7 @@ class CurrencyForm
         $classes         = $this->getHolderClasses($name);
         $value           = $this->fillFieldValue($name, $value);
         $options['step'] = 'any';
-        $defaultCurrency = $options['currency'] ?? app('amount')->getNativeCurrency();
+        $primaryCurrency = $options['currency'] ?? app('amount')->getPrimaryCurrency();
 
         /** @var Collection $currencies */
         $currencies      = app('amount')->getAllCurrencies();
@@ -140,15 +141,15 @@ class CurrencyForm
             $preFilled = [];
         }
         $key             = 'amount_currency_id_'.$name;
-        $sentCurrencyId  = array_key_exists($key, $preFilled) ? (int) $preFilled[$key] : $defaultCurrency->id;
+        $sentCurrencyId  = array_key_exists($key, $preFilled) ? (int) $preFilled[$key] : $primaryCurrency->id;
 
         app('log')->debug(sprintf('Sent currency ID is %d', $sentCurrencyId));
 
         // find this currency in set of currencies:
         foreach ($currencies as $currency) {
             if ($currency->id === $sentCurrencyId) {
-                $defaultCurrency = $currency;
-                app('log')->debug(sprintf('default currency is now %s', $defaultCurrency->code));
+                $primaryCurrency = $currency;
+                app('log')->debug(sprintf('default currency is now %s', $primaryCurrency->code));
 
                 break;
             }
@@ -156,12 +157,12 @@ class CurrencyForm
 
         // make sure value is formatted nicely:
         if (null !== $value && '' !== $value) {
-            $value = app('steam')->bcround($value, $defaultCurrency->decimal_places);
+            $value = app('steam')->bcround($value, $primaryCurrency->decimal_places);
         }
 
         try {
-            $html = view('form.'.$view, compact('defaultCurrency', 'currencies', 'classes', 'name', 'label', 'value', 'options'))->render();
-        } catch (\Throwable $e) {
+            $html = view('form.'.$view, compact('primaryCurrency', 'currencies', 'classes', 'name', 'label', 'value', 'options'))->render();
+        } catch (Throwable $e) {
             app('log')->debug(sprintf('Could not render currencyField(): %s', $e->getMessage()));
             $html = 'Could not render currencyField.';
 

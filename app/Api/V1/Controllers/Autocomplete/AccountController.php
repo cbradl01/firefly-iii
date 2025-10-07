@@ -27,12 +27,14 @@ namespace FireflyIII\Api\V1\Controllers\Autocomplete;
 use FireflyIII\Api\V1\Controllers\Controller;
 use FireflyIII\Api\V1\Requests\Autocomplete\AutocompleteRequest;
 use FireflyIII\Enums\AccountTypeEnum;
+use FireflyIII\Enums\UserRoleEnum;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Models\Account;
 use FireflyIII\Repositories\Account\AccountRepositoryInterface;
+use FireflyIII\Support\Debug\Timer;
+use FireflyIII\Support\Facades\Amount;
 use FireflyIII\Support\Facades\Steam;
 use FireflyIII\Support\Http\Api\AccountFilter;
-use FireflyIII\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
 
@@ -42,8 +44,10 @@ use Illuminate\Support\Facades\Log;
 class AccountController extends Controller
 {
     use AccountFilter;
+
     // this array only exists to test if the constructor will use it properly.
-    protected array $accepts = ['application/json', 'application/vnd.api+json'];
+    protected array $accepts       = ['application/json', 'application/vnd.api+json'];
+    protected array $acceptedRoles = [UserRoleEnum::READ_ONLY];
 
     /** @var array<int, string> */
     private array                      $balanceTypes;
@@ -57,10 +61,10 @@ class AccountController extends Controller
         parent::__construct();
         $this->middleware(
             function ($request, $next) {
-                /** @var User $user */
-                $user             = auth()->user();
+                $this->validateUserGroup($request);
                 $this->repository = app(AccountRepositoryInterface::class);
-                $this->repository->setUser($user);
+                $this->repository->setUser($this->user);
+                $this->repository->setUserGroup($this->userGroup);
 
                 return $next($request);
             }
@@ -77,39 +81,40 @@ class AccountController extends Controller
      */
     public function accounts(AutocompleteRequest $request): JsonResponse
     {
-        $data   = $request->getData();
-        $types  = $data['types'];
-        $query  = $data['query'];
-        $date   = $data['date'] ?? today(config('app.timezone'));
-        $return = [];
-        $result = $this->repository->searchAccount((string) $query, $types, $this->parameters->get('limit'));
+        $data        = $request->getData();
+        $types       = $data['types'];
+        $query       = $data['query'];
+        $date        = $data['date'] ?? today(config('app.timezone'));
+        $return      = [];
+        $timer       = Timer::getInstance();
+        $timer->start(sprintf('AC accounts "%s"', $query));
+        $result      = $this->repository->searchAccount((string) $query, $types, $this->parameters->get('limit'));
 
         // set date to subday + end-of-day for account balance. so it is at $date 23:59:59
-        $date->subDay()->endOfDay();
+        $date->endOfDay();
+
+        $allBalances = Steam::accountsBalancesOptimized($result, $date, $this->primaryCurrency, $this->convertToPrimary);
 
         /** @var Account $account */
         foreach ($result as $account) {
             $nameWithBalance = $account->name;
-            $currency        = $this->repository->getAccountCurrency($account) ?? $this->nativeCurrency;
+            $currency        = $this->repository->getAccountCurrency($account) ?? $this->primaryCurrency;
             $useCurrency     = $currency;
             if (in_array($account->accountType->type, $this->balanceTypes, true)) {
                 // this one is correct.
                 Log::debug(sprintf('accounts: Call finalAccountBalance with date/time "%s"', $date->toIso8601String()));
-                $balance         = Steam::finalAccountBalance($account, $date);
-                $key             = $this->convertToNative && $currency->id !== $this->nativeCurrency->id ? 'native_balance' : 'balance';
-                $useCurrency     = $this->convertToNative && $currency->id !== $this->nativeCurrency->id ? $this->nativeCurrency : $currency;
+                $balance         = $allBalances[$account->id] ?? [];
+                $key             = $this->convertToPrimary && $currency->id !== $this->primaryCurrency->id ? 'pc_balance' : 'balance';
+                $useCurrency     = $this->convertToPrimary && $currency->id !== $this->primaryCurrency->id ? $this->primaryCurrency : $currency;
                 $amount          = $balance[$key] ?? '0';
-                $nameWithBalance = sprintf(
-                    '%s (%s)',
-                    $account->name,
-                    app('amount')->formatAnything($useCurrency, $amount, false)
-                );
+                $nameWithBalance = sprintf('%s (%s)', $account->name, Amount::formatAnything($useCurrency, $amount, false));
             }
 
             $return[]        = [
                 'id'                              => (string) $account->id,
                 'name'                            => $account->name,
                 'name_with_balance'               => $nameWithBalance,
+                'active'                          => $account->active,
                 'type'                            => $account->accountType->type,
                 'currency_id'                     => (string) $useCurrency->id,
                 'currency_name'                   => $useCurrency->name,
@@ -135,6 +140,7 @@ class AccountController extends Controller
                 return $posA - $posB;
             }
         );
+        $timer->stop(sprintf('AC accounts "%s"', $query));
 
         return response()->api($return);
     }

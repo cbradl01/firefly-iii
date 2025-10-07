@@ -27,12 +27,11 @@ namespace FireflyIII\Api\V1\Controllers;
 use Carbon\Carbon;
 use Carbon\Exceptions\InvalidFormatException;
 use FireflyIII\Exceptions\BadHttpHeaderException;
-use FireflyIII\Models\Preference;
 use FireflyIII\Models\TransactionCurrency;
 use FireflyIII\Support\Facades\Amount;
 use FireflyIII\Support\Facades\Steam;
 use FireflyIII\Support\Http\Api\ValidatesUserGroupTrait;
-use FireflyIII\Transformers\V2\AbstractTransformer;
+use FireflyIII\Transformers\AbstractTransformer;
 use FireflyIII\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
@@ -40,7 +39,7 @@ use Illuminate\Foundation\Bus\DispatchesJobs;
 use Illuminate\Foundation\Validation\ValidatesRequests;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Routing\Controller as BaseController;
-use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
 use League\Fractal\Manager;
 use League\Fractal\Pagination\IlluminatePaginatorAdapter;
 use League\Fractal\Resource\Collection as FractalCollection;
@@ -62,15 +61,13 @@ abstract class Controller extends BaseController
     use ValidatesRequests;
     use ValidatesUserGroupTrait;
 
-    protected const string CONTENT_TYPE      = 'application/vnd.api+json';
-    protected const string JSON_CONTENT_TYPE = 'application/json';
+    protected const string CONTENT_TYPE             = 'application/vnd.api+json';
+    protected const string JSON_CONTENT_TYPE        = 'application/json';
+    protected array $accepts                        = ['application/json', 'application/vnd.api+json'];
 
-    /** @var array<int, string> */
-    protected array        $allowedSort;
-    protected ParameterBag $parameters;
-    protected bool        $convertToNative   = false;
-    protected array $accepts                 = ['application/json', 'application/vnd.api+json'];
-    protected TransactionCurrency $nativeCurrency;
+    protected bool                $convertToPrimary = false;
+    protected TransactionCurrency $primaryCurrency;
+    protected ParameterBag        $parameters;
 
     /**
      * Controller constructor.
@@ -78,14 +75,13 @@ abstract class Controller extends BaseController
     public function __construct()
     {
         // get global parameters
-        $this->allowedSort = config('firefly.allowed_sort_parameters');
         $this->middleware(
             function ($request, $next) {
                 $this->parameters = $this->getParameters();
                 if (auth()->check()) {
-                    $language              = Steam::getLanguage();
-                    $this->convertToNative = Amount::convertToNative();
-                    $this->nativeCurrency  = Amount::getNativeCurrency();
+                    $language               = Steam::getLanguage();
+                    $this->convertToPrimary = Amount::convertToPrimary();
+                    $this->primaryCurrency  = Amount::getPrimaryCurrency();
                     app()->setLocale($language);
                 }
 
@@ -107,13 +103,8 @@ abstract class Controller extends BaseController
     private function getParameters(): ParameterBag
     {
         $bag      = new ParameterBag();
-        $page     = (int) request()->get('page');
-        if ($page < 1) {
-            $page = 1;
-        }
-        if ($page > 2 ** 16) {
-            $page = 2 ** 16;
-        }
+        $page     = (int)request()->get('page');
+        $page     = min(max(1, $page), 2 ** 16);
         $bag->set('page', $page);
 
         // some date fields:
@@ -124,27 +115,22 @@ abstract class Controller extends BaseController
             try {
                 $date = request()->query->get($field);
             } catch (BadRequestException $e) {
-                app('log')->error(sprintf('Request field "%s" contains a non-scalar value. Value set to NULL.', $field));
-                app('log')->error($e->getMessage());
-                app('log')->error($e->getTraceAsString());
-                $value = null;
+                Log::error(sprintf('Request field "%s" contains a non-scalar value. Value set to NULL.', $field));
+                Log::error($e->getMessage());
+                Log::error($e->getTraceAsString());
             }
             $obj  = null;
             if (null !== $date) {
                 try {
-                    $obj = Carbon::parse((string) $date);
+                    $obj = Carbon::parse((string)$date, config('app.timezone'));
                 } catch (InvalidFormatException $e) {
                     // don't care
-                    app('log')->warning(
-                        sprintf(
-                            'Ignored invalid date "%s" in API controller parameter check: %s',
-                            substr((string) $date, 0, 20),
-                            $e->getMessage()
-                        )
-                    );
+                    Log::warning(sprintf('Ignored invalid date "%s" in API controller parameter check: %s', substr((string)$date, 0, 20), $e->getMessage()));
                 }
             }
-            $bag->set($field, $obj);
+            if ($obj instanceof Carbon) {
+                $bag->set($field, $obj);
+            }
         }
 
         // integer fields:
@@ -153,20 +139,14 @@ abstract class Controller extends BaseController
             try {
                 $value = request()->query->get($integer);
             } catch (BadRequestException $e) {
-                app('log')->error(sprintf('Request field "%s" contains a non-scalar value. Value set to NULL.', $integer));
-                app('log')->error($e->getMessage());
-                app('log')->error($e->getTraceAsString());
+                Log::error(sprintf('Request field "%s" contains a non-scalar value. Value set to NULL.', $integer));
+                Log::error($e->getMessage());
+                Log::error($e->getTraceAsString());
                 $value = null;
             }
             if (null !== $value) {
-                $value = (int) $value;
-                if ($value < 1) {
-                    $value = 1;
-                }
-                if ($value > 2 ** 16) {
-                    $value = 2 ** 16;
-                }
-
+                $value = (int)$value;
+                $value = min(max(1, $value), 2 ** 16);
                 $bag->set($integer, $value);
             }
             if (null === $value
@@ -176,46 +156,14 @@ abstract class Controller extends BaseController
                 /** @var User $user */
                 $user     = auth()->user();
 
-                /** @var Preference $pageSize */
-                $pageSize = (int) app('preferences')->getForUser($user, 'listPageSize', 50)->data;
+                $pageSize = (int)app('preferences')->getForUser($user, 'listPageSize', 50)->data;
                 $bag->set($integer, $pageSize);
             }
         }
 
         // sort fields:
-        return $this->getSortParameters($bag);
-    }
-
-    private function getSortParameters(ParameterBag $bag): ParameterBag
-    {
-        $sortParameters = [];
-
-        try {
-            $param = (string) request()->query->get('sort');
-        } catch (BadRequestException $e) {
-            app('log')->error('Request field "sort" contains a non-scalar value. Value set to NULL.');
-            app('log')->error($e->getMessage());
-            app('log')->error($e->getTraceAsString());
-            $param = '';
-        }
-        if ('' === $param) {
-            return $bag;
-        }
-        $parts          = explode(',', $param);
-        foreach ($parts as $part) {
-            $part      = trim($part);
-            $direction = 'asc';
-            if ('-' === $part[0]) {
-                $part      = substr($part, 1);
-                $direction = 'desc';
-            }
-            if (in_array($part, $this->allowedSort, true)) {
-                $sortParameters[] = [$part, $direction];
-            }
-        }
-        $bag->set('sort', $sortParameters);
-
         return $bag;
+        // return $this->getSortParameters($bag);
     }
 
     /**
@@ -263,7 +211,7 @@ abstract class Controller extends BaseController
 
         // the transformer, at this point, needs to collect information that ALL items in the collection
         // require, like meta-data and stuff like that, and save it for later.
-        $objects  = $transformer->collectMetaData($objects);
+        // $objects  = $transformer->collectMetaData($objects);
         $paginator->setCollection($objects);
 
         $resource = new FractalCollection($objects, $transformer, $key);
@@ -283,8 +231,6 @@ abstract class Controller extends BaseController
         $manager  = new Manager();
         $baseUrl  = sprintf('%s/api/v1', request()->getSchemeAndHttpHost());
         $manager->setSerializer(new JsonApiSerializer($baseUrl));
-
-        $transformer->collectMetaData(new Collection([$object]));
 
         $resource = new Item($object, $transformer, $key);
 

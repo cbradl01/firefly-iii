@@ -41,13 +41,14 @@ use FireflyIII\Repositories\Journal\JournalRepositoryInterface;
 use FireflyIII\Repositories\PiggyBank\PiggyBankRepositoryInterface;
 use FireflyIII\Repositories\Tag\TagRepositoryInterface;
 use Illuminate\Contracts\Validation\ValidationRule;
+use Closure;
 
 /**
  * Class IsValidAttachmentModel
  */
 class IsValidAttachmentModel implements ValidationRule
 {
-    private string $model;
+    private readonly string $model;
 
     /**
      * IsValidAttachmentModel constructor.
@@ -70,7 +71,7 @@ class IsValidAttachmentModel implements ValidationRule
     /**
      * @SuppressWarnings("PHPMD.UnusedFormalParameter")
      */
-    public function validate(string $attribute, mixed $value, \Closure $fail): void
+    public function validate(string $attribute, mixed $value, Closure $fail): void
     {
         if (!auth()->check()) {
             $fail('validation.model_id_invalid')->translate();

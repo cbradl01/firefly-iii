@@ -23,6 +23,8 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Requests;
 
+use Illuminate\Validation\Validator;
+use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Models\PiggyBank;
 use FireflyIII\Models\TransactionCurrency;
 use FireflyIII\Repositories\Account\AccountRepositoryInterface;
@@ -32,7 +34,6 @@ use FireflyIII\Support\Request\ChecksLogin;
 use FireflyIII\Support\Request\ConvertsDataTypes;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Validation\Validator;
 
 /**
  * Class PiggyBankFormRequest.
@@ -49,12 +50,13 @@ class PiggyBankUpdateRequest extends FormRequest
     {
         $accounts = $this->get('accounts');
         $data     = [
-            'name'               => $this->convertString('name'),
-            'start_date'         => $this->getCarbonDate('start_date'),
-            'target_amount'      => trim($this->convertString('target_amount')),
-            'target_date'        => $this->getCarbonDate('target_date'),
-            'notes'              => $this->stringWithNewlines('notes'),
-            'object_group_title' => $this->convertString('object_group'),
+            'name'                    => $this->convertString('name'),
+            'start_date'              => $this->getCarbonDate('start_date'),
+            'target_amount'           => trim($this->convertString('target_amount')),
+            'target_date'             => $this->getCarbonDate('target_date'),
+            'transaction_currency_id' => $this->convertInteger('transaction_currency_id'),
+            'notes'                   => $this->stringWithNewlines('notes'),
+            'object_group_title'      => $this->convertString('object_group'),
         ];
         if (!is_array($accounts)) {
             $accounts = [];
@@ -75,15 +77,16 @@ class PiggyBankUpdateRequest extends FormRequest
         $piggy = $this->route()->parameter('piggyBank');
 
         return [
-            'name'          => sprintf('required|min:1|max:255|uniquePiggyBankForUser:%d', $piggy->id),
-            'accounts'      => 'required|array',
-            'accounts.*'    => 'required|belongsToUser:accounts',
-            'target_amount' => ['nullable', new IsValidPositiveAmount()],
-            'start_date'    => 'date',
-            'target_date'   => 'date|nullable',
-            'order'         => 'integer|max:32768|min:1',
-            'object_group'  => 'min:0|max:255',
-            'notes'         => 'min:1|max:32768|nullable',
+            'name'                    => sprintf('required|min:1|max:255|uniquePiggyBankForUser:%d', $piggy->id),
+            'accounts'                => 'required|array',
+            'accounts.*'              => 'required|belongsToUser:accounts',
+            'target_amount'           => ['nullable', new IsValidPositiveAmount()],
+            'start_date'              => 'date',
+            'transaction_currency_id' => 'exists:transaction_currencies,id',
+            'target_date'             => 'date|nullable',
+            'order'                   => 'integer|max:32768|min:1',
+            'object_group'            => 'min:0|max:255',
+            'notes'                   => 'min:1|max:32768|nullable',
         ];
     }
 
@@ -120,16 +123,18 @@ class PiggyBankUpdateRequest extends FormRequest
 
 
         if ($validator->fails()) {
-            Log::channel('audit')->error(sprintf('Validation errors in %s', __CLASS__), $validator->errors()->toArray());
+            Log::channel('audit')->error(sprintf('Validation errors in %s', self::class), $validator->errors()->toArray());
         }
     }
 
     private function getCurrencyFromData(array $data): TransactionCurrency
     {
         $currencyId = (int) ($data['transaction_currency_id'] ?? 0);
-        $currency   = TransactionCurrency::find($currencyId);
-        if (null === $currency) {
-            return Amount::getNativeCurrency();
+
+        try {
+            $currency = Amount::getTransactionCurrencyById($currencyId);
+        } catch (FireflyException) {
+            return Amount::getPrimaryCurrency();
         }
 
         return $currency;

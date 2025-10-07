@@ -36,21 +36,17 @@ use FireflyIII\Models\Transaction;
 use FireflyIII\Models\TransactionJournal;
 use FireflyIII\Models\TransactionType;
 use FireflyIII\Repositories\Account\AccountRepositoryInterface;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Class ConvertToWithdrawal
  */
 class ConvertToWithdrawal implements ActionInterface
 {
-    private RuleAction $action;
-
     /**
      * TriggerInterface constructor.
      */
-    public function __construct(RuleAction $action)
-    {
-        $this->action = $action;
-    }
+    public function __construct(private readonly RuleAction $action) {}
 
     public function actOnArray(array $journal): bool
     {
@@ -148,14 +144,14 @@ class ConvertToWithdrawal implements ActionInterface
         app('log')->debug(sprintf('ConvertToWithdrawal. Action value is "%s", expense name is "%s"', $actionValue, $opposingName));
 
         // update source transaction(s) to be the original destination account
-        \DB::table('transactions')
+        DB::table('transactions')
             ->where('transaction_journal_id', '=', $journal->id)
             ->where('amount', '<', 0)
             ->update(['account_id' => $destAccount->id])
         ;
 
         // update destination transaction(s) to be new expense account.
-        \DB::table('transactions')
+        DB::table('transactions')
             ->where('transaction_journal_id', '=', $journal->id)
             ->where('amount', '>', 0)
             ->update(['account_id' => $opposingAccount->id])
@@ -163,7 +159,7 @@ class ConvertToWithdrawal implements ActionInterface
 
         // change transaction type of journal:
         $newType         = TransactionType::whereType(TransactionTypeEnum::WITHDRAWAL->value)->first();
-        \DB::table('transaction_journals')
+        DB::table('transaction_journals')
             ->where('id', '=', $journal->id)
             ->update(['transaction_type_id' => $newType->id])
         ;
@@ -234,7 +230,7 @@ class ConvertToWithdrawal implements ActionInterface
         app('log')->debug(sprintf('ConvertToWithdrawal. Action value is "%s", destination name is "%s"', $actionValue, $opposingName));
 
         // update destination transaction(s) to be new expense account.
-        \DB::table('transactions')
+        DB::table('transactions')
             ->where('transaction_journal_id', '=', $journal->id)
             ->where('amount', '>', 0)
             ->update(['account_id' => $opposingAccount->id])
@@ -242,7 +238,7 @@ class ConvertToWithdrawal implements ActionInterface
 
         // change transaction type of journal:
         $newType         = TransactionType::whereType(TransactionTypeEnum::WITHDRAWAL->value)->first();
-        \DB::table('transaction_journals')
+        DB::table('transaction_journals')
             ->where('id', '=', $journal->id)
             ->update(['transaction_type_id' => $newType->id])
         ;

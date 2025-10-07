@@ -23,6 +23,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Requests;
 
+use Illuminate\Validation\Validator;
 use FireflyIII\Models\Budget;
 use FireflyIII\Rules\IsValidPositiveAmount;
 use FireflyIII\Support\Request\ChecksLogin;
@@ -30,7 +31,6 @@ use FireflyIII\Support\Request\ConvertsDataTypes;
 use FireflyIII\Validation\AutoBudget\ValidatesAutoBudgetRequest;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Validation\Validator;
 
 /**
  * Class BudgetFormUpdateRequest
@@ -47,12 +47,13 @@ class BudgetFormUpdateRequest extends FormRequest
     public function getBudgetData(): array
     {
         return [
-            'name'               => $this->convertString('name'),
-            'active'             => $this->boolean('active'),
-            'auto_budget_type'   => $this->convertInteger('auto_budget_type'),
-            'currency_id'        => $this->convertInteger('auto_budget_currency_id'),
-            'auto_budget_amount' => $this->convertString('auto_budget_amount'),
-            'auto_budget_period' => $this->convertString('auto_budget_period'),
+            'name'                    => $this->convertString('name'),
+            'active'                  => $this->boolean('active'),
+            'auto_budget_type'        => $this->convertInteger('auto_budget_type'),
+            'currency_id'             => $this->convertInteger('auto_budget_currency_id'),
+            'auto_budget_amount'      => $this->convertString('auto_budget_amount'),
+            'auto_budget_period'      => $this->convertString('auto_budget_period'),
+            'notes'                   => $this->stringWithNewlines('notes'),
         ];
     }
 
@@ -93,7 +94,7 @@ class BudgetFormUpdateRequest extends FormRequest
             }
         );
         if ($validator->fails()) {
-            Log::channel('audit')->error(sprintf('Validation errors in %s', __CLASS__), $validator->errors()->toArray());
+            Log::channel('audit')->error(sprintf('Validation errors in %s', self::class), $validator->errors()->toArray());
         }
     }
 }

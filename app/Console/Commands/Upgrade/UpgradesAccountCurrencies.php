@@ -24,6 +24,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Console\Commands\Upgrade;
 
+use FireflyIII\Models\TransactionJournal;
 use FireflyIII\Console\Commands\ShowsFriendlyMessages;
 use FireflyIII\Enums\AccountTypeEnum;
 use FireflyIII\Exceptions\FireflyException;
@@ -107,11 +108,11 @@ class UpgradesAccountCurrencies extends Command
         $accounts        = $this->accountRepos->getAccountsByType([AccountTypeEnum::DEFAULT->value, AccountTypeEnum::ASSET->value]);
 
         // get user's currency preference:
-        $defaultCurrency = app('amount')->getNativeCurrencyByUserGroup($user->userGroup);
+        $primaryCurrency = app('amount')->getPrimaryCurrencyByUserGroup($user->userGroup);
 
         /** @var Account $account */
         foreach ($accounts as $account) {
-            $this->updateAccount($account, $defaultCurrency);
+            $this->updateAccount($account, $primaryCurrency);
         }
     }
 
@@ -141,7 +142,7 @@ class UpgradesAccountCurrencies extends Command
             return;
         }
         // do not match and opening balance id is not null.
-        if ($accountCurrency !== $obCurrency && null !== $openingBalance) {
+        if ($accountCurrency !== $obCurrency && $openingBalance instanceof TransactionJournal) {
             // update opening balance:
             $openingBalance->transaction_currency_id = $accountCurrency;
             $openingBalance->save();

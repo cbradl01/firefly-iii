@@ -20,6 +20,10 @@
 
 
 export function showInternalsButton() {
-    console.log('showInternalsButton');
-    document.querySelector('.toggle-page-internals').classList.remove('d-none');
+    // console.log('showInternalsButton');
+    let obj = document.querySelector('.toggle-page-internals');
+    if (obj === null) {
+        return;
+    }
+    obj.classList.remove('d-none');
 }

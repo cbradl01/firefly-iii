@@ -30,9 +30,7 @@ use FireflyIII\Helpers\Collector\GroupCollectorInterface;
 use FireflyIII\Models\Account;
 use FireflyIII\Models\Bill;
 use FireflyIII\Models\Recurrence;
-use FireflyIII\Models\RecurrenceTransaction;
 use FireflyIII\Models\Rule;
-use FireflyIII\Models\RuleTrigger;
 use FireflyIII\Models\TransactionCurrency;
 use FireflyIII\Repositories\Account\AccountRepositoryInterface;
 use FireflyIII\Repositories\Bill\BillRepositoryInterface;
@@ -43,6 +41,9 @@ use FireflyIII\Repositories\Rule\RuleRepositoryInterface;
 use FireflyIII\Support\Http\Api\AccountFilter;
 use FireflyIII\Support\Http\Api\TransactionFilter;
 use FireflyIII\Support\JsonApi\Enrichments\AccountEnrichment;
+use FireflyIII\Support\JsonApi\Enrichments\BudgetLimitEnrichment;
+use FireflyIII\Support\JsonApi\Enrichments\RecurringEnrichment;
+use FireflyIII\Support\JsonApi\Enrichments\SubscriptionEnrichment;
 use FireflyIII\Support\JsonApi\Enrichments\TransactionGroupEnrichment;
 use FireflyIII\Transformers\AccountTransformer;
 use FireflyIII\Transformers\AvailableBudgetTransformer;
@@ -106,9 +107,8 @@ class ListController extends Controller
         /** @var User $admin */
         $admin             = auth()->user();
         $enrichment        = new AccountEnrichment();
+        $enrichment->setDate($this->parameters->get('date'));
         $enrichment->setUser($admin);
-        $enrichment->setConvertToNative($this->convertToNative);
-        $enrichment->setNative($this->nativeCurrency);
         $accounts          = $enrichment->enrich($accounts);
 
         // make paginator:
@@ -178,12 +178,19 @@ class ListController extends Controller
 
         // filter and paginate list:
         $collection  = $unfiltered->filter(
-            static function (Bill $bill) use ($currency) {
-                return $bill->transaction_currency_id === $currency->id;
-            }
+            static fn (Bill $bill) => $bill->transaction_currency_id === $currency->id
         );
         $count       = $collection->count();
         $bills       = $collection->slice(($this->parameters->get('page') - 1) * $pageSize, $pageSize);
+
+        // enrich
+        /** @var User $admin */
+        $admin       = auth()->user();
+        $enrichment  = new SubscriptionEnrichment();
+        $enrichment->setUser($admin);
+        $enrichment->setStart($this->parameters->get('start'));
+        $enrichment->setEnd($this->parameters->get('end'));
+        $bills       = $enrichment->enrich($bills);
 
         // make paginator:
         $paginator   = new LengthAwarePaginator($bills, $count, $pageSize, $this->parameters->get('page'));
@@ -220,6 +227,13 @@ class ListController extends Controller
         $paginator    = new LengthAwarePaginator($budgetLimits, $count, $pageSize, $this->parameters->get('page'));
         $paginator->setPath(route('api.v1.currencies.budget-limits', [$currency->code]).$this->buildParams());
 
+        // enrich
+        /** @var User $admin */
+        $admin        = auth()->user();
+        $enrichment   = new BudgetLimitEnrichment();
+        $enrichment->setUser($admin);
+        $budgetLimits = $enrichment->enrich($budgetLimits);
+
         /** @var BudgetLimitTransformer $transformer */
         $transformer  = app(BudgetLimitTransformer::class);
         $transformer->setParameters($this->parameters);
@@ -252,28 +266,32 @@ class ListController extends Controller
         // filter selection
         $collection     = $unfiltered->filter(
             static function (Recurrence $recurrence) use ($currency) {  // @phpstan-ignore-line
-                /** @var RecurrenceTransaction $transaction */
-                foreach ($recurrence->recurrenceTransactions as $transaction) {
-                    if ($transaction->transaction_currency_id === $currency->id || $transaction->foreign_currency_id === $currency->id) {
-                        return $recurrence;
-                    }
+                if (array_any($recurrence->recurrenceTransactions, fn ($transaction) => $transaction->transaction_currency_id === $currency->id || $transaction->foreign_currency_id === $currency->id)) {
+                    return $recurrence;
                 }
 
                 return null;
             }
         );
         $count          = $collection->count();
-        $piggyBanks     = $collection->slice(($this->parameters->get('page') - 1) * $pageSize, $pageSize);
+        $recurrences    = $collection->slice(($this->parameters->get('page') - 1) * $pageSize, $pageSize);
+
+        // enrich
+        /** @var User $admin */
+        $admin          = auth()->user();
+        $enrichment     = new RecurringEnrichment();
+        $enrichment->setUser($admin);
+        $recurrences    = $enrichment->enrich($recurrences);
 
         // make paginator:
-        $paginator      = new LengthAwarePaginator($piggyBanks, $count, $pageSize, $this->parameters->get('page'));
+        $paginator      = new LengthAwarePaginator($recurrences, $count, $pageSize, $this->parameters->get('page'));
         $paginator->setPath(route('api.v1.currencies.recurrences', [$currency->code]).$this->buildParams());
 
         /** @var RecurrenceTransformer $transformer */
         $transformer    = app(RecurrenceTransformer::class);
         $transformer->setParameters($this->parameters);
 
-        $resource       = new FractalCollection($piggyBanks, $transformer, 'recurrences');
+        $resource       = new FractalCollection($recurrences, $transformer, 'recurrences');
         $resource->setPaginator(new IlluminatePaginatorAdapter($paginator));
 
         return response()->json($manager->createData($resource)->toArray())->header('Content-Type', self::CONTENT_TYPE);
@@ -299,11 +317,8 @@ class ListController extends Controller
 
         $collection  = $unfiltered->filter(
             static function (Rule $rule) use ($currency) { // @phpstan-ignore-line
-                /** @var RuleTrigger $trigger */
-                foreach ($rule->ruleTriggers as $trigger) {
-                    if ('currency_is' === $trigger->trigger_type && $currency->name === $trigger->trigger_value) {
-                        return $rule;
-                    }
+                if (array_any($rule->ruleTriggers, fn ($trigger) => 'currency_is' === $trigger->trigger_type && $currency->name === $trigger->trigger_value)) {
+                    return $rule;
                 }
 
                 return null;

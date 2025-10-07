@@ -28,6 +28,7 @@ use FireflyIII\Api\V1\Controllers\Controller;
 use FireflyIII\Api\V1\Requests\Data\DestroyRequest;
 use FireflyIII\Enums\AccountTypeEnum;
 use FireflyIII\Enums\TransactionTypeEnum;
+use FireflyIII\Enums\UserRoleEnum;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Models\Account;
 use FireflyIII\Models\Bill;
@@ -63,16 +64,24 @@ class DestroyController extends Controller
 {
     private bool $unused;
 
-    /**
-     * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/data/destroyData
-     *
-     * @throws FireflyException
-     */
+    protected array $acceptedRoles = [UserRoleEnum::FULL];
+
+    public function __construct()
+    {
+        parent::__construct();
+        $this->middleware(
+            function ($request, $next) {
+                $this->validateUserGroup($request);
+
+                return $next($request);
+            }
+        );
+    }
+
     public function destroy(DestroyRequest $request): JsonResponse
     {
         $objects         = $request->getObjects();
-        $this->unused    = $request->boolean('unused', false);
+        $this->unused    = $request->boolean('unused');
 
         $all = array_map(fn($enum) => $enum->value, AccountTypeEnum::cases());
         $liabilities     = [AccountTypeEnum::DEBT->value, AccountTypeEnum::LOAN->value, AccountTypeEnum::MORTGAGE->value, AccountTypeEnum::CREDITCARD->value];
@@ -183,14 +192,14 @@ class DestroyController extends Controller
         foreach ($collection as $account) {
             $count = $account->transactions()->count();
             if (true === $this->unused && 0 === $count) {
-                app('log')->info(sprintf('Deleted unused account #%d "%s"', $account->id, $account->name));
+                Log::info(sprintf('Deleted unused account #%d "%s"', $account->id, $account->name));
                 Log::channel('audit')->info(sprintf('Deleted unused account #%d "%s"', $account->id, $account->name));
                 $service->destroy($account, null);
 
                 continue;
             }
             if (false === $this->unused) {
-                app('log')->info(sprintf('Deleting account #%d "%s"', $account->id, $account->name));
+                Log::info(sprintf('Deleting account #%d "%s"', $account->id, $account->name));
                 Log::channel('audit')->warning(sprintf('Deleted account #%d "%s"', $account->id, $account->name));
                 $service->destroy($account, null);
             }

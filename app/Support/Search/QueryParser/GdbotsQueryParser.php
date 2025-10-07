@@ -26,14 +26,18 @@ declare(strict_types=1);
 namespace FireflyIII\Support\Search\QueryParser;
 
 use FireflyIII\Exceptions\FireflyException;
-use Gdbots\QueryParser\QueryParser as BaseQueryParser;
-use Gdbots\QueryParser\Node as GdbotsNode;
 use Gdbots\QueryParser\Enum\BoolOperator;
+use Gdbots\QueryParser\Node as GdbotsNode;
+use Gdbots\QueryParser\QueryParser as BaseQueryParser;
 use Illuminate\Support\Facades\Log;
+use LogicException;
+use TypeError;
+
+use function Safe\fwrite;
 
 class GdbotsQueryParser implements QueryParserInterface
 {
-    private BaseQueryParser $parser;
+    private readonly BaseQueryParser $parser;
 
     public function __construct()
     {
@@ -53,7 +57,7 @@ class GdbotsQueryParser implements QueryParserInterface
             );
 
             return new NodeGroup($nodes);
-        } catch (\LogicException|\TypeError $e) {
+        } catch (LogicException|TypeError $e) {
             fwrite(STDERR, "Setting up GdbotsQueryParserTest\n");
             app('log')->error($e->getMessage());
             app('log')->error(sprintf('Could not parse search: "%s".', $query));
@@ -98,7 +102,7 @@ class GdbotsQueryParser implements QueryParserInterface
 
             default:
                 throw new FireflyException(
-                    sprintf('Unsupported node type: %s', get_class($node))
+                    sprintf('Unsupported node type: %s', $node::class)
                 );
         }
     }

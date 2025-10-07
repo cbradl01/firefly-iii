@@ -28,6 +28,8 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
 use Illuminate\Queue\SerializesModels;
 
+use function Safe\parse_url;
+
 /**
  * Class InvitationMail
  */
@@ -36,20 +38,18 @@ class InvitationMail extends Mailable
     use Queueable;
     use SerializesModels;
 
-    public string $admin;
     public string $host;
-    public string $invitee;
-    public string $url;
 
     /**
      * OAuthTokenCreatedMail constructor.
      */
-    public function __construct(string $invitee, string $admin, string $url)
+    public function __construct(public string $invitee, public string $admin, public string $url)
     {
-        $this->invitee = $invitee;
-        $this->admin   = $admin;
-        $this->url     = $url;
-        $this->host    = (string) parse_url($url, PHP_URL_HOST);
+        $host       = parse_url($this->url, PHP_URL_HOST);
+        if (is_array($host)) {
+            $host = '';
+        }
+        $this->host = (string) $host;
     }
 
     /**

@@ -26,6 +26,7 @@ namespace FireflyIII\Api\V1\Controllers\Autocomplete;
 
 use FireflyIII\Api\V1\Controllers\Controller;
 use FireflyIII\Api\V1\Requests\Autocomplete\AutocompleteRequest;
+use FireflyIII\Enums\UserRoleEnum;
 use FireflyIII\Models\TransactionType;
 use FireflyIII\Repositories\TransactionType\TransactionTypeRepositoryInterface;
 use Illuminate\Http\JsonResponse;
@@ -36,6 +37,7 @@ use Illuminate\Http\JsonResponse;
 class TransactionTypeController extends Controller
 {
     private TransactionTypeRepositoryInterface $repository;
+    protected array $acceptedRoles = [UserRoleEnum::READ_ONLY];
 
     /**
      * TransactionTypeController constructor.
@@ -45,6 +47,7 @@ class TransactionTypeController extends Controller
         parent::__construct();
         $this->middleware(
             function ($request, $next) {
+                $this->validateUserGroup($request);
                 $this->repository = app(TransactionTypeRepositoryInterface::class);
 
                 return $next($request);
@@ -52,10 +55,6 @@ class TransactionTypeController extends Controller
         );
     }
 
-    /**
-     * This endpoint is documented at
-     * * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/autocomplete/getTransactionTypesAC
-     */
     public function transactionTypes(AutocompleteRequest $request): JsonResponse
     {
         $data  = $request->getData();

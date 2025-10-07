@@ -31,18 +31,16 @@ use FireflyIII\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Support\Facades\Log;
+use Closure;
+use Override;
 
 class IsAllowedGroupAction implements ValidationRule
 {
-    private array                        $acceptedRoles;
-    private string $className;
-    private string $methodName;
-    private UserGroupRepositoryInterface $repository;
+    private array                                 $acceptedRoles;
+    private readonly UserGroupRepositoryInterface $repository;
 
-    public function __construct(string $className, string $methodName)
+    public function __construct(private readonly string $className, private readonly string $methodName)
     {
-        $this->className     = $className;
-        $this->methodName    = $methodName;
         // you need these roles to do anything with any endpoint.
         $this->acceptedRoles = [UserRoleEnum::OWNER, UserRoleEnum::FULL];
         $this->repository    = app(UserGroupRepositoryInterface::class);
@@ -51,8 +49,8 @@ class IsAllowedGroupAction implements ValidationRule
     /**
      * @throws AuthorizationException
      */
-    #[\Override]
-    public function validate(string $attribute, mixed $value, \Closure $fail): void
+    #[Override]
+    public function validate(string $attribute, mixed $value, Closure $fail): void
     {
         if ('GET' === $this->methodName) {
             // need at least "read only rights".
@@ -73,7 +71,7 @@ class IsAllowedGroupAction implements ValidationRule
         $this->validateUserGroup((int) $value, $fail);
     }
 
-    private function validateUserGroup(int $userGroupId, \Closure $fail): void
+    private function validateUserGroup(int $userGroupId, Closure $fail): void
     {
         Log::debug(sprintf('validateUserGroup: %s', static::class));
         if (!auth()->check()) {

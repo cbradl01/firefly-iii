@@ -44,7 +44,6 @@ use FireflyIII\Models\UserRole;
 use FireflyIII\Notifications\Admin\UserRegistration as AdminRegistrationNotification;
 use FireflyIII\Notifications\Security\UserFailedLoginAttempt;
 use FireflyIII\Notifications\Test\UserTestNotificationEmail;
-use FireflyIII\Notifications\Test\UserTestNotificationNtfy;
 use FireflyIII\Notifications\Test\UserTestNotificationPushover;
 use FireflyIII\Notifications\Test\UserTestNotificationSlack;
 use FireflyIII\Notifications\User\UserLogin;
@@ -54,8 +53,9 @@ use FireflyIII\Repositories\User\UserRepositoryInterface;
 use FireflyIII\User;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
-use Mail;
+use Exception;
 
 /**
  * Class UserEventHandler.
@@ -128,7 +128,7 @@ class UserEventHandler
         $groupTitle          = $user->email;
         $index               = 1;
 
-        /** @var UserGroup $group */
+        /** @var null|UserGroup $group */
         $group               = null;
 
         // create a new group.
@@ -203,7 +203,7 @@ class UserEventHandler
             if (false === $entry['notified']) {
                 try {
                     Notification::send($user, new UserLogin());
-                } catch (\Exception $e) {
+                } catch (Exception $e) {
                     $message = $e->getMessage();
                     if (str_contains($message, 'Bcc')) {
                         app('log')->warning('[Bcc] Could not send notification. Please validate your email settings, use the .env.example file as a guide.');
@@ -233,7 +233,7 @@ class UserEventHandler
 
             try {
                 Notification::send($owner, new AdminRegistrationNotification($event->user));
-            } catch (\Exception $e) {
+            } catch (Exception $e) {
                 $message = $e->getMessage();
                 if (str_contains($message, 'Bcc')) {
                     app('log')->warning('[Bcc] Could not send notification. Please validate your email settings, use the .env.example file as a guide.');
@@ -266,8 +266,8 @@ class UserEventHandler
         $url      = route('profile.confirm-email-change', [$token->data]);
 
         try {
-            \Mail::to($newEmail)->send(new ConfirmEmailChangeMail($newEmail, $oldEmail, $url));
-        } catch (\Exception $e) {
+            Mail::to($newEmail)->send(new ConfirmEmailChangeMail($newEmail, $oldEmail, $url));
+        } catch (Exception $e) {
             app('log')->error($e->getMessage());
             app('log')->error($e->getTraceAsString());
 
@@ -291,8 +291,8 @@ class UserEventHandler
         $url      = route('profile.undo-email-change', [$token->data, $hashed]);
 
         try {
-            \Mail::to($oldEmail)->send(new UndoEmailChangeMail($newEmail, $oldEmail, $url));
-        } catch (\Exception $e) {
+            Mail::to($oldEmail)->send(new UndoEmailChangeMail($newEmail, $oldEmail, $url));
+        } catch (Exception $e) {
             app('log')->error($e->getMessage());
             app('log')->error($e->getTraceAsString());
 
@@ -304,7 +304,7 @@ class UserEventHandler
     {
         try {
             Notification::send($event->user, new UserFailedLoginAttempt($event->user));
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             $message = $e->getMessage();
             if (str_contains($message, 'Bcc')) {
                 app('log')->warning('[Bcc] Could not send notification. Please validate your email settings, use the .env.example file as a guide.');
@@ -328,7 +328,7 @@ class UserEventHandler
     {
         try {
             Notification::send($event->user, new UserNewPassword(route('password.reset', [$event->token])));
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             $message = $e->getMessage();
             if (str_contains($message, 'Bcc')) {
                 app('log')->warning('[Bcc] Could not send notification. Please validate your email settings, use the .env.example file as a guide.');
@@ -355,8 +355,8 @@ class UserEventHandler
         $url     = route('invite', [$event->invitee->invite_code]);
 
         try {
-            \Mail::to($invitee)->send(new InvitationMail($invitee, $admin, $url));
-        } catch (\Exception $e) {
+            Mail::to($invitee)->send(new InvitationMail($invitee, $admin, $url));
+        } catch (Exception $e) {
             app('log')->error($e->getMessage());
             app('log')->error($e->getTraceAsString());
 
@@ -374,7 +374,7 @@ class UserEventHandler
         if ($sendMail) {
             try {
                 Notification::send($event->user, new UserRegistrationNotification());
-            } catch (\Exception $e) {
+            } catch (Exception $e) {
                 $message = $e->getMessage();
                 if (str_contains($message, 'Bcc')) {
                     app('log')->warning('[Bcc] Could not send notification. Please validate your email settings, use the .env.example file as a guide.');
@@ -410,10 +410,10 @@ class UserEventHandler
 
                 break;
 
-            case 'ntfy':
-                $class = UserTestNotificationNtfy::class;
-
-                break;
+                //            case 'ntfy':
+                //                $class = UserTestNotificationNtfy::class;
+                //
+                //                break;
 
             case 'pushover':
                 $class = UserTestNotificationPushover::class;
@@ -429,7 +429,7 @@ class UserEventHandler
 
         try {
             Notification::send($event->user, new $class());
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             $message = $e->getMessage();
             if (str_contains($message, 'Bcc')) {
                 app('log')->warning('[Bcc] Could not send notification. Please validate your email settings, use the .env.example file as a guide.');
@@ -483,7 +483,7 @@ class UserEventHandler
             }
             // clean up old entries (6 months)
             $carbon = Carbon::createFromFormat('Y-m-d H:i:s', $preference[$index]['time']);
-            if (null !== $carbon && $carbon->diffInMonths(today(), true) > 6) {
+            if ($carbon instanceof Carbon && $carbon->diffInMonths(today(), true) > 6) {
                 app('log')->debug(sprintf('Entry for %s is very old, remove it.', $row['ip']));
                 unset($preference[$index]);
             }

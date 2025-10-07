@@ -29,6 +29,8 @@ use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
+use function Safe\json_encode;
+
 /**
  * Class AccountSearch
  */
@@ -135,7 +137,7 @@ class AccountSearch implements GenericSearchInterface
         $this->types = $types;
     }
 
-    public function setUser(null|Authenticatable|User $user): void
+    public function setUser(Authenticatable|User|null $user): void
     {
         if ($user instanceof User) {
             $this->user = $user;

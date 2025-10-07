@@ -24,7 +24,8 @@ declare(strict_types=1);
 
 namespace FireflyIII\Api\V1\Requests\Models\PiggyBank;
 
-use FireflyIII\Exceptions\FireflyException;
+use Illuminate\Validation\Validator;
+use FireflyIII\Support\Facades\Amount;
 use FireflyIII\Models\TransactionCurrency;
 use FireflyIII\Repositories\Account\AccountRepositoryInterface;
 use FireflyIII\Rules\IsValidZeroOrMoreAmount;
@@ -32,7 +33,6 @@ use FireflyIII\Support\Request\ChecksLogin;
 use FireflyIII\Support\Request\ConvertsDataTypes;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Validation\Validator;
 
 /**
  * Class StoreRequest
@@ -65,25 +65,6 @@ class StoreRequest extends FormRequest
         return $data;
     }
 
-    private function parseAccounts(mixed $array): array
-    {
-        if (!is_array($array)) {
-            return [];
-        }
-        $return = [];
-        foreach ($array as $entry) {
-            if (!is_array($entry)) {
-                continue;
-            }
-            $return[] = [
-                'account_id'     => $this->integerFromValue((string) ($entry['account_id'] ?? '0')),
-                'current_amount' => $this->clearString((string) ($entry['current_amount'] ?? '0')),
-            ];
-        }
-
-        return $return;
-    }
-
     /**
      * The rules that the incoming request must be matched against.
      */
@@ -98,7 +79,7 @@ class StoreRequest extends FormRequest
             'object_group_id'           => 'numeric|belongsToUser:object_groups,id',
             'object_group_title'        => ['min:1', 'max:255'],
             'target_amount'             => ['required', new IsValidZeroOrMoreAmount()],
-            'start_date'                => 'date|nullable',
+            'start_date'                => 'required|date|after:1970-01-01|before:2038-01-17',
             'transaction_currency_id'   => 'exists:transaction_currencies,id|required_without:transaction_currency_code',
             'transaction_currency_code' => 'exists:transaction_currencies,code|required_without:transaction_currency_id',
             'target_date'               => 'date|nullable|after:start_date',
@@ -115,7 +96,10 @@ class StoreRequest extends FormRequest
             function (Validator $validator): void {
                 // validate start before end only if both are there.
                 $data          = $validator->getData();
-                $currency      = $this->getCurrencyFromData($data);
+                $currency      = $this->getCurrencyFromData($validator, $data);
+                if (!$currency instanceof TransactionCurrency) {
+                    return;
+                }
                 $targetAmount  = (string) ($data['target_amount'] ?? '0');
                 $currentAmount = '0';
                 if (array_key_exists('accounts', $data) && is_array($data['accounts'])) {
@@ -145,25 +129,20 @@ class StoreRequest extends FormRequest
             }
         );
         if ($validator->fails()) {
-            Log::channel('audit')->error(sprintf('Validation errors in %s', __CLASS__), $validator->errors()->toArray());
+            Log::channel('audit')->error(sprintf('Validation errors in %s', self::class), $validator->errors()->toArray());
         }
     }
 
-    private function getCurrencyFromData(array $data): TransactionCurrency
+    private function getCurrencyFromData(Validator $validator, array $data): ?TransactionCurrency
     {
         if (array_key_exists('transaction_currency_code', $data) && '' !== (string) $data['transaction_currency_code']) {
-            $currency = TransactionCurrency::whereCode($data['transaction_currency_code'])->first();
-            if (null !== $currency) {
-                return $currency;
-            }
+            return Amount::getTransactionCurrencyByCode((string) $data['transaction_currency_code']);
         }
         if (array_key_exists('transaction_currency_id', $data) && '' !== (string) $data['transaction_currency_id']) {
-            $currency = TransactionCurrency::find((int) $data['transaction_currency_id']);
-            if (null !== $currency) {
-                return $currency;
-            }
+            return Amount::getTransactionCurrencyById((int) $data['transaction_currency_id']);
         }
+        $validator->errors()->add('transaction_currency_id', trans('validation.require_currency_id_code'));
 
-        throw new FireflyException('Unexpected empty currency.');
+        return null;
     }
 }

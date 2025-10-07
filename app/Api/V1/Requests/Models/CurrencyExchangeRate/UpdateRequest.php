@@ -50,8 +50,10 @@ class UpdateRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'date'  => 'date|after:1900-01-01|before:2099-12-31',
-            'rate'  => 'required|numeric|gt:0',
+            'date' => 'date|after:1970-01-02|before:2038-01-17',
+            'rate' => 'required|numeric|gt:0',
+            'from' => 'nullable|exists:transaction_currencies,code',
+            'to'   => 'nullable|exists:transaction_currencies,code',
         ];
     }
 }

@@ -23,6 +23,9 @@ declare(strict_types=1);
 
 namespace FireflyIII\Factory;
 
+use FireflyIII\Models\ObjectGroup;
+use FireflyIII\Models\Account;
+use FireflyIII\Events\Model\PiggyBank\ChangedAmount;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Models\PiggyBank;
 use FireflyIII\Models\TransactionCurrency;
@@ -34,6 +37,8 @@ use FireflyIII\User;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Log;
 
+use function Safe\json_encode;
+
 /**
  * Class PiggyBankFactory
  */
@@ -41,9 +46,9 @@ class PiggyBankFactory
 {
     use CreatesObjectGroups;
 
-    public User                          $user;
-    private AccountRepositoryInterface   $accountRepository;
-    private CurrencyRepositoryInterface  $currencyRepository;
+    public User $user;
+    private AccountRepositoryInterface $accountRepository;
+    private CurrencyRepositoryInterface $currencyRepository;
     private PiggyBankRepositoryInterface $piggyBankRepository;
 
     public function __construct()
@@ -73,7 +78,7 @@ class PiggyBankFactory
         unset($piggyBankData['object_group_title'], $piggyBankData['transaction_currency_code'], $piggyBankData['transaction_currency_id'], $piggyBankData['accounts'], $piggyBankData['object_group_id'], $piggyBankData['notes']);
 
         // validate amount:
-        if (array_key_exists('target_amount', $piggyBankData) && '' === (string) $piggyBankData['target_amount']) {
+        if (array_key_exists('target_amount', $piggyBankData) && '' === (string)$piggyBankData['target_amount']) {
             $piggyBankData['target_amount'] = '0';
         }
 
@@ -98,15 +103,15 @@ class PiggyBankFactory
         $objectGroupTitle                         = $data['object_group_title'] ?? '';
         if ('' !== $objectGroupTitle) {
             $objectGroup = $this->findOrCreateObjectGroup($objectGroupTitle);
-            if (null !== $objectGroup) {
+            if ($objectGroup instanceof ObjectGroup) {
                 $piggyBank->objectGroups()->sync([$objectGroup->id]);
             }
         }
         // try also with ID
-        $objectGroupId                            = (int) ($data['object_group_id'] ?? 0);
+        $objectGroupId                            = (int)($data['object_group_id'] ?? 0);
         if (0 !== $objectGroupId) {
             $objectGroup = $this->findObjectGroupById($objectGroupId);
-            if (null !== $objectGroup) {
+            if ($objectGroup instanceof ObjectGroup) {
                 $piggyBank->objectGroups()->sync([$objectGroup->id]);
             }
         }
@@ -121,23 +126,23 @@ class PiggyBankFactory
     private function getCurrency(array $data): TransactionCurrency
     {
         // currency:
-        $defaultCurrency = app('amount')->getNativeCurrency();
+        $primaryCurrency = app('amount')->getPrimaryCurrency();
         $currency        = null;
         if (array_key_exists('transaction_currency_code', $data)) {
-            $currency = $this->currencyRepository->findByCode((string) ($data['transaction_currency_code'] ?? ''));
+            $currency = $this->currencyRepository->findByCode((string)($data['transaction_currency_code'] ?? ''));
         }
         if (array_key_exists('transaction_currency_id', $data)) {
-            $currency = $this->currencyRepository->find((int) ($data['transaction_currency_id'] ?? 0));
+            $currency = $this->currencyRepository->find((int)($data['transaction_currency_id'] ?? 0));
         }
-        $currency ??= $defaultCurrency;
+        $currency ??= $primaryCurrency;
 
         return $currency;
     }
 
     public function find(?int $piggyBankId, ?string $piggyBankName): ?PiggyBank
     {
-        $piggyBankId   = (int) $piggyBankId;
-        $piggyBankName = (string) $piggyBankName;
+        $piggyBankId   = (int)$piggyBankId;
+        $piggyBankName = (string)$piggyBankName;
         if ('' === $piggyBankName && 0 === $piggyBankId) {
             return null;
         }
@@ -216,7 +221,7 @@ class PiggyBankFactory
 
     private function getMaxOrder(): int
     {
-        return (int) $this->piggyBankRepository->getPiggyBanks()->max('order');
+        return (int)$this->piggyBankRepository->getPiggyBanks()->max('order');
 
     }
 
@@ -225,28 +230,59 @@ class PiggyBankFactory
         Log::debug(sprintf('Linking piggy bank #%d to %d accounts.', $piggyBank->id, count($accounts)), $accounts);
         // collect current current_amount so the sync does not remove them.
         // TODO this is a tedious check. Feels like a hack.
-        $toBeLinked = [];
+        $toBeLinked     = [];
+        $oldSavedAmount = $this->piggyBankRepository->getCurrentAmount($piggyBank);
         foreach ($piggyBank->accounts as $account) {
+            Log::debug(sprintf('Checking account #%d', $account->id));
             foreach ($accounts as $info) {
-                if ($account->id === $info['account_id']) {
-                    if (array_key_exists($account->id, $accounts)) {
-                        $toBeLinked[$account->id] = ['current_amount' => $account->pivot->current_amount ?? '0'];
-                        Log::debug(sprintf('Prefilled for account #%d with amount %s', $account->id, $account->pivot->current_amount ?? '0'));
-                    }
+                Log::debug(sprintf('  Checking other account #%d', $info['account_id']));
+                if ((int)$account->id === (int)$info['account_id']) {
+                    $toBeLinked[$account->id] = ['current_amount' => $account->pivot->current_amount ?? '0'];
+                    Log::debug(sprintf('Prefilled for account #%d with amount %s', $account->id, $account->pivot->current_amount ?? '0'));
                 }
             }
         }
 
-
         /** @var array $info */
         foreach ($accounts as $info) {
-            $account = $this->accountRepository->find((int) ($info['account_id'] ?? 0));
-            if (null === $account) {
+            $account = $this->accountRepository->find((int)($info['account_id'] ?? 0));
+            if (!$account instanceof Account) {
+                Log::debug(sprintf('Account #%d not found, skipping.', (int)($info['account_id'] ?? 0)));
+
                 continue;
             }
-            if (array_key_exists('current_amount', $info)) {
+            if (array_key_exists('current_amount', $info) && null !== $info['current_amount']) {
+                // an amount is set, first check out if there is a difference with the previous amount.
+                $previous                 = $toBeLinked[$account->id]['current_amount'] ?? '0';
+                $diff                     = bcsub($info['current_amount'], $previous);
+
+                // create event for difference.
+                if (0 !== bccomp($diff, '0')) {
+                    Log::debug(sprintf('[a] Will save event for difference %s (previous value was %s)', $diff, $previous));
+                    event(new ChangedAmount($piggyBank, $diff, null, null));
+                }
+
                 $toBeLinked[$account->id] = ['current_amount' => $info['current_amount']];
-                Log::debug(sprintf('Will link account #%d with amount %s', $account->id, $account->pivot->current_amount ?? '0'));
+                Log::debug(sprintf('[a] Will link account #%d with amount %s', $account->id, $info['current_amount']));
+            }
+            if (array_key_exists('current_amount', $info) && null === $info['current_amount']) {
+                // an amount is set, first check out if there is a difference with the previous amount.
+                $previous                 = $toBeLinked[$account->id]['current_amount'] ?? '0';
+                $diff                     = bcsub('0', $previous);
+
+                // create event for difference.
+                if (0 !== bccomp($diff, '0')) {
+                    Log::debug(sprintf('[b] Will save event for difference %s (previous value was %s)', $diff, $previous));
+                    event(new ChangedAmount($piggyBank, $diff, null, null));
+                }
+
+                // no amount set, use previous amount or go to ZERO.
+                $toBeLinked[$account->id] = ['current_amount' => $toBeLinked[$account->id]['current_amount'] ?? '0'];
+                Log::debug(sprintf('[b] Will link account #%d with amount %s', $account->id, $toBeLinked[$account->id]['current_amount'] ?? '0'));
+
+                // create event:
+                Log::debug('linkToAccountIds: Trigger change for positive amount [b].');
+                event(new ChangedAmount($piggyBank, $toBeLinked[$account->id]['current_amount'] ?? '0', null, null));
             }
             if (!array_key_exists('current_amount', $info)) {
                 $toBeLinked[$account->id] ??= [];
@@ -254,6 +290,20 @@ class PiggyBankFactory
             }
         }
         Log::debug(sprintf('Link information: %s', json_encode($toBeLinked)));
-        $piggyBank->accounts()->sync($toBeLinked);
+        if (0 !== count($toBeLinked)) {
+            Log::debug('Syncing accounts to piggy bank.');
+            $piggyBank->accounts()->sync($toBeLinked);
+            $piggyBank->refresh();
+            $newSavedAmount = $this->piggyBankRepository->getCurrentAmount($piggyBank);
+            Log::debug(sprintf('Old saved amount: %s, new saved amount is %s', $oldSavedAmount, $newSavedAmount));
+            if (0 !== bccomp($oldSavedAmount, $newSavedAmount)) {
+                Log::debug('Amount changed, will create event for it.');
+                // create event for difference.
+                event(new ChangedAmount($piggyBank, bcsub($newSavedAmount, $oldSavedAmount), null, null));
+            }
+        }
+        if (0 === count($toBeLinked)) {
+            Log::warning('No accounts to link to piggy bank, will not change whatever is there now.');
+        }
     }
 }

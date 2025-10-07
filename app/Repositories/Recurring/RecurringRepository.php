@@ -35,6 +35,7 @@ use FireflyIII\Models\RecurrenceMeta;
 use FireflyIII\Models\RecurrenceRepetition;
 use FireflyIII\Models\RecurrenceTransaction;
 use FireflyIII\Models\RecurrenceTransactionMeta;
+use FireflyIII\Models\TransactionGroup;
 use FireflyIII\Models\TransactionJournal;
 use FireflyIII\Models\TransactionJournalMeta;
 use FireflyIII\Services\Internal\Destroy\RecurrenceDestroyService;
@@ -43,24 +44,27 @@ use FireflyIII\Support\Repositories\Recurring\CalculateRangeOccurrences;
 use FireflyIII\Support\Repositories\Recurring\CalculateXOccurrences;
 use FireflyIII\Support\Repositories\Recurring\CalculateXOccurrencesSince;
 use FireflyIII\Support\Repositories\Recurring\FiltersWeekends;
-use FireflyIII\User;
-use Illuminate\Contracts\Auth\Authenticatable;
+use FireflyIII\Support\Repositories\UserGroup\UserGroupInterface;
+use FireflyIII\Support\Repositories\UserGroup\UserGroupTrait;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 
+use function Safe\json_encode;
+use function Safe\json_decode;
+
 /**
  * Class RecurringRepository
  */
-class RecurringRepository implements RecurringRepositoryInterface
+class RecurringRepository implements RecurringRepositoryInterface, UserGroupInterface
 {
     use CalculateRangeOccurrences;
     use CalculateXOccurrences;
     use CalculateXOccurrencesSince;
     use FiltersWeekends;
 
-    private User $user;
+    use UserGroupTrait;
 
     public function createdPreviously(Recurrence $recurrence, Carbon $date): bool
     {
@@ -212,10 +216,10 @@ class RecurringRepository implements RecurringRepositoryInterface
             ->where('journal_meta.name', 'recurrence_id')
             ->where('journal_meta.data', '"'.$recurrence->id.'"')
         ;
-        if (null !== $start) {
+        if ($start instanceof Carbon) {
             $query->where('transaction_journals.date', '>=', $start->format('Y-m-d 00:00:00'));
         }
-        if (null !== $end) {
+        if ($end instanceof Carbon) {
             $query->where('transaction_journals.date', '<=', $end->format('Y-m-d 00:00:00'));
         }
         $count = $query->count('transaction_journals.id');
@@ -272,7 +276,7 @@ class RecurringRepository implements RecurringRepositoryInterface
         /** @var RecurrenceMeta $meta */
         foreach ($transaction->recurrenceTransactionMeta as $meta) {
             if ('tags' === $meta->name && '' !== $meta->value) {
-                $tags = json_decode($meta->value, true, 512, JSON_THROW_ON_ERROR);
+                $tags = json_decode((string) $meta->value, true, 512, JSON_THROW_ON_ERROR);
             }
         }
 
@@ -303,13 +307,6 @@ class RecurringRepository implements RecurringRepositoryInterface
         $collector->setJournalIds($search);
 
         return $collector->getPaginatedGroups();
-    }
-
-    public function setUser(null|Authenticatable|User $user): void
-    {
-        if ($user instanceof User) {
-            $this->user = $user;
-        }
     }
 
     public function getTransactions(Recurrence $recurrence): Collection
@@ -413,7 +410,7 @@ class RecurringRepository implements RecurringRepositoryInterface
     private function filterMaxDate(?Carbon $max, array $occurrences): array
     {
         $filtered = [];
-        if (null === $max) {
+        if (!$max instanceof Carbon) {
             foreach ($occurrences as $date) {
                 if ($date->gt(today())) {
                     $filtered[] = $date;
@@ -483,7 +480,7 @@ class RecurringRepository implements RecurringRepositoryInterface
         if ('yearly' === $repetition->repetition_type) {
             $today       = today(config('app.timezone'))->endOfYear();
             $repDate     = Carbon::createFromFormat('Y-m-d', $repetition->repetition_moment);
-            if (null === $repDate) {
+            if (!$repDate instanceof Carbon) {
                 $repDate = clone $today;
             }
             $diffInYears = (int) $today->diffInYears($repDate, true);
@@ -585,5 +582,18 @@ class RecurringRepository implements RecurringRepositoryInterface
         $service = app(RecurrenceUpdateService::class);
 
         return $service->update($recurrence, $data);
+    }
+
+    public function markGroupsAsNow(Collection $groups): void
+    {
+        /** @var TransactionGroup $group */
+        foreach ($groups as $group) {
+            /** @var TransactionJournal $journal */
+            foreach ($group->transactionJournals as $journal) {
+                Log::debug(sprintf('Set date of journal #%d to today!', $journal->id));
+                $journal->date = now(config('app.timezone'));
+                $journal->save();
+            }
+        }
     }
 }

@@ -27,7 +27,7 @@ namespace FireflyIII\Api\V1\Controllers\Models\TransactionCurrency;
 use FireflyIII\Api\V1\Controllers\Controller;
 use FireflyIII\Api\V1\Requests\Models\TransactionCurrency\StoreRequest;
 use FireflyIII\Exceptions\FireflyException;
-use FireflyIII\Repositories\UserGroups\Currency\CurrencyRepositoryInterface;
+use FireflyIII\Repositories\Currency\CurrencyRepositoryInterface;
 use FireflyIII\Support\Http\Api\AccountFilter;
 use FireflyIII\Support\Http\Api\TransactionFilter;
 use FireflyIII\Transformers\CurrencyTransformer;
@@ -73,7 +73,7 @@ class StoreController extends Controller
     {
         $currency    = $this->repository->store($request->getAll());
         if (true === $request->boolean('default')) {
-            $this->repository->makeDefault($currency);
+            $this->repository->makePrimary($currency);
             app('preferences')->mark();
         }
         $manager     = $this->getManager();

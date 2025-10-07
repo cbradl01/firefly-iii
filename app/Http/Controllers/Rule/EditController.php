@@ -24,6 +24,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Controllers\Rule;
 
+use Throwable;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Http\Controllers\Controller;
 use FireflyIII\Http\Requests\RuleFormRequest;
@@ -135,7 +136,7 @@ class EditController extends Controller
 
         // get rule trigger for update / store-journal:
         $primaryTrigger = $this->ruleRepos->getPrimaryTrigger($rule);
-        $subTitle       = (string) trans('firefly.edit_rule', ['title' => $rule->title]);
+        $subTitle       = (string) trans('firefly.edit_rule', ['nr' => $rule->order, 'title' => $rule->title]);
 
         // put previous url in session if not redirect from store (not "return_to_edit").
         if (true !== session('rules.edit.fromUpdate')) {
@@ -177,7 +178,7 @@ class EditController extends Controller
                         'triggers'   => $triggers,
                     ]
                 )->render();
-            } catch (\Throwable $e) {
+            } catch (Throwable $e) {
                 $message = sprintf('Throwable was thrown in getPreviousTriggers(): %s', $e->getMessage());
                 app('log')->debug($message);
                 app('log')->error($e->getTraceAsString());

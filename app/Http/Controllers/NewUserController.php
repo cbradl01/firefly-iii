@@ -23,11 +23,12 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Controllers;
 
+use FireflyIII\Models\TransactionCurrency;
 use FireflyIII\Enums\AccountTypeEnum;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Http\Requests\NewUserFormRequest;
 use FireflyIII\Repositories\Account\AccountRepositoryInterface;
-use FireflyIII\Repositories\UserGroups\Currency\CurrencyRepositoryInterface;
+use FireflyIII\Repositories\Currency\CurrencyRepositoryInterface;
 use FireflyIII\Support\Http\Controllers\CreateStuff;
 use Illuminate\Contracts\View\Factory;
 use Illuminate\Http\RedirectResponse;
@@ -101,7 +102,7 @@ class NewUserController extends Controller
         $currency      = $currencyRepository->find((int) $request->input('amount_currency_id_bank_balance'));
 
         // if is null, set to EUR:
-        if (null === $currency) {
+        if (!$currency instanceof TransactionCurrency) {
             $currency = $currencyRepository->findByCode('EUR');
         }
         $currencyRepository->enable($currency);
@@ -111,7 +112,7 @@ class NewUserController extends Controller
         $this->createCashWalletAccount($currency, $language);        // create cash wallet account
 
         // store currency preference:
-        $currencyRepository->makeDefault($currency);
+        $currencyRepository->makePrimary($currency);
 
         // store frontpage preferences:
         $accounts      = $this->repository->getAccountsByType([AccountTypeEnum::ASSET->value])->pluck('id')->toArray();

@@ -26,6 +26,9 @@ namespace FireflyIII\Support\Chart;
 
 use FireflyIII\Exceptions\FireflyException;
 
+/**
+ * @deprecated
+ */
 class ChartData
 {
     private array $series;
@@ -43,10 +46,10 @@ class ChartData
         if (array_key_exists('currency_id', $data)) {
             $data['currency_id'] = (string) $data['currency_id'];
         }
-        if (array_key_exists('native_currency_id', $data)) {
-            $data['native_currency_id'] = (string) $data['native_currency_id'];
+        if (array_key_exists('primary_currency_id', $data)) {
+            $data['primary_currency_id'] = (string) $data['primary_currency_id'];
         }
-        $required       = ['start', 'date', 'end', 'entries', 'native_entries'];
+        $required       = ['start', 'date', 'end', 'entries'];
         foreach ($required as $field) {
             if (!array_key_exists($field, $data)) {
                 throw new FireflyException(sprintf('Data-set is missing the "%s"-variable.', $field));

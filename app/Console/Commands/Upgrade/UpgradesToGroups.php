@@ -24,6 +24,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Console\Commands\Upgrade;
 
+use Carbon\Carbon;
 use FireflyIII\Console\Commands\ShowsFriendlyMessages;
 use FireflyIII\Factory\TransactionGroupFactory;
 use FireflyIII\Models\Budget;
@@ -36,6 +37,7 @@ use FireflyIII\Services\Internal\Destroy\JournalDestroyService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Exception;
 
 class UpgradesToGroups extends Command
 {
@@ -103,7 +105,7 @@ class UpgradesToGroups extends Command
     }
 
     /**
-     * @throws \Exception
+     * @throws Exception
      */
     private function makeGroupsFromSplitJournals(): void
     {
@@ -119,7 +121,7 @@ class UpgradesToGroups extends Command
     }
 
     /**
-     * @throws \Exception
+     * @throws Exception
      */
     private function makeMultiGroup(TransactionJournal $journal): void
     {
@@ -179,9 +181,7 @@ class UpgradesToGroups extends Command
     private function getDestinationTransactions(TransactionJournal $journal): Collection
     {
         return $journal->transactions->filter(
-            static function (Transaction $transaction) {
-                return $transaction->amount > 0;
-            }
+            static fn (Transaction $transaction) => $transaction->amount > 0
         );
     }
 
@@ -193,7 +193,7 @@ class UpgradesToGroups extends Command
         app('log')->debug(sprintf('Now going to add transaction #%d to the array.', $transaction->id));
         $opposingTr     = $this->findOpposingTransaction($journal, $transaction);
 
-        if (null === $opposingTr) {
+        if (!$opposingTr instanceof Transaction) {
             $this->friendlyError(
                 sprintf(
                     'Journal #%d has no opposing transaction for transaction #%d. Cannot upgrade this entry.',
@@ -236,9 +236,10 @@ class UpgradesToGroups extends Command
         $categoryId     = $this->getTransactionCategory($transaction, $opposingTr) ?? $categoryId;
 
         return [
-            'type'                => strtolower($journal->transactionType->type),
+            'type'                => strtolower((string) $journal->transactionType->type),
             'date'                => $journal->date,
-            'user'                => $journal->user_id,
+            'user'                => $journal->user,
+            'user_group'          => $journal->user->userGroup,
             'currency_id'         => $transaction->transaction_currency_id,
             'foreign_currency_id' => $transaction->foreign_currency_id,
             'amount'              => $transaction->amount,
@@ -367,8 +368,8 @@ class UpgradesToGroups extends Command
     {
         $groupId = DB::table('transaction_groups')->insertGetId(
             [
-                'created_at' => date('Y-m-d H:i:s'),
-                'updated_at' => date('Y-m-d H:i:s'),
+                'created_at' => Carbon::now()->format('Y-m-d H:i:s'),
+                'updated_at' => Carbon::now()->format('Y-m-d H:i:s'),
                 'title'      => null,
                 'user_id'    => $array['user_id'],
             ]

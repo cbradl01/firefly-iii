@@ -33,6 +33,9 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
+use Safe\Exceptions\UrlException;
+
+use function Safe\parse_url;
 
 /**
  * Class ForgotPasswordController
@@ -61,10 +64,10 @@ class ForgotPasswordController extends Controller
      */
     public function sendResetLinkEmail(Request $request, UserRepositoryInterface $repository)
     {
-        app('log')->info('Start of sendResetLinkEmail()');
-        if ('web' !== config('firefly.authentication_guard')) {
+        Log::info('Start of sendResetLinkEmail()');
+        if ('web'   !== config('firefly.authentication_guard')) {
             $message = sprintf('Cannot reset password when authenticating over "%s".', config('firefly.authentication_guard'));
-            app('log')->error($message);
+            Log::error($message);
 
             return view('error', compact('message'));
         }
@@ -87,7 +90,7 @@ class ForgotPasswordController extends Controller
         // need to show to the user. Finally, we'll send out a proper response.
         $result   = $this->broker()->sendResetLink($request->only('email'));
         if ('passwords.throttled' === $result) {
-            app('log')->error(sprintf('Cowardly refuse to send a password reset message to user #%d because the reset button has been throttled.', $user->id));
+            Log::error(sprintf('Cowardly refuse to send a password reset message to user #%d because the reset button has been throttled.', $user->id));
         }
 
         // always send the same response to the user:
@@ -101,11 +104,15 @@ class ForgotPasswordController extends Controller
      */
     private function validateHost(): void
     {
-        $configuredHost = parse_url((string) config('app.url'), PHP_URL_HOST);
-        if (false === $configuredHost || null === $configuredHost) {
+        try {
+            $configuredHost = parse_url((string)config('app.url'), PHP_URL_HOST);
+        } catch (UrlException $e) {
+            throw new FireflyException('Please set a valid and correct Firefly III URL in the APP_URL environment variable.', 0, $e);
+        }
+        if (!is_string($configuredHost)) {
             throw new FireflyException('Please set a valid and correct Firefly III URL in the APP_URL environment variable.');
         }
-        $host           = request()->host();
+        $host = request()->host();
         if ($configuredHost !== $host) {
             Log::error(sprintf('Host header is "%s", APP_URL is "%s".', $host, $configuredHost));
 

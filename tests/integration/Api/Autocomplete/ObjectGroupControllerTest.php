@@ -28,7 +28,6 @@ use FireflyIII\Models\ObjectGroup;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\integration\TestCase;
 use FireflyIII\User;
-use FireflyIII\Models\UserGroup;
 
 /**
  * Class ObjectGroupControllerTest
@@ -43,21 +42,6 @@ final class ObjectGroupControllerTest extends TestCase
      * @covers \FireflyIII\Api\V1\Controllers\Autocomplete\ObjectGroupController
      */
     use RefreshDatabase;
-
-    protected function createAuthenticatedUser(): User
-    {
-        $userGroup           = UserGroup::create(['title' => 'Test Group']);
-
-
-        $user                = User::create([
-            'email'         => 'test@email.com',
-            'password'      => 'password',
-        ]);
-        $user->user_group_id = $userGroup->id;
-        $user->save();
-
-        return $user;
-    }
 
     private function createTestObjectGroups(int $count, User $user): void
     {
@@ -76,7 +60,7 @@ final class ObjectGroupControllerTest extends TestCase
         $response = $this->get(route('api.v1.autocomplete.object-groups'), ['Accept' => 'application/json']);
         $response->assertStatus(401);
         $response->assertHeader('Content-Type', 'application/json');
-        $response->assertContent('{"message":"Unauthenticated","exception":"AuthenticationException"}');
+        $response->assertContent('{"message":"Unauthenticated.","exception":"AuthenticationException"}');
     }
 
     public function testGivenAuthenticatedRequestWhenCallingTheObjectGroupsEndpointThenReturns200HttpCode(): void

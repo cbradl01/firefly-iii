@@ -27,10 +27,12 @@ namespace FireflyIII\Support\Request;
 use Carbon\Carbon;
 use Carbon\Exceptions\InvalidDateException;
 use Carbon\Exceptions\InvalidFormatException;
-use FireflyIII\Repositories\UserGroups\Account\AccountRepositoryInterface;
+use FireflyIII\Repositories\Account\AccountRepositoryInterface;
 use FireflyIII\Support\Facades\Steam;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
+
+use function Safe\preg_replace;
 
 /**
  * Trait ConvertsDataTypes
@@ -97,6 +99,28 @@ trait ConvertsDataTypes
         return Steam::filterSpaces($string);
     }
 
+    public function convertSortParameters(string $field, string $class): array
+    {
+        // assume this all works, because the validator would have caught any errors.
+        $parameter      = (string)request()->query->get($field);
+        if ('' === $parameter) {
+            return [];
+        }
+        $parts          = explode(',', $parameter);
+        $sortParameters = [];
+        foreach ($parts as $part) {
+            $part             = trim($part);
+            $direction        = 'asc';
+            if ('-' === $part[0]) {
+                $part      = substr($part, 1);
+                $direction = 'desc';
+            }
+            $sortParameters[] = [$part, $direction];
+        }
+
+        return $sortParameters;
+    }
+
     public function clearString(?string $string): ?string
     {
         $string = $this->clearStringKeepNewlines($string);
@@ -127,7 +151,7 @@ trait ConvertsDataTypes
         // clear zalgo text (TODO also in API v2)
         $string = preg_replace('/(\pM{2})\pM+/u', '\1', $string);
 
-        return trim((string) $string);
+        return trim($string);
     }
 
     public function convertIban(string $field): string
@@ -145,7 +169,7 @@ trait ConvertsDataTypes
             return $default;
         }
 
-        return (string) $this->clearString((string) $entry);
+        return (string)$this->clearString((string)$entry);
     }
 
     /**
@@ -159,7 +183,7 @@ trait ConvertsDataTypes
      */
     public function convertInteger(string $field): int
     {
-        return (int) $this->get($field);
+        return (int)$this->get($field);
     }
 
     /**
@@ -184,7 +208,7 @@ trait ConvertsDataTypes
         $collection = new Collection();
         if (is_array($set)) {
             foreach ($set as $accountId) {
-                $account = $repository->find((int) $accountId);
+                $account = $repository->find((int)$accountId);
                 if (null !== $account) {
                     $collection->push($account);
                 }
@@ -199,7 +223,7 @@ trait ConvertsDataTypes
      */
     public function stringWithNewlines(string $field): string
     {
-        return (string) $this->clearStringKeepNewlines((string) ($this->get($field) ?? ''));
+        return (string)$this->clearStringKeepNewlines((string)($this->get($field) ?? ''));
     }
 
     /**
@@ -243,28 +267,28 @@ trait ConvertsDataTypes
 
     protected function convertDateTime(?string $string): ?Carbon
     {
-        $value = $this->get((string) $string);
+        $value = $this->get((string)$string);
         if (null === $value) {
             return null;
         }
         if ('' === $value) {
             return null;
         }
-        if (10 === strlen($value)) {
+        if (10 === strlen((string)$value)) {
             // probably a date format.
             try {
-                $carbon = Carbon::createFromFormat('Y-m-d', $value);
+                $carbon = Carbon::createFromFormat('Y-m-d', $value, config('app.timezone'));
             } catch (InvalidDateException $e) { // @phpstan-ignore-line
-                app('log')->error(sprintf('[1] "%s" is not a valid date: %s', $value, $e->getMessage()));
+                Log::error(sprintf('[1] "%s" is not a valid date: %s', $value, $e->getMessage()));
 
                 return null;
             } catch (InvalidFormatException $e) { // @phpstan-ignore-line
-                app('log')->error(sprintf('[2] "%s" is of an invalid format: %s', $value, $e->getMessage()));
+                Log::error(sprintf('[2] "%s" is of an invalid format: %s', $value, $e->getMessage()));
 
                 return null;
             }
-            if (null === $carbon) {
-                app('log')->error(sprintf('[2] "%s" is of an invalid format.', $value));
+            if (!$carbon instanceof Carbon) {
+                Log::error(sprintf('[2] "%s" is of an invalid format.', $value));
 
                 return null;
             }
@@ -274,13 +298,13 @@ trait ConvertsDataTypes
 
         // is an atom string, I hope?
         try {
-            $carbon = Carbon::parse($value);
+            $carbon = Carbon::parse($value, $value, config('app.timezone'));
         } catch (InvalidDateException $e) { // @phpstan-ignore-line
-            app('log')->error(sprintf('[3] "%s" is not a valid date or time: %s', $value, $e->getMessage()));
+            Log::error(sprintf('[3] "%s" is not a valid date or time: %s', $value, $e->getMessage()));
 
             return null;
         } catch (InvalidFormatException $e) {
-            app('log')->error(sprintf('[4] "%s" is of an invalid format: %s', $value, $e->getMessage()));
+            Log::error(sprintf('[4] "%s" is of an invalid format: %s', $value, $e->getMessage()));
 
             return null;
         }
@@ -298,12 +322,13 @@ trait ConvertsDataTypes
             return null;
         }
 
-        return (float) $res;
+        return (float)$res;
     }
 
     protected function dateFromValue(?string $string): ?Carbon
     {
         if (null === $string) {
+
             return null;
         }
         if ('' === $string) {
@@ -313,17 +338,29 @@ trait ConvertsDataTypes
 
         try {
             $carbon = new Carbon($string, config('app.timezone'));
-        } catch (InvalidFormatException $e) {
+        } catch (InvalidFormatException) {
             // @ignoreException
         }
-        if (null === $carbon) {
-            app('log')->debug(sprintf('Invalid date: %s', $string));
+        if (!$carbon instanceof Carbon) {
+            Log::debug(sprintf('Invalid date: %s', $string));
 
             return null;
         }
-        app('log')->debug(sprintf('Date object: %s (%s)', $carbon->toW3cString(), $carbon->getTimezone()));
+        Log::debug(sprintf('Date object: %s (%s) from "%s"', $carbon->toW3cString(), $carbon->getTimezone(), $string));
 
         return $carbon;
+    }
+
+    protected function floatFromValue(?string $string): ?float
+    {
+        if (null === $string) {
+            return null;
+        }
+        if ('' === $string) {
+            return null;
+        }
+
+        return (float)$string;
     }
 
     /**
@@ -360,19 +397,65 @@ trait ConvertsDataTypes
     {
         $result = null;
 
-        Log::debug(sprintf('Date string is "%s"', (string) $this->get($field)));
+        Log::debug(sprintf('Date string is "%s"', (string)$this->get($field)));
 
         try {
-            $result = '' !== (string) $this->get($field) ? new Carbon((string) $this->get($field), config('app.timezone')) : null;
-        } catch (InvalidFormatException $e) {
+            $result = '' !== (string)$this->get($field) ? new Carbon((string)$this->get($field), config('app.timezone')) : null;
+        } catch (InvalidFormatException) {
             // @ignoreException
             Log::debug(sprintf('Exception when parsing date "%s".', $this->get($field)));
         }
-        if (null === $result) {
-            app('log')->debug(sprintf('Exception when parsing date "%s".', $this->get($field)));
+        if (!$result instanceof Carbon) {
+            Log::debug(sprintf('Exception when parsing date "%s".', $this->get($field)));
         }
 
         return $result;
+    }
+
+    /**
+     * Return integer value, or NULL when it's not set.
+     */
+    protected function nullableInteger(string $field): ?int
+    {
+        if (false === $this->has($field)) {
+            return null;
+        }
+
+        $value = (string)$this->get($field);
+        if ('' === $value) {
+            return null;
+        }
+
+        return (int)$value;
+    }
+
+    protected function parseAccounts(mixed $array): array
+    {
+        if (!is_array($array)) {
+            return [];
+        }
+        $return = [];
+        foreach ($array as $entry) {
+            if (!is_array($entry)) {
+                continue;
+            }
+            $amount   = null;
+            if (array_key_exists('current_amount', $entry)) {
+                $amount = $this->clearString((string)($entry['current_amount'] ?? '0'));
+                if (null === $entry['current_amount']) {
+                    $amount = null;
+                }
+            }
+            if (!array_key_exists('current_amount', $entry)) {
+                $amount = null;
+            }
+            $return[] = [
+                'account_id'     => $this->integerFromValue((string)($entry['account_id'] ?? '0')),
+                'current_amount' => $amount,
+            ];
+        }
+
+        return $return;
     }
 
     /**
@@ -387,35 +470,6 @@ trait ConvertsDataTypes
             return null;
         }
 
-        return (int) $string;
-    }
-
-    protected function floatFromValue(?string $string): ?float
-    {
-        if (null === $string) {
-            return null;
-        }
-        if ('' === $string) {
-            return null;
-        }
-
-        return (float) $string;
-    }
-
-    /**
-     * Return integer value, or NULL when it's not set.
-     */
-    protected function nullableInteger(string $field): ?int
-    {
-        if (false === $this->has($field)) {
-            return null;
-        }
-
-        $value = (string) $this->get($field);
-        if ('' === $value) {
-            return null;
-        }
-
-        return (int) $value;
+        return (int)$string;
     }
 }

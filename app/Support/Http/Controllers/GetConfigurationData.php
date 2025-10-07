@@ -26,6 +26,7 @@ namespace FireflyIII\Support\Http\Controllers;
 
 use Carbon\Carbon;
 use FireflyIII\Exceptions\FireflyException;
+use FireflyIII\Support\Facades\FireflyConfig;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -205,9 +206,9 @@ trait GetConfigurationData
 
     protected function verifyRecurringCronJob(): void
     {
-        $config   = app('fireflyconfig')->get('last_rt_job', 0);
+        $config   = FireflyConfig::get('last_rt_job', 0);
         $lastTime = (int) $config?->data;
-        $now      = time();
+        $now      = Carbon::now()->getTimestamp();
         app('log')->debug(sprintf('verifyRecurringCronJob: last time is %d ("%s"), now is %d', $lastTime, $config?->data, $now));
         if (0 === $lastTime) {
             request()->session()->flash('info', trans('firefly.recurring_never_cron'));

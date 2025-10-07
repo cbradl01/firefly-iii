@@ -43,6 +43,9 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
+use function Safe\mb_regex_encoding;
+use function Safe\json_encode;
+
 /**
  * This command was inspired by https://github.com/elliot-gh. It will check all amount fields
  * and their values and correct them to the correct number of decimal places. This fixes issues where
@@ -512,7 +515,7 @@ class ForcesDecimalSize extends Command
                 continue;
             }
             // fix $field by rounding it down correctly.
-            $pow         = (float) 10 ** $currency->decimal_places;
+            $pow         = 10.0 ** $currency->decimal_places;
             $correct     = bcdiv((string) round((float) $value * $pow), (string) $pow, 12);
             $this->friendlyWarning(sprintf('Transaction #%d has amount with value "%s", this has been corrected to "%s".', $item->id, $value, $correct));
 
@@ -543,7 +546,7 @@ class ForcesDecimalSize extends Command
                 continue;
             }
             // fix $field by rounding it down correctly.
-            $pow         = (float) 10 ** $currency->decimal_places;
+            $pow         = 10.0 ** $currency->decimal_places;
             $correct     = bcdiv((string) round((float) $value * $pow), (string) $pow, 12);
             $this->friendlyWarning(
                 sprintf('Transaction #%d has foreign amount with value "%s", this has been corrected to "%s".', $item->id, $value, $correct)

@@ -23,6 +23,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Controllers\Report;
 
+use Throwable;
 use Carbon\Carbon;
 use FireflyIII\Enums\TransactionTypeEnum;
 use FireflyIII\Exceptions\FireflyException;
@@ -113,7 +114,7 @@ class BalanceController extends Controller
                     'currency_decimal_places' => $journal['currency_decimal_places'],
                     'spent'                   => '0',
                 ];
-                $spent[$sourceAccount]['spent']                                = bcadd($spent[$sourceAccount]['spent'], $journal['amount']);
+                $spent[$sourceAccount]['spent']                                = bcadd($spent[$sourceAccount]['spent'], (string) $journal['amount']);
 
                 // also fix sum:
                 $report['sums'][$budgetId][$currencyId] ??= [
@@ -124,8 +125,8 @@ class BalanceController extends Controller
                     'currency_symbol'         => $journal['currency_symbol'],
                     'currency_decimal_places' => $journal['currency_decimal_places'],
                 ];
-                $report['sums'][$budgetId][$currencyId]['sum']                 = bcadd($report['sums'][$budgetId][$currencyId]['sum'], $journal['amount']);
-                $report['accounts'][$sourceAccount]['sum']                     = bcadd($report['accounts'][$sourceAccount]['sum'], $journal['amount']);
+                $report['sums'][$budgetId][$currencyId]['sum']                 = bcadd($report['sums'][$budgetId][$currencyId]['sum'], (string) $journal['amount']);
+                $report['accounts'][$sourceAccount]['sum']                     = bcadd($report['accounts'][$sourceAccount]['sum'], (string) $journal['amount']);
 
                 // add currency info for account sum
                 $report['accounts'][$sourceAccount]['currency_id']             = $journal['currency_id'];
@@ -140,7 +141,7 @@ class BalanceController extends Controller
 
         try {
             $result = view('reports.partials.balance', compact('report'))->render();
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             app('log')->error(sprintf('Could not render reports.partials.balance: %s', $e->getMessage()));
             app('log')->error($e->getTraceAsString());
             $result = 'Could not render view.';

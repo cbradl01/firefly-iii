@@ -25,12 +25,15 @@ namespace FireflyIII\Support\Twig;
 
 use Twig\Extension\AbstractExtension;
 use Twig\TwigFunction;
+use Config;
+use Override;
 
 /**
  * Class Rule.
  */
 class Rule extends AbstractExtension
 {
+    #[Override]
     public function getFunctions(): array
     {
         return [
@@ -44,13 +47,11 @@ class Rule extends AbstractExtension
     {
         return new TwigFunction(
             'allJournalTriggers',
-            static function () {
-                return [
-                    'store-journal'     => (string) trans('firefly.rule_trigger_store_journal'),
-                    'update-journal'    => (string) trans('firefly.rule_trigger_update_journal'),
-                    'manual-activation' => (string) trans('firefly.rule_trigger_manual'),
-                ];
-            }
+            static fn () => [
+                'store-journal'     => (string) trans('firefly.rule_trigger_store_journal'),
+                'update-journal'    => (string) trans('firefly.rule_trigger_update_journal'),
+                'manual-activation' => (string) trans('firefly.rule_trigger_manual'),
+            ]
         );
     }
 
@@ -80,7 +81,7 @@ class Rule extends AbstractExtension
             'allRuleActions',
             static function () {
                 // array of valid values for actions
-                $ruleActions     = array_keys(\Config::get('firefly.rule-actions'));
+                $ruleActions     = array_keys(Config::get('firefly.rule-actions'));
                 $possibleActions = [];
                 foreach ($ruleActions as $key) {
                     $possibleActions[$key] = (string) trans('firefly.rule_action_'.$key.'_choice');

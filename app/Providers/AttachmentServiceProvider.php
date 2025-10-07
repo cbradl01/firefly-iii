@@ -27,6 +27,7 @@ use FireflyIII\Repositories\Attachment\AttachmentRepository;
 use FireflyIII\Repositories\Attachment\AttachmentRepositoryInterface;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\ServiceProvider;
+use Override;
 
 /**
  * Class AttachmentServiceProvider.
@@ -41,11 +42,11 @@ class AttachmentServiceProvider extends ServiceProvider
     /**
      * Register the application services.
      */
+    #[Override]
     public function register(): void
     {
         $this->app->bind(
-            AttachmentRepositoryInterface::class,
-            static function (Application $app) {
+            static function (Application $app): AttachmentRepositoryInterface {
                 /** @var AttachmentRepositoryInterface $repository */
                 $repository = app(AttachmentRepository::class);
                 // reference to auth is not understood by phpstan.

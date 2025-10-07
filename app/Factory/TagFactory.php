@@ -34,7 +34,7 @@ use FireflyIII\User;
  */
 class TagFactory
 {
-    private User $user;
+    private User      $user;
     private UserGroup $userGroup;
 
     public function findOrCreate(string $tag): ?Tag
@@ -59,7 +59,7 @@ class TagFactory
                 'zoom_level'  => null,
             ]
         );
-        if (null === $newTag) {
+        if (!$newTag instanceof Tag) {
             app('log')->error(sprintf('TagFactory::findOrCreate("%s") but tag is unexpectedly NULL!', $tag));
 
             return null;
@@ -75,15 +75,15 @@ class TagFactory
         $latitude  = 0.0 === (float) $data['latitude'] ? null : (float) $data['latitude'];   // intentional float
         $longitude = 0.0 === (float) $data['longitude'] ? null : (float) $data['longitude']; // intentional float
         $array     = [
-            'user_id'       => $this->user->id,
-            'user_group_id' => $this->userGroup->id,
-            'tag'           => trim($data['tag']),
-            'tagMode'       => 'nothing',
-            'date'          => $data['date'],
-            'description'   => $data['description'],
-            'latitude'      => null,
-            'longitude'     => null,
-            'zoomLevel'     => null,
+            'user_id'        => $this->user->id,
+            'user_group_id'  => $this->userGroup->id,
+            'tag'            => trim((string) $data['tag']),
+            'tag_mode'       => 'nothing',
+            'date'           => $data['date'],
+            'description'    => $data['description'],
+            'latitude'       => null,
+            'longitude'      => null,
+            'zoomLevel'      => null,
         ];
 
         /** @var null|Tag $tag */

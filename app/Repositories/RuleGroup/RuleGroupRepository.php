@@ -27,18 +27,19 @@ use FireflyIII\Models\Rule;
 use FireflyIII\Models\RuleAction;
 use FireflyIII\Models\RuleGroup;
 use FireflyIII\Models\RuleTrigger;
-use FireflyIII\User;
-use Illuminate\Contracts\Auth\Authenticatable;
+use FireflyIII\Support\Repositories\UserGroup\UserGroupInterface;
+use FireflyIII\Support\Repositories\UserGroup\UserGroupTrait;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
+use Exception;
 
 /**
  * Class RuleGroupRepository.
  */
-class RuleGroupRepository implements RuleGroupRepositoryInterface
+class RuleGroupRepository implements RuleGroupRepositoryInterface, UserGroupInterface
 {
-    private User $user;
+    use UserGroupTrait;
 
     public function correctRuleGroupOrder(): void
     {
@@ -72,13 +73,13 @@ class RuleGroupRepository implements RuleGroupRepositoryInterface
     }
 
     /**
-     * @throws \Exception
+     * @throws Exception
      */
     public function destroy(RuleGroup $ruleGroup, ?RuleGroup $moveTo): bool
     {
         /** @var Rule $rule */
         foreach ($ruleGroup->rules as $rule) {
-            if (null === $moveTo) {
+            if (!$moveTo instanceof RuleGroup) {
                 $rule->delete();
 
                 continue;
@@ -91,7 +92,7 @@ class RuleGroupRepository implements RuleGroupRepositoryInterface
         $ruleGroup->delete();
 
         $this->resetOrder();
-        if (null !== $moveTo) {
+        if ($moveTo instanceof RuleGroup) {
             $this->resetRuleOrder($moveTo);
         }
 
@@ -380,13 +381,6 @@ class RuleGroupRepository implements RuleGroupRepositoryInterface
         ;
 
         return $search->take($limit)->get(['id', 'title', 'description']);
-    }
-
-    public function setUser(null|Authenticatable|User $user): void
-    {
-        if ($user instanceof User) {
-            $this->user = $user;
-        }
     }
 
     public function store(array $data): RuleGroup

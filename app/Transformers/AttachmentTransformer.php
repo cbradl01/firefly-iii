@@ -32,10 +32,10 @@ use FireflyIII\Repositories\Attachment\AttachmentRepositoryInterface;
  */
 class AttachmentTransformer extends AbstractTransformer
 {
-    private AttachmentRepositoryInterface $repository;
+    private readonly AttachmentRepositoryInterface $repository;
 
     /**
-     * BillTransformer constructor.
+     * AttachmentTransformer constructor.
      */
     public function __construct()
     {
@@ -50,21 +50,20 @@ class AttachmentTransformer extends AbstractTransformer
         $this->repository->setUser($attachment->user);
 
         return [
-            'id'               => (string) $attachment->id,
-            'created_at'       => $attachment->created_at->toAtomString(),
-            'updated_at'       => $attachment->updated_at->toAtomString(),
-            'attachable_id'    => (string) $attachment->attachable_id,
-            'attachable_type'  => str_replace('FireflyIII\Models\\', '', $attachment->attachable_type),
-            'md5'              => $attachment->md5,
-            'hash'             => $attachment->md5,
-            'filename'         => $attachment->filename,
-            'download_url'     => route('api.v1.attachments.download', [$attachment->id]),
-            'upload_url'       => route('api.v1.attachments.upload', [$attachment->id]),
-            'title'            => $attachment->title,
-            'notes'            => $this->repository->getNoteText($attachment),
-            'mime'             => $attachment->mime,
-            'size'             => (int) $attachment->size,
-            'links'            => [
+            'id'              => (string) $attachment->id,
+            'created_at'      => $attachment->created_at->toAtomString(),
+            'updated_at'      => $attachment->updated_at->toAtomString(),
+            'attachable_id'   => (string) $attachment->attachable_id,
+            'attachable_type' => str_replace('FireflyIII\Models\\', '', $attachment->attachable_type),
+            'hash'            => $attachment->md5,
+            'filename'        => $attachment->filename,
+            'download_url'    => route('api.v1.attachments.download', [$attachment->id]),
+            'upload_url'      => route('api.v1.attachments.upload', [$attachment->id]),
+            'title'           => $attachment->title,
+            'notes'           => $this->repository->getNoteText($attachment),
+            'mime'            => $attachment->mime,
+            'size'            => (int) $attachment->size,
+            'links'           => [
                 [
                     'rel' => 'self',
                     'uri' => '/attachment/'.$attachment->id,

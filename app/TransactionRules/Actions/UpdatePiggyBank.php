@@ -37,15 +37,10 @@ use Illuminate\Support\Facades\Log;
 
 class UpdatePiggyBank implements ActionInterface
 {
-    private RuleAction $action;
-
     /**
      * TriggerInterface constructor.
      */
-    public function __construct(RuleAction $action)
-    {
-        $this->action = $action;
-    }
+    public function __construct(private readonly RuleAction $action) {}
 
     public function actOnArray(array $journal): bool
     {
@@ -61,7 +56,7 @@ class UpdatePiggyBank implements ActionInterface
         $journalObj  = $user->transactionJournals()->find($journal['transaction_journal_id']);
 
         $piggyBank   = $this->findPiggyBank($user, $actionValue);
-        if (null === $piggyBank) {
+        if (!$piggyBank instanceof PiggyBank) {
             Log::info(
                 sprintf('No piggy bank named "%s", cant execute action #%d of rule #%d', $actionValue, $this->action->id, $this->action->rule_id)
             );
@@ -71,6 +66,16 @@ class UpdatePiggyBank implements ActionInterface
         }
 
         Log::debug(sprintf('Found piggy bank #%d ("%s")', $piggyBank->id, $piggyBank->name));
+
+        // piggy bank already has an event for this transaction journal?
+        if ($this->alreadyEventPresent($piggyBank, $journal)) {
+            Log::info(sprintf('Piggy bank #%d ("%s") already has an event for transaction journal #%d, so no action will be taken.', $piggyBank->id, $piggyBank->name, $journalObj->id));
+
+            event(new RuleActionFailedOnArray($this->action, $journal, trans('rules.cannot_find_piggy', ['name' => $actionValue])));
+
+            return false;
+        }
+
 
         /** @var Transaction $destination */
         $destination = $journalObj->transactions()->where('amount', '>', 0)->first();
@@ -145,6 +150,29 @@ class UpdatePiggyBank implements ActionInterface
         return $repository->findByName($name);
     }
 
+    private function getAccounts(TransactionJournal $journal): array
+    {
+        return [
+            'source'      => $journal->transactions()->where('amount', '<', '0')->first()?->account,
+            'destination' => $journal->transactions()->where('amount', '>', '0')->first()?->account,
+        ];
+    }
+
+    private function isConnected(PiggyBank $piggyBank, ?Account $link): bool
+    {
+        if (!$link instanceof Account) {
+            return false;
+        }
+        foreach ($piggyBank->accounts as $account) {
+            if ($account->id === $link->id) {
+                return true;
+            }
+        }
+        Log::debug(sprintf('Piggy bank is not connected to account #%d "%s"', $link->id, $link->name));
+
+        return false;
+    }
+
     private function removeAmount(PiggyBank $piggyBank, array $array, TransactionJournal $journal, Account $account, string $amount): void
     {
         $repository = app(PiggyBankRepositoryInterface::class);
@@ -214,26 +242,8 @@ class UpdatePiggyBank implements ActionInterface
         $repository->addAmount($piggyBank, $account, $amount, $journal);
     }
 
-    private function getAccounts(TransactionJournal $journal): array
+    private function alreadyEventPresent(PiggyBank $piggyBank, array $journal): bool
     {
-        return [
-            'source'      => $journal->transactions()->where('amount', '<', '0')->first()?->account,
-            'destination' => $journal->transactions()->where('amount', '>', '0')->first()?->account,
-        ];
-    }
-
-    private function isConnected(PiggyBank $piggyBank, ?Account $link): bool
-    {
-        if (null === $link) {
-            return false;
-        }
-        foreach ($piggyBank->accounts as $account) {
-            if ($account->id === $link->id) {
-                return true;
-            }
-        }
-        Log::debug(sprintf('Piggy bank is not connected to account #%d "%s"', $link->id, $link->name));
-
-        return false;
+        return $piggyBank->piggyBankEvents()->where('transaction_journal_id', $journal['transaction_journal_id'])->exists();
     }
 }

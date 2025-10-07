@@ -27,17 +27,18 @@ namespace FireflyIII\Repositories\Category;
 use Carbon\Carbon;
 use FireflyIII\Enums\TransactionTypeEnum;
 use FireflyIII\Helpers\Collector\GroupCollectorInterface;
+use FireflyIII\Support\Facades\Steam;
 use FireflyIII\Support\Report\Summarizer\TransactionSummarizer;
-use FireflyIII\User;
-use Illuminate\Contracts\Auth\Authenticatable;
+use FireflyIII\Support\Repositories\UserGroup\UserGroupInterface;
+use FireflyIII\Support\Repositories\UserGroup\UserGroupTrait;
 use Illuminate\Support\Collection;
 
 /**
  * Class NoCategoryRepository
  */
-class NoCategoryRepository implements NoCategoryRepositoryInterface
+class NoCategoryRepository implements NoCategoryRepositoryInterface, UserGroupInterface
 {
-    private User $user;
+    use UserGroupTrait;
 
     /**
      * This method returns a list of all the withdrawal transaction journals (as arrays) set in that period
@@ -49,7 +50,7 @@ class NoCategoryRepository implements NoCategoryRepositoryInterface
         /** @var GroupCollectorInterface $collector */
         $collector = app(GroupCollectorInterface::class);
         $collector->setUser($this->user)->setRange($start, $end)->setTypes([TransactionTypeEnum::WITHDRAWAL->value])->withoutCategory();
-        if (null !== $accounts && $accounts->count() > 0) {
+        if ($accounts instanceof Collection && $accounts->count() > 0) {
             $collector->setAccounts($accounts);
         }
         $journals  = $collector->getExtractedJournals();
@@ -85,13 +86,6 @@ class NoCategoryRepository implements NoCategoryRepositoryInterface
         return $array;
     }
 
-    public function setUser(null|Authenticatable|User $user): void
-    {
-        if ($user instanceof User) {
-            $this->user = $user;
-        }
-    }
-
     /**
      * This method returns a list of all the deposit transaction journals (as arrays) set in that period
      * which have no category set to them. It's grouped per currency, with as few details in the array
@@ -102,7 +96,7 @@ class NoCategoryRepository implements NoCategoryRepositoryInterface
         /** @var GroupCollectorInterface $collector */
         $collector = app(GroupCollectorInterface::class);
         $collector->setUser($this->user)->setRange($start, $end)->setTypes([TransactionTypeEnum::DEPOSIT->value])->withoutCategory();
-        if (null !== $accounts && $accounts->count() > 0) {
+        if ($accounts instanceof Collection && $accounts->count() > 0) {
             $collector->setAccounts($accounts);
         }
         $journals  = $collector->getExtractedJournals();
@@ -147,7 +141,7 @@ class NoCategoryRepository implements NoCategoryRepositoryInterface
         $collector  = app(GroupCollectorInterface::class);
         $collector->setUser($this->user)->setRange($start, $end)->setTypes([TransactionTypeEnum::WITHDRAWAL->value])->withoutCategory();
 
-        if (null !== $accounts && $accounts->count() > 0) {
+        if ($accounts instanceof Collection && $accounts->count() > 0) {
             $collector->setAccounts($accounts);
         }
         $journals   = $collector->getExtractedJournals();
@@ -165,7 +159,7 @@ class NoCategoryRepository implements NoCategoryRepositoryInterface
         $collector = app(GroupCollectorInterface::class);
         $collector->setUser($this->user)->setRange($start, $end)->setTypes([TransactionTypeEnum::DEPOSIT->value])->withoutCategory();
 
-        if (null !== $accounts && $accounts->count() > 0) {
+        if ($accounts instanceof Collection && $accounts->count() > 0) {
             $collector->setAccounts($accounts);
         }
         $journals  = $collector->getExtractedJournals();
@@ -181,7 +175,7 @@ class NoCategoryRepository implements NoCategoryRepositoryInterface
                 'currency_code'           => $journal['currency_code'],
                 'currency_decimal_places' => $journal['currency_decimal_places'],
             ];
-            $array[$currencyId]['sum'] = bcadd($array[$currencyId]['sum'], app('steam')->positive($journal['amount']));
+            $array[$currencyId]['sum'] = bcadd($array[$currencyId]['sum'], Steam::positive($journal['amount']));
         }
 
         return $array;
@@ -193,7 +187,7 @@ class NoCategoryRepository implements NoCategoryRepositoryInterface
         $collector = app(GroupCollectorInterface::class);
         $collector->setUser($this->user)->setRange($start, $end)->setTypes([TransactionTypeEnum::TRANSFER->value])->withoutCategory();
 
-        if (null !== $accounts && $accounts->count() > 0) {
+        if ($accounts instanceof Collection && $accounts->count() > 0) {
             $collector->setAccounts($accounts);
         }
         $journals  = $collector->getExtractedJournals();
@@ -209,7 +203,7 @@ class NoCategoryRepository implements NoCategoryRepositoryInterface
                 'currency_code'           => $journal['currency_code'],
                 'currency_decimal_places' => $journal['currency_decimal_places'],
             ];
-            $array[$currencyId]['sum'] = bcadd($array[$currencyId]['sum'], app('steam')->positive($journal['amount']));
+            $array[$currencyId]['sum'] = bcadd($array[$currencyId]['sum'], Steam::positive($journal['amount']));
         }
 
         return $array;

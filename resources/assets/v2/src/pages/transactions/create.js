@@ -23,7 +23,7 @@ import dates from '../../pages/shared/dates.js';
 import {createEmptySplit, defaultErrorSet} from "./shared/create-empty-split.js";
 import {parseFromEntries} from "./shared/parse-from-entries.js";
 import formatMoney from "../../util/format-money.js";
-import Post from "../../api/v2/model/transaction/post.js";
+import Post from "../../api/v1/model/transaction/post.js";
 import {loadCurrencies} from "./shared/load-currencies.js";
 import {loadBudgets} from "./shared/load-budgets.js";
 import {loadPiggyBanks} from "./shared/load-piggy-banks.js";
@@ -82,7 +82,7 @@ let transactions = function () {
         formData: {
             defaultCurrency: null,
             enabledCurrencies: [],
-            nativeCurrencies: [],
+            primaryCurrencies: [],
             foreignCurrencies: [],
             budgets: [],
             piggyBanks: [],
@@ -149,7 +149,7 @@ let transactions = function () {
                 // this also locks the amount into the amount of the source account
                 // and the foreign amount (if different) in that of the destination account.
                 console.log('filter down currencies for transfer.');
-                this.filterNativeCurrencies(this.entries[0].source_account.currency_code);
+                this.filterPrimaryCurrencies(this.entries[0].source_account.currency_code);
                 this.filterForeignCurrencies(this.entries[0].destination_account.currency_code);
                 return;
             }
@@ -157,20 +157,20 @@ let transactions = function () {
             if ('Asset account' === sourceType && ['Expense account', 'Debt', 'Loan', 'Mortgage'].includes(destType)) {
                 this.groupProperties.transactionType = 'withdrawal';
                 console.log('[a] Transaction type is detected to be "' + this.groupProperties.transactionType + '".');
-                this.filterNativeCurrencies(this.entries[0].source_account.currency_code);
+                this.filterPrimaryCurrencies(this.entries[0].source_account.currency_code);
                 return;
             }
             if ('Asset account' === sourceType && 'unknown' === destType) {
                 this.groupProperties.transactionType = 'withdrawal';
                 console.log('[b] Transaction type is detected to be "' + this.groupProperties.transactionType + '".');
                 console.log(this.entries[0].source_account);
-                this.filterNativeCurrencies(this.entries[0].source_account.currency_code);
+                this.filterPrimaryCurrencies(this.entries[0].source_account.currency_code);
                 return;
             }
             if (['Debt', 'Loan', 'Mortgage'].includes(sourceType) && 'Expense account' === destType) {
                 this.groupProperties.transactionType = 'withdrawal';
                 console.log('[c] Transaction type is detected to be "' + this.groupProperties.transactionType + '".');
-                this.filterNativeCurrencies(this.entries[0].source_account.currency_code);
+                this.filterPrimaryCurrencies(this.entries[0].source_account.currency_code);
                 return;
             }
 
@@ -237,7 +237,7 @@ let transactions = function () {
             }
         },
 
-        filterNativeCurrencies(code) {
+        filterPrimaryCurrencies(code) {
             let list = [];
             let currency;
             for (let i in this.formData.enabledCurrencies) {
@@ -249,7 +249,7 @@ let transactions = function () {
                 }
             }
             list.push(currency);
-            this.formData.nativeCurrencies = list;
+            this.formData.primaryCurrencies = list;
 
             // this also forces the currency_code on ALL entries.
             for (let i in this.entries) {
@@ -296,7 +296,7 @@ let transactions = function () {
                 this.formStates.loadingCurrencies = false;
                 this.formData.defaultCurrency = data.defaultCurrency;
                 this.formData.enabledCurrencies = data.enabledCurrencies;
-                this.formData.nativeCurrencies = data.nativeCurrencies;
+                this.formData.primaryCurrencies = data.primaryCurrencies;
                 this.formData.foreignCurrencies = data.foreignCurrencies;
             });
 
@@ -490,14 +490,15 @@ let transactions = function () {
                 // addedSplit, is called from the HTML
                 // for source account
                 const renderAccount = function (item, b, c) {
-                    return item.title + '<br><small class="text-muted">' + i18next.t('firefly.account_type_' + item.meta.type) + '</small>';
+                    return item.name_with_balance + '<br><small class="text-muted">' + i18next.t('firefly.account_type_' + item.type) + '</small>';
                 };
+                console.log('here we are in');
                 addAutocomplete({
                     selector: 'input.ac-source',
                     serverUrl: urls.account,
                     onRenderItem: renderAccount,
                     valueField: 'id',
-                    labelField: 'title',
+                    labelField: 'name_with_balance',
                     onChange: changeSourceAccount,
                     onSelectItem: selectSourceAccount,
                     hiddenValue: this.entries[count].source_account.alpine_name
@@ -507,7 +508,7 @@ let transactions = function () {
                     serverUrl: urls.account,
                     account_types: this.filters.destination,
                     valueField: 'id',
-                    labelField: 'title',
+                    labelField: 'name_with_balance',
                     onRenderItem: renderAccount,
                     onChange: changeDestinationAccount,
                     onSelectItem: selectDestinationAccount

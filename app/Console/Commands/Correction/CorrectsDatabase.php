@@ -26,6 +26,7 @@ namespace FireflyIII\Console\Commands\Correction;
 
 use FireflyIII\Console\Commands\ShowsFriendlyMessages;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Schema;
 
 class CorrectsDatabase extends Command
 {
@@ -40,7 +41,7 @@ class CorrectsDatabase extends Command
     public function handle(): int
     {
         // if table does not exist, return false
-        if (!\Schema::hasTable('users')) {
+        if (!Schema::hasTable('users')) {
             $this->friendlyError('No "users"-table, will not continue.');
 
             return 1;
@@ -74,7 +75,7 @@ class CorrectsDatabase extends Command
             'correction:recalculates-liabilities',
             'correction:preferences',
             // 'correction:transaction-types', // resource heavy, disabled.
-            'correction:recalculate-native-amounts', // not necessary, disabled.
+            'correction:recalculate-pc-amounts', // not necessary, disabled.
             'firefly-iii:report-integrity',
         ];
         foreach ($commands as $command) {

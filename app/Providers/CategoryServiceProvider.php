@@ -29,10 +29,9 @@ use FireflyIII\Repositories\Category\NoCategoryRepository;
 use FireflyIII\Repositories\Category\NoCategoryRepositoryInterface;
 use FireflyIII\Repositories\Category\OperationsRepository;
 use FireflyIII\Repositories\Category\OperationsRepositoryInterface;
-use FireflyIII\Repositories\UserGroups\Category\CategoryRepository as UserGroupCategoryRepository;
-use FireflyIII\Repositories\UserGroups\Category\CategoryRepositoryInterface as UserGroupCategoryRepositoryInterface;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\ServiceProvider;
+use Override;
 
 /**
  * Class CategoryServiceProvider.
@@ -47,12 +46,12 @@ class CategoryServiceProvider extends ServiceProvider
     /**
      * Register the application services.
      */
+    #[Override]
     public function register(): void
     {
         // phpstan does not understand reference to 'auth'.
         $this->app->bind(
-            CategoryRepositoryInterface::class,
-            static function (Application $app) {
+            static function (Application $app): CategoryRepositoryInterface {
                 /** @var CategoryRepository $repository */
                 $repository = app(CategoryRepository::class);
                 if ($app->auth->check()) { // @phpstan-ignore-line
@@ -63,23 +62,8 @@ class CategoryServiceProvider extends ServiceProvider
             }
         );
 
-        // phpstan does not understand reference to 'auth'.
         $this->app->bind(
-            UserGroupCategoryRepositoryInterface::class,
-            static function (Application $app) {
-                /** @var UserGroupCategoryRepository $repository */
-                $repository = app(UserGroupCategoryRepository::class);
-                if ($app->auth->check()) { // @phpstan-ignore-line
-                    $repository->setUser(auth()->user());
-                }
-
-                return $repository;
-            }
-        );
-
-        $this->app->bind(
-            OperationsRepositoryInterface::class,
-            static function (Application $app) {
+            static function (Application $app): OperationsRepositoryInterface {
                 /** @var OperationsRepository $repository */
                 $repository = app(OperationsRepository::class);
                 if ($app->auth->check()) { // @phpstan-ignore-line
@@ -91,8 +75,7 @@ class CategoryServiceProvider extends ServiceProvider
         );
 
         $this->app->bind(
-            NoCategoryRepositoryInterface::class,
-            static function (Application $app) {
+            static function (Application $app): NoCategoryRepositoryInterface {
                 /** @var NoCategoryRepository $repository */
                 $repository = app(NoCategoryRepository::class);
                 if ($app->auth->check()) { // @phpstan-ignore-line

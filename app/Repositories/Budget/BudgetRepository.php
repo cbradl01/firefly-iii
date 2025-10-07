@@ -38,18 +38,22 @@ use FireflyIII\Models\RecurrenceTransactionMeta;
 use FireflyIII\Models\RuleAction;
 use FireflyIII\Models\RuleTrigger;
 use FireflyIII\Repositories\Account\AccountRepositoryInterface;
-use FireflyIII\Repositories\UserGroups\Currency\CurrencyRepositoryInterface;
+use FireflyIII\Repositories\Currency\CurrencyRepositoryInterface;
 use FireflyIII\Services\Internal\Destroy\BudgetDestroyService;
+use FireflyIII\Support\Facades\Steam;
 use FireflyIII\Support\Http\Api\ExchangeRateConverter;
+use FireflyIII\Support\Repositories\UserGroup\UserGroupInterface;
 use FireflyIII\Support\Repositories\UserGroup\UserGroupTrait;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * Class BudgetRepository.
  */
-class BudgetRepository implements BudgetRepositoryInterface
+class BudgetRepository implements BudgetRepositoryInterface, UserGroupInterface
 {
     use UserGroupTrait;
 
@@ -88,7 +92,7 @@ class BudgetRepository implements BudgetRepositoryInterface
         $limitRepository = app(BudgetLimitRepository::class);
         $limitRepository->setUser($this->user);
         $budgets         = $this->getActiveBudgets();
-        $defaultCurrency = app('amount')->getNativeCurrency();
+        $primaryCurrency = app('amount')->getPrimaryCurrency();
         $converter       = new ExchangeRateConverter();
 
         /** @var Budget $budget */
@@ -99,48 +103,48 @@ class BudgetRepository implements BudgetRepositoryInterface
             /** @var BudgetLimit $limit */
             foreach ($limits as $limit) {
                 app('log')->debug(sprintf('Budget limit #%d', $limit->id));
-                $currency                            = $limit->transactionCurrency;
-                $rate                                = $converter->getCurrencyRate($currency, $defaultCurrency, $end);
-                $currencyCode                        = $currency->code;
+                $currency                        = $limit->transactionCurrency;
+                $rate                            = $converter->getCurrencyRate($currency, $primaryCurrency, $end);
+                $currencyCode                    = $currency->code;
                 $return[$currencyCode] ??= [
-                    'currency_id'                    => (string) $currency->id,
-                    'currency_name'                  => $currency->name,
-                    'currency_symbol'                => $currency->symbol,
-                    'currency_code'                  => $currency->code,
-                    'currency_decimal_places'        => $currency->decimal_places,
-                    'native_currency_id'             => (string) $defaultCurrency->id,
-                    'native_currency_name'           => $defaultCurrency->name,
-                    'native_currency_symbol'         => $defaultCurrency->symbol,
-                    'native_currency_code'           => $defaultCurrency->code,
-                    'native_currency_decimal_places' => $defaultCurrency->decimal_places,
-                    'sum'                            => '0',
-                    'native_sum'                     => '0',
+                    'currency_id'                     => (string) $currency->id,
+                    'currency_name'                   => $currency->name,
+                    'currency_symbol'                 => $currency->symbol,
+                    'currency_code'                   => $currency->code,
+                    'currency_decimal_places'         => $currency->decimal_places,
+                    'primary_currency_id'             => (string) $primaryCurrency->id,
+                    'primary_currency_name'           => $primaryCurrency->name,
+                    'primary_currency_symbol'         => $primaryCurrency->symbol,
+                    'primary_currency_code'           => $primaryCurrency->code,
+                    'primary_currency_decimal_places' => $primaryCurrency->decimal_places,
+                    'sum'                             => '0',
+                    'pc_sum'                          => '0',
                 ];
                 // same period
                 if ($limit->start_date->isSameDay($start) && $limit->end_date->isSameDay($end)) {
-                    $return[$currencyCode]['sum']        = bcadd($return[$currencyCode]['sum'], $limit->amount);
-                    $return[$currencyCode]['native_sum'] = bcmul($rate, $return[$currencyCode]['sum']);
+                    $return[$currencyCode]['sum']    = bcadd($return[$currencyCode]['sum'], (string) $limit->amount);
+                    $return[$currencyCode]['pc_sum'] = bcmul($rate, $return[$currencyCode]['sum']);
                     app('log')->debug(sprintf('Add full amount [1]: %s', $limit->amount));
 
                     continue;
                 }
                 // limit is inside of date range
                 if ($start->lte($limit->start_date) && $end->gte($limit->end_date)) {
-                    $return[$currencyCode]['sum']        = bcadd($return[$currencyCode]['sum'], $limit->amount);
-                    $return[$currencyCode]['native_sum'] = bcmul($rate, $return[$currencyCode]['sum']);
+                    $return[$currencyCode]['sum']    = bcadd($return[$currencyCode]['sum'], (string) $limit->amount);
+                    $return[$currencyCode]['pc_sum'] = bcmul($rate, $return[$currencyCode]['sum']);
                     app('log')->debug(sprintf('Add full amount [2]: %s', $limit->amount));
 
                     continue;
                 }
-                $total                               = $limit->start_date->diffInDays($limit->end_date, true) + 1; // include the day itself.
-                $days                                = $this->daysInOverlap($limit, $start, $end);
-                $amount                              = bcmul(bcdiv($limit->amount, (string) $total), (string) $days);
-                $return[$currencyCode]['sum']        = bcadd($return[$currencyCode]['sum'], $amount);
-                $return[$currencyCode]['native_sum'] = bcmul($rate, $return[$currencyCode]['sum']);
+                $total                           = $limit->start_date->diffInDays($limit->end_date, true) + 1; // include the day itself.
+                $days                            = $this->daysInOverlap($limit, $start, $end);
+                $amount                          = bcmul(bcdiv((string) $limit->amount, (string) $total), (string) $days);
+                $return[$currencyCode]['sum']    = bcadd($return[$currencyCode]['sum'], $amount);
+                $return[$currencyCode]['pc_sum'] = bcmul($rate, $return[$currencyCode]['sum']);
                 app('log')->debug(
                     sprintf(
                         'Amount per day: %s (%s over %d days). Total amount for %d days: %s',
-                        bcdiv($limit->amount, (string) $total),
+                        bcdiv((string) $limit->amount, (string) $total),
                         $limit->amount,
                         $total,
                         $days,
@@ -222,26 +226,26 @@ class BudgetRepository implements BudgetRepositoryInterface
             ];
             // same period
             if ($limit->start_date->isSameDay($start) && $limit->end_date->isSameDay($end)) {
-                $return[$currency->id]['sum'] = bcadd($return[$currency->id]['sum'], $limit->amount);
+                $return[$currency->id]['sum'] = bcadd($return[$currency->id]['sum'], (string) $limit->amount);
                 app('log')->debug(sprintf('Add full amount [1]: %s', $limit->amount));
 
                 continue;
             }
             // limit is inside of date range
             if ($start->lte($limit->start_date) && $end->gte($limit->end_date)) {
-                $return[$currency->id]['sum'] = bcadd($return[$currency->id]['sum'], $limit->amount);
+                $return[$currency->id]['sum'] = bcadd($return[$currency->id]['sum'], (string) $limit->amount);
                 app('log')->debug(sprintf('Add full amount [2]: %s', $limit->amount));
 
                 continue;
             }
             $total                        = $limit->start_date->diffInDays($limit->end_date) + 1; // include the day itself.
             $days                         = $this->daysInOverlap($limit, $start, $end);
-            $amount                       = bcmul(bcdiv($limit->amount, (string) $total), (string) $days);
+            $amount                       = bcmul(bcdiv((string) $limit->amount, (string) $total), (string) $days);
             $return[$currency->id]['sum'] = bcadd($return[$currency->id]['sum'], $amount);
             app('log')->debug(
                 sprintf(
                     'Amount per day: %s (%s over %d days). Total amount for %d days: %s',
-                    bcdiv($limit->amount, (string) $total),
+                    bcdiv((string) $limit->amount, (string) $total),
                     $limit->amount,
                     $total,
                     $days,
@@ -265,7 +269,7 @@ class BudgetRepository implements BudgetRepositoryInterface
          */
         foreach ($budgets as $index => $budget) {
             $budget->order = $index + 1;
-            $budget->save();
+            $budget->saveQuietly();
         }
         // other budgets, set to 0.
         $this->user->budgets()->where('active', 0)->update(['order' => 0]);
@@ -300,16 +304,16 @@ class BudgetRepository implements BudgetRepositoryInterface
         // first things first: delete when no longer required:
         $autoBudgetType = array_key_exists('auto_budget_type', $data) ? $data['auto_budget_type'] : null;
 
-        if (0 === $autoBudgetType && null !== $autoBudget) {
+        if (0 === $autoBudgetType && $autoBudget instanceof AutoBudget) {
             // delete!
             $autoBudget->delete();
 
             return $budget;
         }
-        if (0 === $autoBudgetType && null === $autoBudget) {
+        if (0 === $autoBudgetType) {
             return $budget;
         }
-        if (null === $autoBudgetType && null === $autoBudget) {
+        if (null === $autoBudgetType) {
             return $budget;
         }
         $this->updateAutoBudget($budget, $data);
@@ -388,9 +392,9 @@ class BudgetRepository implements BudgetRepositoryInterface
         $autoBudget = $this->getAutoBudget($budget);
 
         // grab default currency:
-        $currency   = app('amount')->getNativeCurrencyByUserGroup($this->user->userGroup);
+        $currency   = app('amount')->getPrimaryCurrencyByUserGroup($this->user->userGroup);
 
-        if (null === $autoBudget) {
+        if (!$autoBudget instanceof AutoBudget) {
             // at this point it's a blind assumption auto_budget_type is 1 or 2.
             $autoBudget                          = new AutoBudget();
             $autoBudget->auto_budget_type        = $data['auto_budget_type'];
@@ -456,8 +460,8 @@ class BudgetRepository implements BudgetRepositoryInterface
 
         /** @var Budget $budget */
         foreach ($budgets as $budget) {
-            \DB::table('budget_transaction')->where('budget_id', $budget->id)->delete();
-            \DB::table('budget_transaction_journal')->where('budget_id', $budget->id)->delete();
+            DB::table('budget_transaction')->where('budget_id', $budget->id)->delete();
+            DB::table('budget_transaction_journal')->where('budget_id', $budget->id)->delete();
             RecurrenceTransactionMeta::where('name', 'budget_id')->where('value', (string) $budget->id)->delete();
             RuleAction::where('action_type', 'set_budget')->where('action_value', (string) $budget->id)->delete();
             $budget->delete();
@@ -485,14 +489,14 @@ class BudgetRepository implements BudgetRepositoryInterface
         app('log')->debug('Now in findBudget()');
         app('log')->debug(sprintf('Searching for budget with ID #%d...', $budgetId));
         $result = $this->find((int) $budgetId);
-        if (null === $result && null !== $budgetName && '' !== $budgetName) {
+        if (!$result instanceof Budget && null !== $budgetName && '' !== $budgetName) {
             app('log')->debug(sprintf('Searching for budget with name %s...', $budgetName));
             $result = $this->findByName($budgetName);
         }
-        if (null !== $result) {
+        if ($result instanceof Budget) {
             app('log')->debug(sprintf('Found budget #%d: %s', $result->id, $result->name));
         }
-        app('log')->debug(sprintf('Found result is null? %s', var_export(null === $result, true)));
+        app('log')->debug(sprintf('Found result is null? %s', var_export(!$result instanceof Budget, true)));
 
         return $result;
     }
@@ -529,8 +533,7 @@ class BudgetRepository implements BudgetRepositoryInterface
     {
         $set  = $budget->attachments()->get();
 
-        /** @var \Storage $disk */
-        $disk = \Storage::disk('upload');
+        $disk = Storage::disk('upload');
 
         return $set->each(
             static function (Attachment $attachment) use ($disk) { // @phpstan-ignore-line
@@ -630,7 +633,7 @@ class BudgetRepository implements BudgetRepositoryInterface
                 'decimal_places' => $journal['currency_decimal_places'],
                 'sum'            => '0',
             ];
-            $array[$currencyId]['sum'] = bcadd($array[$currencyId]['sum'], app('steam')->negative($journal['amount']));
+            $array[$currencyId]['sum'] = bcadd($array[$currencyId]['sum'], Steam::negative($journal['amount']));
 
             // also do foreign amount:
             $foreignId                 = (int) $journal['foreign_currency_id'];
@@ -643,7 +646,7 @@ class BudgetRepository implements BudgetRepositoryInterface
                     'decimal_places' => $journal['foreign_currency_decimal_places'],
                     'sum'            => '0',
                 ];
-                $array[$foreignId]['sum'] = bcadd($array[$foreignId]['sum'], app('steam')->negative($journal['foreign_amount']));
+                $array[$foreignId]['sum'] = bcadd($array[$foreignId]['sum'], Steam::negative($journal['foreign_amount']));
             }
         }
 
@@ -692,7 +695,7 @@ class BudgetRepository implements BudgetRepositoryInterface
                 'decimal_places' => $journal['currency_decimal_places'],
                 'sum'            => '0',
             ];
-            $array[$currencyId]['sum'] = bcadd($array[$currencyId]['sum'], app('steam')->negative($journal['amount']));
+            $array[$currencyId]['sum'] = bcadd($array[$currencyId]['sum'], Steam::negative($journal['amount']));
 
             // also do foreign amount:
             $foreignId                 = (int) $journal['foreign_currency_id'];
@@ -705,7 +708,7 @@ class BudgetRepository implements BudgetRepositoryInterface
                     'decimal_places' => $journal['foreign_currency_decimal_places'],
                     'sum'            => '0',
                 ];
-                $array[$foreignId]['sum'] = bcadd($array[$foreignId]['sum'], app('steam')->negative($journal['foreign_amount']));
+                $array[$foreignId]['sum'] = bcadd($array[$foreignId]['sum'], Steam::negative($journal['foreign_amount']));
             }
         }
 
@@ -774,7 +777,7 @@ class BudgetRepository implements BudgetRepositoryInterface
             $currency = $repos->findByCode((string) $data['currency_code']);
         }
         if (null === $currency) {
-            $currency = app('amount')->getNativeCurrencyByUserGroup($this->user->userGroup);
+            $currency = app('amount')->getPrimaryCurrencyByUserGroup($this->user->userGroup);
         }
 
         $autoBudget                          = new AutoBudget();

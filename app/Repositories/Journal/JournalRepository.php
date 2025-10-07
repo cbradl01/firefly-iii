@@ -36,16 +36,16 @@ use FireflyIII\Services\Internal\Destroy\JournalDestroyService;
 use FireflyIII\Services\Internal\Destroy\TransactionGroupDestroyService;
 use FireflyIII\Services\Internal\Update\JournalUpdateService;
 use FireflyIII\Support\CacheProperties;
-use FireflyIII\User;
-use Illuminate\Contracts\Auth\Authenticatable;
+use FireflyIII\Support\Repositories\UserGroup\UserGroupInterface;
+use FireflyIII\Support\Repositories\UserGroup\UserGroupTrait;
 use Illuminate\Support\Collection;
 
 /**
  * Class JournalRepository.
  */
-class JournalRepository implements JournalRepositoryInterface
+class JournalRepository implements JournalRepositoryInterface, UserGroupInterface
 {
-    private User $user;
+    use UserGroupTrait;
 
     public function destroyGroup(TransactionGroup $transactionGroup): void
     {
@@ -77,13 +77,12 @@ class JournalRepository implements JournalRepositoryInterface
     public function firstNull(): ?TransactionJournal
     {
         /** @var null|TransactionJournal $entry */
-        $entry  = $this->user->transactionJournals()->orderBy('date', 'ASC')->first(['transaction_journals.*']);
-        $result = null;
+        $entry = $this->user->transactionJournals()->orderBy('date', 'ASC')->first(['transaction_journals.*']);
         if (null !== $entry) {
-            $result = $entry;
+            return $entry;
         }
 
-        return $result;
+        return null;
     }
 
     public function getDestinationAccount(TransactionJournal $journal): Account
@@ -120,13 +119,12 @@ class JournalRepository implements JournalRepositoryInterface
     public function getLast(): ?TransactionJournal
     {
         /** @var null|TransactionJournal $entry */
-        $entry  = $this->user->transactionJournals()->orderBy('date', 'DESC')->first(['transaction_journals.*']);
-        $result = null;
+        $entry = $this->user->transactionJournals()->orderBy('date', 'DESC')->first(['transaction_journals.*']);
         if (null !== $entry) {
-            $result = $entry;
+            return $entry;
         }
 
-        return $result;
+        return null;
     }
 
     public function getLinkNoteText(TransactionJournalLink $link): string
@@ -202,13 +200,6 @@ class JournalRepository implements JournalRepositoryInterface
         }
 
         return $query->take($limit)->get();
-    }
-
-    public function setUser(null|Authenticatable|User $user): void
-    {
-        if ($user instanceof User) {
-            $this->user = $user;
-        }
     }
 
     public function unreconcileById(int $journalId): void

@@ -27,7 +27,6 @@ namespace FireflyIII\Notifications\Admin;
 use FireflyIII\Models\InvitedUser;
 use FireflyIII\Notifications\Notifiables\OwnerNotifiable;
 use FireflyIII\Notifications\ReturnsAvailableChannels;
-use FireflyIII\Notifications\ReturnsSettings;
 use FireflyIII\Support\Facades\Steam;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -36,7 +35,6 @@ use Illuminate\Notifications\Notification;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Request;
 use NotificationChannels\Pushover\PushoverMessage;
-use Ntfy\Message;
 
 /**
  * Class UserInvitation
@@ -45,12 +43,7 @@ class UserInvitation extends Notification
 {
     use Queueable;
 
-    private InvitedUser     $invitee;
-
-    public function __construct(InvitedUser $invitee)
-    {
-        $this->invitee = $invitee;
-    }
+    public function __construct(private InvitedUser $invitee) {}
 
     /**
      * @SuppressWarnings("PHPMD.UnusedFormalParameter")
@@ -72,26 +65,26 @@ class UserInvitation extends Notification
         $time      = now(config('app.timezone'))->isoFormat((string) trans('config.date_time_js'));
 
 
-        return (new MailMessage())
+        return new MailMessage()
             ->markdown('emails.invitation-created', ['email' => $this->invitee->user->email, 'invitee' => $this->invitee->email, 'ip' => $ip, 'host' => $host, 'userAgent' => $userAgent, 'time' => $time])
             ->subject((string) trans('email.invitation_created_subject'))
         ;
     }
 
-    /**
-     * @SuppressWarnings("PHPMD.UnusedFormalParameter")
-     */
-    public function toNtfy(OwnerNotifiable $notifiable): Message
-    {
-        Log::debug('Now in toNtfy() for UserInvitation');
-        $settings = ReturnsSettings::getSettings('ntfy', 'owner', null);
-        $message  = new Message();
-        $message->topic($settings['ntfy_topic']);
-        $message->title((string) trans('email.invitation_created_subject'));
-        $message->body((string) trans('email.invitation_created_body', ['email' => $this->invitee->user->email, 'invitee' => $this->invitee->email]));
-
-        return $message;
-    }
+    //    /**
+    //     * @SuppressWarnings("PHPMD.UnusedFormalParameter")
+    //     */
+    //    public function toNtfy(OwnerNotifiable $notifiable): Message
+    //    {
+    //        Log::debug('Now in toNtfy() for UserInvitation');
+    //        $settings = ReturnsSettings::getSettings('ntfy', 'owner', null);
+    //        $message  = new Message();
+    //        $message->topic($settings['ntfy_topic']);
+    //        $message->title((string) trans('email.invitation_created_subject'));
+    //        $message->body((string) trans('email.invitation_created_body', ['email' => $this->invitee->user->email, 'invitee' => $this->invitee->email]));
+    //
+    //        return $message;
+    //    }
 
     /**
      * @SuppressWarnings("PHPMD.UnusedFormalParameter")

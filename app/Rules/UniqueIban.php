@@ -28,21 +28,20 @@ use FireflyIII\Enums\AccountTypeEnum;
 use FireflyIII\Models\Account;
 use FireflyIII\Support\Facades\Steam;
 use Illuminate\Contracts\Validation\ValidationRule;
+use Closure;
 
 /**
  * Class UniqueIban
  */
 class UniqueIban implements ValidationRule
 {
-    private ?Account $account;
-    private array    $expectedTypes;
+    private array $expectedTypes;
 
     /**
      * Create a new rule instance.
      */
-    public function __construct(?Account $account, ?string $expectedType)
+    public function __construct(private readonly ?Account $account, ?string $expectedType)
     {
-        $this->account       = $account;
         $this->expectedTypes = [];
         if (null === $expectedType) {
             return;
@@ -71,7 +70,7 @@ class UniqueIban implements ValidationRule
         return (string) trans('validation.unique_iban_for_user');
     }
 
-    public function validate(string $attribute, mixed $value, \Closure $fail): void
+    public function validate(string $attribute, mixed $value, Closure $fail): void
     {
         if (!$this->passes($attribute, $value)) {
             $fail((string) trans('validation.unique_iban_for_user'));
@@ -161,7 +160,7 @@ class UniqueIban implements ValidationRule
                         ->whereIn('account_types.type', $typesArray)
         ;
 
-        if (null !== $this->account) {
+        if ($this->account instanceof Account) {
             $query->where('accounts.id', '!=', $this->account->id);
         }
 

@@ -62,6 +62,7 @@ function drawChart() {
             // net worth
             var net_worth = [];
             var keepGreen = false;
+            var makeBlue = false;
 
             for (key in data) {
                 // balance
@@ -82,7 +83,11 @@ function drawChart() {
                 if (key.substring(0, 17) === 'left-to-spend-in-') {
                     left_to_spend_top.push(data[key].value_parsed);
                     left_to_spend_bottom.push(data[key].sub_title);
-                    if (parseFloat(data[key].monetary_value) > 0) {
+                    if(true === data[key].no_available_budgets) {
+                        makeBlue = true;
+                        $('#box-left-to-spend-text').text(data[key].title);
+                    }
+                    if(false === data[key].no_available_budgets && parseFloat(data[key].monetary_value) > 0) {
                         keepGreen = true;
                     }
                 }
@@ -94,6 +99,9 @@ function drawChart() {
             }
             if(!keepGreen) {
                 $('#box-left-to-spend-box').removeClass('bg-green-gradient').addClass('bg-red-gradient')
+            }
+            if(makeBlue) {
+                $('#box-left-to-spend-box').removeClass('bg-red-gradient').removeClass('bg-green-gradient').addClass('bg-blue-gradient')
             }
 
             // balance

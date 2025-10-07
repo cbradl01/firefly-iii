@@ -28,7 +28,7 @@ use FireflyIII\Api\V1\Controllers\Controller;
 use FireflyIII\Api\V1\Requests\Models\TransactionCurrency\UpdateRequest;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Models\TransactionCurrency;
-use FireflyIII\Repositories\UserGroups\Currency\CurrencyRepositoryInterface;
+use FireflyIII\Repositories\Currency\CurrencyRepositoryInterface;
 use FireflyIII\Support\Http\Api\AccountFilter;
 use FireflyIII\Support\Http\Api\TransactionFilter;
 use FireflyIII\Transformers\CurrencyTransformer;
@@ -99,19 +99,14 @@ class UpdateController extends Controller
     }
 
     /**
-     * This endpoint is documented at:
-     * https://api-docs.firefly-iii.org/?urls.primaryName=2.0.0%20(v1)#/currencies/nativeCurrency
-     *
-     * Make the currency a default currency.
-     *
      * @throws FireflyException
      */
-    public function makeDefault(TransactionCurrency $currency): JsonResponse
+    public function makePrimary(TransactionCurrency $currency): JsonResponse
     {
         /** @var User $user */
         $user        = auth()->user();
         $this->repository->enable($currency);
-        $this->repository->makeDefault($currency);
+        $this->repository->makePrimary($currency);
 
         app('preferences')->mark();
 

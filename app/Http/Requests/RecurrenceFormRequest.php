@@ -24,6 +24,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Requests;
 
+use Illuminate\Validation\Validator;
 use FireflyIII\Enums\TransactionTypeEnum;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Factory\CategoryFactory;
@@ -36,7 +37,6 @@ use FireflyIII\Support\Request\ConvertsDataTypes;
 use FireflyIII\Validation\AccountValidator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Validation\Validator;
 
 /**
  * Class RecurrenceFormRequest
@@ -138,7 +138,7 @@ class RecurrenceFormRequest extends FormRequest
          * @var int   $index
          * @var array $transaction
          */
-        foreach ($return['transactions'] as $index => $transaction) {
+        foreach ($return['transactions'] as $index => $transaction) { // @phpstan-ignore-line
             $categoryName = $transaction['category_name'] ?? null;
             if (null !== $categoryName) {
                 $category = $factory->findOrCreate(null, $categoryName);
@@ -281,7 +281,7 @@ class RecurrenceFormRequest extends FormRequest
             }
         );
         if ($validator->fails()) {
-            Log::channel('audit')->error(sprintf('Validation errors in %s', __CLASS__), $validator->errors()->toArray());
+            Log::channel('audit')->error(sprintf('Validation errors in %s', self::class), $validator->errors()->toArray());
         }
     }
 

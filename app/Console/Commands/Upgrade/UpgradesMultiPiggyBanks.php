@@ -87,10 +87,16 @@ class UpgradesMultiPiggyBanks extends Command
 
     private function upgradePiggyBank(PiggyBank $piggyBank): void
     {
+        if (null === $piggyBank->account) {
+            // #10432 account has been deleted, delete piggy bank.
+            $piggyBank->delete();
+
+            return;
+        }
         $this->repository->setUser($piggyBank->account->user);
         $this->accountRepository->setUser($piggyBank->account->user);
         $repetition                         = $this->repository->getRepetition($piggyBank, true);
-        $currency                           = $this->accountRepository->getAccountCurrency($piggyBank->account) ?? app('amount')->getNativeCurrencyByUserGroup($piggyBank->account->user->userGroup);
+        $currency                           = $this->accountRepository->getAccountCurrency($piggyBank->account) ?? app('amount')->getPrimaryCurrencyByUserGroup($piggyBank->account->user->userGroup);
 
         // update piggy bank to have a currency.
         $piggyBank->transaction_currency_id = $currency->id;

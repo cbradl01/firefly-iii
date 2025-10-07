@@ -26,6 +26,7 @@ namespace FireflyIII\Providers;
 use FireflyIII\Http\Middleware\StartFireflySession;
 use Illuminate\Session\SessionManager;
 use Illuminate\Support\ServiceProvider;
+use Override;
 
 /**
  * Class FireflySessionProvider
@@ -35,6 +36,7 @@ class FireflySessionProvider extends ServiceProvider
     /**
      * Register the service provider.
      */
+    #[Override]
     public function register(): void
     {
         $this->registerSessionManager();
@@ -51,9 +53,7 @@ class FireflySessionProvider extends ServiceProvider
     {
         $this->app->singleton(
             'session',
-            static function ($app) {
-                return new SessionManager($app);
-            }
+            static fn ($app) => new SessionManager($app)
         );
     }
 
@@ -64,12 +64,11 @@ class FireflySessionProvider extends ServiceProvider
     {
         $this->app->singleton(
             'session.store',
-            static function ($app) {
+            static fn ($app)
                 // First, we will create the session manager which is responsible for the
                 // creation of the various session drivers when they are needed by the
                 // application instance, and will resolve them on a lazy load basis.
-                return $app->make('session')->driver();
-            }
+            => $app->make('session')->driver()
         );
     }
 }

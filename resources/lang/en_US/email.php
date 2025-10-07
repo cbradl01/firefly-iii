@@ -64,13 +64,13 @@ return [
 
     // unknown user login attempt
     'unknown_user_subject'                        => 'An unknown user tried to log in',
-    'unknown_user_body'                           => 'An unknown user tried to log in to Firefly III. The email address they used was ":address".',
-    'unknown_user_message'                        => 'The email address they used was ":address".',
+    'unknown_user_body'                           => 'An unknown user (:ip) tried to log in to Firefly III. The email address they used was ":address".',
+    'unknown_user_message'                        => 'The email address they (:ip) used was ":address".',
 
     // known user login attempt
     'failed_login_subject'                        => 'Firefly III detected a failed login attempt',
     'failed_login_body'                           => 'Firefly III detected that somebody (you?) failed to login with your account ":email". Please verify that this was you.',
-    'failed_login_message'                        => 'A failed login attempt on your Firefly III account ":email" was detected.',
+    'failed_login_message'                        => 'A failed login attempt (:ip) on your Firefly III account ":email" was detected.',
     'failed_login_warning'                        => 'If you recognize this IP address or the login attempt, you can ignore this message. If you didn\'t try to login, of if you have no idea what this is about, verify your password security, change it, and log out all other sessions. To do this, go to your profile page. Of course you have 2FA enabled already, right? Stay safe!',
 
     // registered
@@ -138,6 +138,14 @@ return [
     'new_journals_subject'                        => 'Firefly III has created a new transaction|Firefly III has created :count new transactions',
     'new_journals_header'                         => 'Firefly III has created a transaction for you. You can find it in your Firefly III installation:|Firefly III has created :count transactions for you. You can find them in your Firefly III installation:',
 
+    // subscription is overdue.
+    'subscriptions_overdue_subject_multi'               => 'You have :count subscriptions that are overdue to be paid',
+    'subscriptions_overdue_subject_single'               => 'You have a subscription that is overdue to be paid',
+    'subscriptions_overdue_warning_intro_single' => 'You have one subscription that is overdue to be paid. At the following date(s) a payment was expected, but it has not yet arrived.',
+    'subscriptions_overdue_warning_intro_multi' => 'You have :count subscription(s) that are overdue to be paid. At the following date(s) a payment was expected, but it has not yet arrived.',
+    'subscriptions_overdue_please_action_single' => 'Perhaps you have simply not linked a transaction to this subscription. In that case, please do so. You will NOT get another warning about this overdue subscription. A new warning will be sent out for the NEXT due payment.',
+    'subscriptions_overdue_please_action_multi' => 'Perhaps you have simply not linked a transaction to these subscriptions. In that case, please do so. You will NOT get another warning about these overdue subscriptions. A new warning will be sent out for the NEXT due payments.',
+    'subscriptions_overdue_outro' => 'If you believe this message is wrong, please contact the Firefly III developer. Thank you for using Firefly III.',
     // bill warning
     'bill_warning_subject_end_date'               => 'Your subscription ":name" is due to end in :diff days',
     'bill_warning_subject_now_end_date'           => 'Your subscription ":name" is due to end TODAY',

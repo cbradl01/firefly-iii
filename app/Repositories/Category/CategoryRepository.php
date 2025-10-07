@@ -33,16 +33,18 @@ use FireflyIII\Models\RecurrenceTransactionMeta;
 use FireflyIII\Models\RuleAction;
 use FireflyIII\Services\Internal\Destroy\CategoryDestroyService;
 use FireflyIII\Services\Internal\Update\CategoryUpdateService;
+use FireflyIII\Support\Repositories\UserGroup\UserGroupInterface;
 use FireflyIII\Support\Repositories\UserGroup\UserGroupTrait;
-use FireflyIII\User;
-use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
+use Exception;
 
 /**
  * Class CategoryRepository.
  */
-class CategoryRepository implements CategoryRepositoryInterface
+class CategoryRepository implements CategoryRepositoryInterface, UserGroupInterface
 {
     use UserGroupTrait;
 
@@ -84,8 +86,8 @@ class CategoryRepository implements CategoryRepositoryInterface
 
         /** @var Category $category */
         foreach ($categories as $category) {
-            \DB::table('category_transaction')->where('category_id', $category->id)->delete();
-            \DB::table('category_transaction_journal')->where('category_id', $category->id)->delete();
+            DB::table('category_transaction')->where('category_id', $category->id)->delete();
+            DB::table('category_transaction_journal')->where('category_id', $category->id)->delete();
             RecurrenceTransactionMeta::where('name', 'category_id')->where('value', $category->id)->delete();
             RuleAction::where('action_type', 'set_category')->where('action_value', $category->name)->delete();
             $category->delete();
@@ -109,18 +111,18 @@ class CategoryRepository implements CategoryRepositoryInterface
         app('log')->debug('Now in findCategory()');
         app('log')->debug(sprintf('Searching for category with ID #%d...', $categoryId));
         $result = $this->find((int) $categoryId);
-        if (null === $result) {
+        if (!$result instanceof Category) {
             app('log')->debug(sprintf('Searching for category with name %s...', $categoryName));
             $result = $this->findByName((string) $categoryName);
-            if (null === $result && '' !== (string) $categoryName) {
+            if (!$result instanceof Category && '' !== (string) $categoryName) {
                 // create it!
                 $result = $this->store(['name' => $categoryName]);
             }
         }
-        if (null !== $result) {
+        if ($result instanceof Category) {
             app('log')->debug(sprintf('Found category #%d: %s', $result->id, $result->name));
         }
-        app('log')->debug(sprintf('Found category result is null? %s', var_export(null === $result, true)));
+        app('log')->debug(sprintf('Found category result is null? %s', var_export(!$result instanceof Category, true)));
 
         return $result;
     }
@@ -168,13 +170,6 @@ class CategoryRepository implements CategoryRepositoryInterface
         return $category;
     }
 
-    public function setUser(null|Authenticatable|User $user): void
-    {
-        if ($user instanceof User) {
-            $this->user = $user;
-        }
-    }
-
     public function removeNotes(Category $category): void
     {
         $category->notes()->delete();
@@ -196,13 +191,13 @@ class CategoryRepository implements CategoryRepositoryInterface
         $firstJournalDate     = $this->getFirstJournalDate($category);
         $firstTransactionDate = $this->getFirstTransactionDate($category);
 
-        if (null === $firstTransactionDate && null === $firstJournalDate) {
+        if (!$firstTransactionDate instanceof Carbon && !$firstJournalDate instanceof Carbon) {
             return null;
         }
-        if (null === $firstTransactionDate) {
+        if (!$firstTransactionDate instanceof Carbon) {
             return $firstJournalDate;
         }
-        if (null === $firstJournalDate) {
+        if (!$firstJournalDate instanceof Carbon) {
             return $firstTransactionDate;
         }
 
@@ -245,8 +240,7 @@ class CategoryRepository implements CategoryRepositoryInterface
     {
         $set  = $category->attachments()->get();
 
-        /** @var \Storage $disk */
-        $disk = \Storage::disk('upload');
+        $disk = Storage::disk('upload');
 
         return $set->each(
             static function (Attachment $attachment) use ($disk) { // @phpstan-ignore-line
@@ -278,20 +272,20 @@ class CategoryRepository implements CategoryRepositoryInterface
     }
 
     /**
-     * @throws \Exception
+     * @throws Exception
      */
     public function lastUseDate(Category $category, Collection $accounts): ?Carbon
     {
         $lastJournalDate     = $this->getLastJournalDate($category, $accounts);
         $lastTransactionDate = $this->getLastTransactionDate($category, $accounts);
 
-        if (null === $lastTransactionDate && null === $lastJournalDate) {
+        if (!$lastTransactionDate instanceof Carbon && !$lastJournalDate instanceof Carbon) {
             return null;
         }
-        if (null === $lastTransactionDate) {
+        if (!$lastTransactionDate instanceof Carbon) {
             return $lastJournalDate;
         }
-        if (null === $lastJournalDate) {
+        if (!$lastJournalDate instanceof Carbon) {
             return $lastTransactionDate;
         }
 
@@ -321,7 +315,7 @@ class CategoryRepository implements CategoryRepositoryInterface
     }
 
     /**
-     * @throws \Exception
+     * @throws Exception
      */
     private function getLastTransactionDate(Category $category, Collection $accounts): ?Carbon
     {
@@ -354,7 +348,7 @@ class CategoryRepository implements CategoryRepositoryInterface
     }
 
     /**
-     * @throws \Exception
+     * @throws Exception
      */
     public function update(Category $category, array $data): Category
     {

@@ -25,6 +25,7 @@ declare(strict_types=1);
 namespace FireflyIII\Http\Controllers;
 
 use Carbon\Carbon;
+use Exception;
 use FireflyIII\Enums\AccountTypeEnum;
 use FireflyIII\Enums\TransactionTypeEnum;
 use FireflyIII\Exceptions\FireflyException;
@@ -49,6 +50,12 @@ use Illuminate\View\View;
 use Monolog\Handler\RotatingFileHandler;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
+use function Safe\file_get_contents;
+use function Safe\ini_get;
+
+use const PHP_INT_SIZE;
+use const PHP_SAPI;
+
 /**
  * Class DebugController
  */
@@ -63,110 +70,6 @@ class DebugController extends Controller
     {
         parent::__construct();
         $this->middleware(IsDemoUser::class)->except(['displayError']);
-    }
-
-    public function routes(Request $request): never
-    {
-        if (!auth()->user()->hasRole('owner')) {
-            throw new NotFoundHttpException();
-        }
-
-        /** @var iterable $routes */
-        $routes = Route::getRoutes();
-
-        if ('true' === $request->get('api')) {
-            $collection = [];
-            $i          = 0;
-
-            echo 'PATHS="';
-
-            /** @var \Illuminate\Routing\Route $route */
-            foreach ($routes as $route) {
-                ++$i;
-                // skip API and other routes.
-                if (!str_starts_with($route->uri(), 'api/v1')
-                ) {
-                    continue;
-                }
-                // skip non GET routes
-                if (!in_array('GET', $route->methods(), true)) {
-                    continue;
-                }
-                // no name route:
-                if (null === $route->getName()) {
-                    var_dump($route);
-
-                    exit;
-                }
-
-                echo substr($route->uri(), 3);
-                if (0 === $i % 5) {
-                    echo '"<br>PATHS="${PATHS},';
-                }
-                if (0 !== $i % 5) {
-                    echo ',';
-                }
-            }
-
-            exit;
-        }
-
-
-
-        $return = [];
-
-        /** @var \Illuminate\Routing\Route $route */
-        foreach ($routes as $route) {
-            // skip API and other routes.
-            if (
-                str_starts_with($route->uri(), 'api')
-                || str_starts_with($route->uri(), '_debugbar')
-                || str_starts_with($route->uri(), '_ignition')
-                || str_starts_with($route->uri(), 'oauth')
-                || str_starts_with($route->uri(), 'chart')
-                || str_starts_with($route->uri(), 'v1/jscript')
-                || str_starts_with($route->uri(), 'v2/jscript')
-                || str_starts_with($route->uri(), 'json')
-                || str_starts_with($route->uri(), 'sanctum')
-            ) {
-                continue;
-            }
-            // skip non GET routes
-            if (!in_array('GET', $route->methods(), true)) {
-                continue;
-            }
-            // no name route:
-            if (null === $route->getName()) {
-                var_dump($route);
-
-                exit;
-            }
-            if (!str_contains($route->uri(), '{')) {
-
-                $return[$route->getName()] = route($route->getName());
-
-                continue;
-            }
-            $params                    = [];
-            foreach ($route->parameterNames() as $name) {
-                $params[] = $this->getParameter($name);
-            }
-            $return[$route->getName()] = route($route->getName(), $params);
-        }
-        $count  = 0;
-        echo '<hr>';
-        echo '<h1>Routes</h1>';
-        echo sprintf('<h2>%s</h2>', $count);
-        foreach ($return as $name => $path) {
-            echo sprintf('<a href="%1$s">%2$s</a><br>', $path, $name).PHP_EOL;
-            ++$count;
-            if (0 === $count % 10) {
-                echo '<hr>';
-                echo sprintf('<h2>%s</h2>', $count);
-            }
-        }
-
-        exit;
     }
 
     /**
@@ -211,7 +114,7 @@ class DebugController extends Controller
 
         try {
             Artisan::call('twig:clean');
-        } catch (\Exception $e) {  // intentional generic exception
+        } catch (Exception $e) {  // intentional generic exception
             throw new FireflyException($e->getMessage(), 0, $e);
         }
 
@@ -248,10 +151,15 @@ class DebugController extends Controller
         }
         if ('' !== $logContent) {
             // last few lines
-            $logContent = 'Truncated from this point <----|'.substr((string) $logContent, -16384);
+            $logContent = 'Truncated from this point <----|'.substr($logContent, -16384);
         }
 
         return view('debug', compact('table', 'now', 'logContent'));
+    }
+
+    public function apiTest(): View
+    {
+        return view('test.api-test');
     }
 
     private function generateTable(): string
@@ -267,8 +175,8 @@ class DebugController extends Controller
 
     private function getSystemInformation(): array
     {
-        $maxFileSize   = Steam::phpBytes((string) ini_get('upload_max_filesize'));
-        $maxPostSize   = Steam::phpBytes((string) ini_get('post_max_size'));
+        $maxFileSize   = Steam::phpBytes(ini_get('upload_max_filesize'));
+        $maxPostSize   = Steam::phpBytes(ini_get('post_max_size'));
         $drivers       = DB::availableDrivers();
         $currentDriver = DB::getDriverName();
 
@@ -277,8 +185,8 @@ class DebugController extends Controller
             'php_version'     => PHP_VERSION,
             'php_os'          => PHP_OS,
             'uname'           => php_uname('m'),
-            'interface'       => \PHP_SAPI,
-            'bits'            => \PHP_INT_SIZE * 8,
+            'interface'       => PHP_SAPI,
+            'bits'            => PHP_INT_SIZE * 8,
             'bcscale'         => bcscale(),
             'display_errors'  => ini_get('display_errors'),
             'error_reporting' => $this->errorReporting((int) ini_get('error_reporting')),
@@ -300,26 +208,26 @@ class DebugController extends Controller
 
         try {
             if (file_exists('/var/www/counter-main.txt')) {
-                $return['build'] = trim((string) file_get_contents('/var/www/counter-main.txt'));
+                $return['build'] = trim(file_get_contents('/var/www/counter-main.txt'));
                 app('log')->debug(sprintf('build is now "%s"', $return['build']));
             }
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             app('log')->debug('Could not check build counter, but thats ok.');
             app('log')->warning($e->getMessage());
         }
 
         try {
             if (file_exists('/var/www/build-date-main.txt')) {
-                $return['build_date'] = trim((string) file_get_contents('/var/www/build-date-main.txt'));
+                $return['build_date'] = trim(file_get_contents('/var/www/build-date-main.txt'));
             }
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             app('log')->debug('Could not check build date, but thats ok.');
             app('log')->warning($e->getMessage());
         }
-        if ('' !== (string) env('BASE_IMAGE_BUILD')) { // @phpstan-ignore-line
+        if ('' !== (string) env('BASE_IMAGE_BUILD')) {       // @phpstan-ignore-line
             $return['base_build'] = env('BASE_IMAGE_BUILD'); // @phpstan-ignore-line
         }
-        if ('' !== (string) env('BASE_IMAGE_DATE')) { // @phpstan-ignore-line
+        if ('' !== (string) env('BASE_IMAGE_DATE')) {            // @phpstan-ignore-line
             $return['base_build_date'] = env('BASE_IMAGE_DATE'); // @phpstan-ignore-line
         }
 
@@ -378,16 +286,16 @@ class DebugController extends Controller
         setlocale(LC_ALL, (string) $original);
 
         return [
-            'user_id'           => auth()->user()->id,
-            'user_count'        => User::count(),
-            'user_flags'        => $userFlags,
-            'user_agent'        => $userAgent,
-            'native'            => Amount::getNativeCurrency(),
-            'convert_to_native' => Amount::convertToNative(),
-            'locale_attempts'   => $localeAttempts,
-            'locale'            => Steam::getLocale(),
-            'language'          => Steam::getLanguage(),
-            'view_range'        => Preferences::get('viewRange', '1M')->data,
+            'user_id'            => auth()->user()->id,
+            'user_count'         => User::count(),
+            'user_flags'         => $userFlags,
+            'user_agent'         => $userAgent,
+            'primary'            => Amount::getPrimaryCurrency(),
+            'convert_to_primary' => Amount::convertToPrimary(),
+            'locale_attempts'    => $localeAttempts,
+            'locale'             => Steam::getLocale(),
+            'language'           => Steam::getLanguage(),
+            'view_range'         => Preferences::get('viewRange', '1M')->data,
         ];
     }
 
@@ -442,19 +350,107 @@ class DebugController extends Controller
         return implode(' ', $flags);
     }
 
-    /**
-     * Flash all types of messages.
-     *
-     * @return Redirector|RedirectResponse
-     */
-    public function testFlash(Request $request)
+    public function routes(Request $request): never
     {
-        $request->session()->flash('success', 'This is a success message.');
-        $request->session()->flash('info', 'This is an info message.');
-        $request->session()->flash('warning', 'This is a warning.');
-        $request->session()->flash('error', 'This is an error!');
+        if (!auth()->user()->hasRole('owner')) {
+            throw new NotFoundHttpException();
+        }
 
-        return redirect(route('home'));
+        /** @var iterable $routes */
+        $routes = Route::getRoutes();
+
+        if ('true' === $request->get('api')) {
+            $collection = [];
+            $i          = 0;
+
+            echo 'PATHS="';
+
+            /** @var \Illuminate\Routing\Route $route */
+            foreach ($routes as $route) {
+                ++$i;
+                // skip API and other routes.
+                if (!str_starts_with($route->uri(), 'api/v1')
+                ) {
+                    continue;
+                }
+                // skip non GET routes
+                if (!in_array('GET', $route->methods(), true)) {
+                    continue;
+                }
+                // no name route:
+                if (null === $route->getName()) {
+                    var_dump($route);
+
+                    exit;
+                }
+
+                echo substr($route->uri(), 3);
+                if (0 === $i % 5) {
+                    echo '"<br>PATHS="${PATHS},';
+                }
+                if (0 !== $i % 5) {
+                    echo ',';
+                }
+            }
+
+            exit;
+        }
+
+
+        $return = [];
+
+        /** @var \Illuminate\Routing\Route $route */
+        foreach ($routes as $route) {
+            // skip API and other routes.
+            if (
+                str_starts_with($route->uri(), 'api')
+                || str_starts_with($route->uri(), '_debugbar')
+                || str_starts_with($route->uri(), '_ignition')
+                || str_starts_with($route->uri(), 'oauth')
+                || str_starts_with($route->uri(), 'chart')
+                || str_starts_with($route->uri(), 'v1/jscript')
+                || str_starts_with($route->uri(), 'v2/jscript')
+                || str_starts_with($route->uri(), 'json')
+                || str_starts_with($route->uri(), 'sanctum')
+            ) {
+                continue;
+            }
+            // skip non GET routes
+            if (!in_array('GET', $route->methods(), true)) {
+                continue;
+            }
+            // no name route:
+            if (null === $route->getName()) {
+                var_dump($route);
+
+                exit;
+            }
+            if (!str_contains($route->uri(), '{')) {
+
+                $return[$route->getName()] = route($route->getName());
+
+                continue;
+            }
+            $params                    = [];
+            foreach ($route->parameterNames() as $name) {
+                $params[] = $this->getParameter($name);
+            }
+            $return[$route->getName()] = route($route->getName(), $params);
+        }
+        $count  = 0;
+        echo '<hr>';
+        echo '<h1>Routes</h1>';
+        echo sprintf('<h2>%s</h2>', $count);
+        foreach ($return as $name => $path) {
+            echo sprintf('<a href="%1$s">%2$s</a><br>', $path, $name).PHP_EOL;
+            ++$count;
+            if (0 === $count % 10) {
+                echo '<hr>';
+                echo sprintf('<h2>%s</h2>', $count);
+            }
+        }
+
+        exit;
     }
 
     private function getParameter(string $name): string
@@ -581,5 +577,20 @@ class DebugController extends Controller
                 return '20241201';
 
         }
+    }
+
+    /**
+     * Flash all types of messages.
+     *
+     * @return Redirector|RedirectResponse
+     */
+    public function testFlash(Request $request)
+    {
+        $request->session()->flash('success', 'This is a success message.');
+        $request->session()->flash('info', 'This is an info message.');
+        $request->session()->flash('warning', 'This is a warning.');
+        $request->session()->flash('error', 'This is an error!');
+
+        return redirect(route('home'));
     }
 }

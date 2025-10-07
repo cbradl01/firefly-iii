@@ -24,6 +24,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Services\Internal\Support;
 
+use Deprecated;
 use Carbon\Carbon;
 use FireflyIII\Enums\AccountTypeEnum;
 use FireflyIII\Exceptions\DuplicateTransactionException;
@@ -39,6 +40,7 @@ use FireflyIII\Models\TransactionGroup;
 use FireflyIII\Models\TransactionJournal;
 use FireflyIII\Repositories\Account\AccountRepositoryInterface;
 use FireflyIII\Services\Internal\Destroy\TransactionGroupDestroyService;
+use Illuminate\Support\Facades\Validator;
 
 /**
  * Trait AccountServiceTrait
@@ -54,7 +56,7 @@ trait AccountServiceTrait
         }
         $data      = ['iban' => $iban];
         $rules     = ['iban' => 'required|iban'];
-        $validator = \Validator::make($data, $rules);
+        $validator = Validator::make($data, $rules);
         if ($validator->fails()) {
             app('log')->info(sprintf('Detected invalid IBAN ("%s"). Return NULL instead.', $iban));
 
@@ -192,8 +194,8 @@ trait AccountServiceTrait
     /**
      * @throws FireflyException
      *                          *
-     * @deprecated
      */
+    #[Deprecated]
     protected function createOBGroup(Account $account, array $data): TransactionGroup
     {
         app('log')->debug('Now going to create an OB group.');
@@ -209,19 +211,19 @@ trait AccountServiceTrait
         $amount     = array_key_exists('opening_balance', $data) ? $data['opening_balance'] : '0';
 
         // amount is positive.
-        if (1 === bccomp($amount, '0')) {
+        if (1 === bccomp((string) $amount, '0')) {
             app('log')->debug(sprintf('Amount is %s, which is positive. Source is a new IB account, destination is #%d', $amount, $account->id));
             $sourceName = trans('firefly.initial_balance_description', ['account' => $account->name], $language);
             $destId     = $account->id;
         }
         // amount is not positive
-        if (-1 === bccomp($amount, '0')) {
+        if (-1 === bccomp((string) $amount, '0')) {
             app('log')->debug(sprintf('Amount is %s, which is negative. Destination is a new IB account, source is #%d', $amount, $account->id));
             $destName = trans('firefly.initial_balance_account', ['account' => $account->name], $language);
             $sourceId = $account->id;
         }
         // amount is 0
-        if (0 === bccomp($amount, '0')) {
+        if (0 === bccomp((string) $amount, '0')) {
             app('log')->debug('Amount is zero, so will not make an OB group.');
 
             throw new FireflyException('Amount for new opening balance was unexpectedly 0.');
@@ -233,13 +235,14 @@ trait AccountServiceTrait
         // get or grab currency:
         $currency   = $this->accountRepository->getAccountCurrency($account);
         if (null === $currency) {
-            $currency = app('amount')->getNativeCurrencyByUserGroup($account->user->userGroup);
+            $currency = app('amount')->getPrimaryCurrencyByUserGroup($account->user->userGroup);
         }
 
         // submit to factory:
         $submission = [
             'group_title'  => null,
             'user'         => $account->user,
+            'user_group'   => $account->user->userGroup,
             'transactions' => [
                 [
                     'type'             => 'Opening balance',
@@ -352,7 +355,7 @@ trait AccountServiceTrait
 
         if (null === $currency) {
             // use default currency:
-            $currency = app('amount')->getNativeCurrencyByUserGroup($this->user->userGroup);
+            $currency = app('amount')->getPrimaryCurrencyByUserGroup($this->user->userGroup);
         }
         $currency->enabled = true;
         $currency->save();
@@ -392,7 +395,7 @@ trait AccountServiceTrait
         // if exists, update:
         $currency                                    = $this->accountRepository->getAccountCurrency($account);
         if (null === $currency) {
-            $currency = app('amount')->getNativeCurrencyByUserGroup($account->user->userGroup);
+            $currency = app('amount')->getPrimaryCurrencyByUserGroup($account->user->userGroup);
         }
 
         // simply grab the first journal and change it:
@@ -458,9 +461,8 @@ trait AccountServiceTrait
         // get or grab currency:
         $currency   = $this->accountRepository->getAccountCurrency($account);
         if (null === $currency) {
-            $currency = app('amount')->getNativeCurrencyByUserGroup($account->user->userGroup);
+            $currency = app('amount')->getPrimaryCurrencyByUserGroup($account->user->userGroup);
         }
-
         // submit to factory:
         $submission = [
             'group_title'  => null,
@@ -576,7 +578,7 @@ trait AccountServiceTrait
         // if exists, update:
         $currency           = $this->accountRepository->getAccountCurrency($account);
         if (null === $currency) {
-            $currency = app('amount')->getNativeCurrencyByUserGroup($account->user->userGroup);
+            $currency = app('amount')->getPrimaryCurrencyByUserGroup($account->user->userGroup);
         }
 
         // simply grab the first journal and change it:
@@ -657,15 +659,15 @@ trait AccountServiceTrait
         // get or grab currency:
         $currency   = $this->accountRepository->getAccountCurrency($account);
         if (null === $currency) {
-            $currency = app('amount')->getNativeCurrencyByUserGroup($account->user->userGroup);
+            $currency = app('amount')->getPrimaryCurrencyByUserGroup($account->user->userGroup);
         }
 
         // submit to factory:
         $submission = [
-            'group_title'   => null,
-            'user'          => $account->user,
-            'user_group'    => $account->user->userGroup,
-            'transactions'  => [
+            'group_title'  => null,
+            'user'         => $account->user,
+            'user_group'   => $account->user->userGroup,
+            'transactions' => [
                 [
                     'type'             => 'Opening balance',
                     'date'             => $openingBalanceDate,

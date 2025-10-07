@@ -25,9 +25,11 @@ declare(strict_types=1);
 namespace FireflyIII\Console\Commands\Upgrade;
 
 use FireflyIII\Console\Commands\ShowsFriendlyMessages;
+use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Models\Preference;
 use FireflyIII\Models\TransactionCurrency;
 use FireflyIII\Models\UserGroup;
+use FireflyIII\Support\Facades\Amount;
 use FireflyIII\User;
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
@@ -65,7 +67,7 @@ class UpgradesCurrencyPreferences extends Command
     {
         $configVar = app('fireflyconfig')->get(self::CONFIG_NAME, false);
         if (null !== $configVar) {
-            return (bool) $configVar->data;
+            return (bool)$configVar->data;
         }
 
         return false;
@@ -104,8 +106,8 @@ class UpgradesCurrencyPreferences extends Command
 
     private function upgradeUserPreferences(User $user): void
     {
-        $currencies      = TransactionCurrency::get();
-        $enabled         = new Collection();
+        $currencies = TransactionCurrency::get();
+        $enabled    = new Collection();
 
         /** @var TransactionCurrency $currency */
         foreach ($currencies as $currency) {
@@ -116,14 +118,15 @@ class UpgradesCurrencyPreferences extends Command
         $user->currencies()->sync($enabled->pluck('id')->toArray());
 
         // set the default currency for the user and for the group:
-        $preference      = $this->getPreference($user);
-        $defaultCurrency = TransactionCurrency::where('code', $preference)->first();
-        if (null === $defaultCurrency) {
-            // get EUR
-            $defaultCurrency = TransactionCurrency::where('code', 'EUR')->first();
+        $preference = $this->getPreference($user);
+
+        try {
+            $primaryCurrency = Amount::getTransactionCurrencyByCode($preference);
+        } catch (FireflyException) {
+            $primaryCurrency = TransactionCurrency::where('code', 'EUR')->first();
         }
-        $user->currencies()->updateExistingPivot($defaultCurrency->id, ['user_default' => true]);
-        $user->userGroup->currencies()->updateExistingPivot($defaultCurrency->id, ['group_default' => true]);
+        $user->currencies()->updateExistingPivot($primaryCurrency->id, ['user_default' => true]);
+        $user->userGroup->currencies()->updateExistingPivot($primaryCurrency->id, ['group_default' => true]);
     }
 
     private function getPreference(User $user): string
@@ -135,7 +138,7 @@ class UpgradesCurrencyPreferences extends Command
         }
 
         if (null !== $preference->data && !is_array($preference->data)) {
-            return (string) $preference->data;
+            return (string)$preference->data;
         }
 
         return 'EUR';

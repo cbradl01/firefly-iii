@@ -76,7 +76,7 @@ class CorrectsOpeningBalanceCurrencies extends Command
     {
         // get the asset account for this opening balance:
         $account = $this->getAccount($journal);
-        if (null === $account) {
+        if (!$account instanceof Account) {
             $message = sprintf('Transaction journal #%d has no valid account. Can\'t fix this line.', $journal->id);
             app('log')->warning($message);
             $this->friendlyError($message);
@@ -132,6 +132,6 @@ class CorrectsOpeningBalanceCurrencies extends Command
         $repos = app(AccountRepositoryInterface::class);
         $repos->setUser($account->user);
 
-        return $repos->getAccountCurrency($account) ?? app('amount')->getNativeCurrencyByUserGroup($account->userGroup);
+        return $repos->getAccountCurrency($account) ?? app('amount')->getPrimaryCurrencyByUserGroup($account->userGroup);
     }
 }

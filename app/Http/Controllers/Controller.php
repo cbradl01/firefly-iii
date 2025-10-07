@@ -23,6 +23,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Controllers;
 
+use FireflyIII\Events\RequestedSendWebhookMessages;
 use FireflyIII\Models\TransactionCurrency;
 use FireflyIII\Support\Facades\Amount;
 use FireflyIII\Support\Facades\Steam;
@@ -32,8 +33,13 @@ use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Foundation\Bus\DispatchesJobs;
 use Illuminate\Foundation\Validation\ValidatesRequests;
 use Illuminate\Routing\Controller as BaseController;
+use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\View;
-use Route;
+use Illuminate\Support\Facades\Route;
+
+use function Safe\realpath;
+use function Safe\ini_get;
 
 /**
  * Class Controller.
@@ -51,13 +57,12 @@ abstract class Controller extends BaseController
 
     // fails on PHP < 8.4
     public protected(set) string $name;
-
-    protected string $dateTimeFormat;
-    protected string $monthAndDayFormat;
-    protected bool $convertToNative = false;
-    protected ?TransactionCurrency $defaultCurrency;
-    protected string $monthFormat;
-    protected string $redirectUrl = '/';
+    protected bool                 $convertToPrimary = false;
+    protected string               $dateTimeFormat;
+    protected ?TransactionCurrency $primaryCurrency;
+    protected string               $monthAndDayFormat;
+    protected string               $monthFormat;
+    protected string               $redirectUrl      = '/';
 
     /**
      * Controller constructor.
@@ -76,11 +81,13 @@ abstract class Controller extends BaseController
         View::share('featuringWebhooks', true === config('firefly.feature_flags.webhooks') && true === config('firefly.allow_webhooks'));
 
         // share custom auth guard info.
-        $authGuard = config('firefly.authentication_guard');
-        $logoutUrl = config('firefly.custom_logout_url');
+        $authGuard        = config('firefly.authentication_guard');
+        $logoutUrl        = config('firefly.custom_logout_url');
 
         // overrule v2 layout back to v1.
         if ('true' === request()->get('force_default_layout') && 'v2' === config('view.layout')) {
+            // config('view.layout','v1');
+            Config::set('view.layout', 'v1');
             View::getFinder()->setPaths([realpath(base_path('resources/views'))]); // @phpstan-ignore-line
         }
 
@@ -88,23 +95,23 @@ abstract class Controller extends BaseController
         View::share('logoutUrl', $logoutUrl);
 
         // upload size
-        $maxFileSize = Steam::phpBytes((string) ini_get('upload_max_filesize'));
-        $maxPostSize = Steam::phpBytes((string) ini_get('post_max_size'));
-        $uploadSize  = min($maxFileSize, $maxPostSize);
+        $maxFileSize      = Steam::phpBytes(ini_get('upload_max_filesize'));
+        $maxPostSize      = Steam::phpBytes(ini_get('post_max_size'));
+        $uploadSize       = min($maxFileSize, $maxPostSize);
         View::share('uploadSize', $uploadSize);
 
         // share is alpha, is beta
-        $isAlpha = false;
-        $isBeta = false;
-        $isDevelop = false;
-        if (str_contains(config('firefly.version'), 'alpha')) {
+        $isAlpha          = false;
+        $isBeta           = false;
+        $isDevelop        = false;
+        if (str_contains((string) config('firefly.version'), 'alpha')) {
             $isAlpha = true;
         }
-        if (str_contains(config('firefly.version'), 'develop') || str_contains(config('firefly.version'), 'branch')) {
+        if (str_contains((string) config('firefly.version'), 'develop') || str_contains((string) config('firefly.version'), 'branch')) {
             $isDevelop = true;
         }
 
-        if (str_contains(config('firefly.version'), 'beta')) {
+        if (str_contains((string) config('firefly.version'), 'beta')) {
             $isBeta = true;
         }
 
@@ -114,28 +121,37 @@ abstract class Controller extends BaseController
 
         $this->middleware(
             function ($request, $next): mixed {
-                $locale = Steam::getLocale();
+                $locale                  = Steam::getLocale();
                 // translations for specific strings:
                 $this->monthFormat       = (string) trans('config.month_js', [], $locale);
                 $this->monthAndDayFormat = (string) trans('config.month_and_day_js', [], $locale);
                 $this->dateTimeFormat    = (string) trans('config.date_time_js', [], $locale);
                 $darkMode                = 'browser';
-                $this->defaultCurrency   =null;
+                $this->primaryCurrency   = null;
                 // get shown-intro-preference:
                 if (auth()->check()) {
-                    $this->defaultCurrency   = Amount::getNativeCurrency();
-                    $language  = Steam::getLanguage();
-                    $locale    = Steam::getLocale();
-                    $darkMode  = app('preferences')->get('darkMode', 'browser')->data;
-                    $this->convertToNative =Amount::convertToNative();
-                    $page      = $this->getPageName();
-                    $shownDemo = $this->hasSeenDemo();
+                    $this->primaryCurrency  = Amount::getPrimaryCurrency();
+                    $language               = Steam::getLanguage();
+                    $locale                 = Steam::getLocale();
+                    $darkMode               = app('preferences')->get('darkMode', 'browser')->data;
+                    $this->convertToPrimary = Amount::convertToPrimary();
+                    $page                   = $this->getPageName();
+                    $shownDemo              = $this->hasSeenDemo();
                     View::share('language', $language);
                     View::share('locale', $locale);
-                    View::share('convertToNative', $this->convertToNative);
+                    View::share('convertToPrimary', $this->convertToPrimary);
+                    View::share('primaryCurrency', $this->primaryCurrency);
                     View::share('shownDemo', $shownDemo);
                     View::share('current_route_name', $page);
                     View::share('original_route_name', Route::currentRouteName());
+
+                    // lottery to send any remaining webhooks:
+                    if (7 === random_int(1, 10)) {
+                        // trigger event to send them:
+                        Log::debug('send event RequestedSendWebhookMessages through lottery');
+                        event(new RequestedSendWebhookMessages());
+                    }
+
                 }
                 View::share('darkMode', $darkMode);
 

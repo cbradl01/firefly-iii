@@ -25,7 +25,7 @@ declare(strict_types=1);
 namespace FireflyIII\Notifications\Security;
 
 use FireflyIII\Notifications\ReturnsAvailableChannels;
-use FireflyIII\Notifications\ReturnsSettings;
+use FireflyIII\Support\Facades\FireflyConfig;
 use FireflyIII\Support\Facades\Steam;
 use FireflyIII\User;
 use Illuminate\Bus\Queueable;
@@ -34,18 +34,12 @@ use Illuminate\Notifications\Messages\SlackMessage;
 use Illuminate\Notifications\Notification;
 use Illuminate\Support\Facades\Request;
 use NotificationChannels\Pushover\PushoverMessage;
-use Ntfy\Message;
 
 class UserFailedLoginAttempt extends Notification
 {
     use Queueable;
 
-    private User $user;
-
-    public function __construct(User $user)
-    {
-        $this->user = $user;
-    }
+    public function __construct(private User $user) {}
 
     public function toArray(User $notifiable): array
     {
@@ -64,26 +58,29 @@ class UserFailedLoginAttempt extends Notification
         $userAgent = Request::userAgent();
         $time      = now(config('app.timezone'))->isoFormat((string) trans('config.date_time_js'));
 
-        return (new MailMessage())->markdown('emails.security.failed-login', ['user' => $this->user, 'ip' => $ip, 'host' => $host, 'userAgent' => $userAgent, 'time' => $time])->subject($subject);
+        return new MailMessage()->markdown('emails.security.failed-login', ['user' => $this->user, 'ip' => $ip, 'host' => $host, 'userAgent' => $userAgent, 'time' => $time])->subject($subject);
     }
 
-    public function toNtfy(User $notifiable): Message
-    {
-        $settings = ReturnsSettings::getSettings('ntfy', 'user', $notifiable);
-        $message  = new Message();
-        $message->topic($settings['ntfy_topic']);
-        $message->title((string) trans('email.failed_login_subject'));
-        $message->body((string) trans('email.failed_login_message', ['email' => $this->user->email]));
-
-        return $message;
-    }
+    //    public function toNtfy(User $notifiable): Message
+    //    {
+    //        $settings = ReturnsSettings::getSettings('ntfy', 'user', $notifiable);
+    //        $message  = new Message();
+    //        $ip       = Request::ip();
+    //        $message->topic($settings['ntfy_topic']);
+    //        $message->title((string) trans('email.failed_login_subject'));
+    //        $message->body((string) trans('email.failed_login_message', ['ip' => $ip, 'email' => $this->user->email]));
+    //
+    //        return $message;
+    //    }
 
     /**
      * @SuppressWarnings("PHPMD.UnusedFormalParameter")
      */
     public function toPushover(User $notifiable): PushoverMessage
     {
-        return PushoverMessage::create((string) trans('email.failed_login_message', ['email' => $this->user->email]))
+        $ip = Request::ip();
+
+        return PushoverMessage::create((string) trans('email.failed_login_message', ['ip' => $ip, 'email' => $this->user->email]))
             ->title((string) trans('email.failed_login_subject'))
         ;
     }
@@ -93,7 +90,8 @@ class UserFailedLoginAttempt extends Notification
      */
     public function toSlack(User $notifiable): SlackMessage
     {
-        $message = (string) trans('email.failed_login_message', ['email' => $this->user->email]);
+        $ip      = Request::ip();
+        $message = (string) trans('email.failed_login_message', ['ip' => $ip, 'email' => $this->user->email]);
 
         return new SlackMessage()->content($message);
     }
@@ -103,6 +101,12 @@ class UserFailedLoginAttempt extends Notification
      */
     public function via(User $notifiable): array
     {
-        return ReturnsAvailableChannels::returnChannels('user', $notifiable);
+        $channels   = ReturnsAvailableChannels::returnChannels('user', $notifiable);
+        $isDemoSite = FireflyConfig::get('is_demo_site', false)->data;
+        if (true === $isDemoSite) {
+            return array_diff($channels, ['mail']);
+        }
+
+        return $channels;
     }
 }

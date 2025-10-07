@@ -29,21 +29,17 @@ use FireflyIII\Factory\TagFactory;
 use FireflyIII\Models\RuleAction;
 use FireflyIII\Models\TransactionJournal;
 use FireflyIII\User;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Class AddTag.
  */
 class AddTag implements ActionInterface
 {
-    private RuleAction $action;
-
     /**
      * TriggerInterface constructor.
      */
-    public function __construct(RuleAction $action)
-    {
-        $this->action = $action;
-    }
+    public function __construct(private readonly RuleAction $action) {}
 
     public function actOnArray(array $journal): bool
     {
@@ -64,14 +60,14 @@ class AddTag implements ActionInterface
             return false;
         }
 
-        $count   = \DB::table('tag_transaction_journal')
+        $count   = DB::table('tag_transaction_journal')
             ->where('tag_id', $tag->id)
             ->where('transaction_journal_id', $journal['transaction_journal_id'])
             ->count()
         ;
         if (0 === $count) {
             // add to journal:
-            \DB::table('tag_transaction_journal')->insert(['tag_id' => $tag->id, 'transaction_journal_id' => $journal['transaction_journal_id']]);
+            DB::table('tag_transaction_journal')->insert(['tag_id' => $tag->id, 'transaction_journal_id' => $journal['transaction_journal_id']]);
             app('log')->debug(sprintf('RuleAction AddTag. Added tag #%d ("%s") to journal %d.', $tag->id, $tag->tag, $journal['transaction_journal_id']));
 
             /** @var TransactionJournal $object */

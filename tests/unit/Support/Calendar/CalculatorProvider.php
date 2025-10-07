@@ -27,23 +27,18 @@ namespace Tests\unit\Support\Calendar;
 use Carbon\Carbon;
 use FireflyIII\Support\Calendar\Periodicity;
 use Tests\unit\Support\Calendar\Periodicity\IntervalProvider;
+use Generator;
 
 readonly class CalculatorProvider
 {
-    public IntervalProvider $intervalProvider;
     public string           $label;
-    public Periodicity      $periodicity;
-    public int              $skip;
 
-    private function __construct(IntervalProvider $intervalProvider, Periodicity $periodicity, int $skip = 0)
+    private function __construct(public IntervalProvider $intervalProvider, public Periodicity $periodicity, public int $skip = 0)
     {
-        $this->skip             = $skip;
-        $this->intervalProvider = $intervalProvider;
-        $this->periodicity      = $periodicity;
-        $this->label            = "{$periodicity->name} {$intervalProvider->label}";
+        $this->label = "{$this->periodicity->name} {$this->intervalProvider->label}";
     }
 
-    public static function providePeriodicityWithSkippedIntervals(): \Generator
+    public static function providePeriodicityWithSkippedIntervals(): Generator
     {
         $intervals = [
             self::from(Periodicity::Daily, new IntervalProvider(Carbon::now(), Carbon::now()->addDays(2)), 1),

@@ -35,6 +35,7 @@ use FireflyIII\Models\TransactionCurrency;
 use FireflyIII\Models\TransactionGroup;
 use FireflyIII\Models\TransactionJournal;
 use FireflyIII\Repositories\TransactionGroup\TransactionGroupRepositoryInterface;
+use FireflyIII\Support\Facades\Steam;
 use FireflyIII\Support\NullArrayObject;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
@@ -44,9 +45,9 @@ use Illuminate\Support\Facades\Log;
  */
 class TransactionGroupTransformer extends AbstractTransformer
 {
-    private TransactionGroupRepositoryInterface $groupRepos;
-    private array                               $metaDateFields;
-    private array                               $metaFields;
+    private readonly TransactionGroupRepositoryInterface $groupRepos;
+    private readonly array                               $metaDateFields;
+    private readonly array                               $metaFields;
 
     /**
      * Constructor.
@@ -83,14 +84,14 @@ class TransactionGroupTransformer extends AbstractTransformer
         $first = new NullArrayObject(reset($group['transactions']));
 
         return [
-            'id'                 => (int) $first['transaction_group_id'],
-            'created_at'         => $first['created_at']->toAtomString(),
-            'updated_at'         => $first['updated_at']->toAtomString(),
-            'user'               => (string) $data['user_id'],
-            'user_group'         => (string) $data['user_group_id'],
-            'group_title'        => $data['title'],
-            'transactions'       => $this->transformTransactions($data),
-            'links'              => [
+            'id'           => (int) $first['transaction_group_id'],
+            'created_at'   => $first['created_at']->toAtomString(),
+            'updated_at'   => $first['updated_at']->toAtomString(),
+            'user'         => (string) $data['user_id'],
+            'user_group'   => (string) $data['user_group_id'],
+            'group_title'  => $data['title'],
+            'transactions' => $this->transformTransactions($data),
+            'links'        => [
                 [
                     'rel' => 'self',
                     'uri' => '/transactions/'.$first['transaction_group_id'],
@@ -116,10 +117,19 @@ class TransactionGroupTransformer extends AbstractTransformer
     private function transformTransaction(array $transaction): array
     {
         // amount:
-        $amount          = app('steam')->positive((string) ($transaction['amount'] ?? '0'));
+        $amount          = Steam::positive((string) ($transaction['amount'] ?? '0'));
         $foreignAmount   = null;
-        if (null !== $transaction['foreign_amount'] && '' !== $transaction['foreign_amount'] && 0 !== bccomp('0', $transaction['foreign_amount'])) {
-            $foreignAmount = app('steam')->positive($transaction['foreign_amount']);
+        if (null !== $transaction['foreign_amount'] && '' !== $transaction['foreign_amount'] && 0 !== bccomp('0', (string) $transaction['foreign_amount'])) {
+            $foreignAmount = Steam::positive($transaction['foreign_amount']);
+        }
+
+        // set primary amount to the normal amount if the currency matches.
+        if ($transaction['primary_currency']['id'] ?? null === $transaction['currency_id']) {
+            $transaction['pc_amount'] = $amount;
+        }
+
+        if (array_key_exists('pc_amount', $transaction) && null !== $transaction['pc_amount']) {
+            $transaction['pc_amount'] = Steam::positive($transaction['pc_amount']);
         }
         $type            = $this->stringFromArray($transaction, 'transaction_type_type', TransactionTypeEnum::WITHDRAWAL->value);
 
@@ -131,10 +141,13 @@ class TransactionGroupTransformer extends AbstractTransformer
 
         return [
             'user'                            => (string) $transaction['user_id'],
-            'transaction_journal_id'          => $transaction['transaction_journal_id'],
-            'type'                            => strtolower($type),
+            'transaction_journal_id'          => (string) $transaction['transaction_journal_id'],
+            'type'                            => strtolower((string) $type),
             'date'                            => $transaction['date']->toAtomString(),
             'order'                           => $transaction['order'],
+
+            // currency information, structured for 6.3.0.
+            'object_has_currency_setting'     => true,
 
             'currency_id'                     => (string) $transaction['currency_id'],
             'currency_code'                   => $transaction['currency_code'],
@@ -144,11 +157,32 @@ class TransactionGroupTransformer extends AbstractTransformer
 
             'foreign_currency_id'             => $this->stringFromArray($transaction, 'foreign_currency_id', null),
             'foreign_currency_code'           => $transaction['foreign_currency_code'],
+            'foreign_currency_name'           => $transaction['foreign_currency_name'],
             'foreign_currency_symbol'         => $transaction['foreign_currency_symbol'],
             'foreign_currency_decimal_places' => $transaction['foreign_currency_decimal_places'],
 
+            'primary_currency_id'             => $transaction['primary_currency']['id'] ?? null,
+            'primary_currency_code'           => $transaction['primary_currency']['code'] ?? null,
+            'primary_currency_name'           => $transaction['primary_currency']['name'] ?? null,
+            'primary_currency_symbol'         => $transaction['primary_currency']['symbol'] ?? null,
+            'primary_currency_decimal_places' => $transaction['primary_currency']['decimal_places'] ?? null,
+
+            // amounts, structured for 6.3.0.
             'amount'                          => $amount,
+            'pc_amount'                       => $transaction['pc_amount'] ?? null,
+
             'foreign_amount'                  => $foreignAmount,
+            'pc_foreign_amount'               => null,
+
+            'source_balance_after'            => $transaction['source_balance_after'] ?? null,
+            'pc_source_balance_after'         => null,
+
+            // destination balance after
+            'destination_balance_after'       => $transaction['destination_balance_after'] ?? null,
+            'pc_destination_balance_after'    => null,
+
+            'source_balance_dirty'            => $transaction['source_balance_dirty'],
+            'destination_balance_dirty'       => $transaction['destination_balance_dirty'],
 
             'description'                     => $transaction['description'],
             'source_description'              => $transaction['source_description'] ?? null,
@@ -172,6 +206,8 @@ class TransactionGroupTransformer extends AbstractTransformer
 
             'bill_id'                         => $this->stringFromArray($transaction, 'bill_id', null),
             'bill_name'                       => $transaction['bill_name'],
+            'subscription_id'                 => $this->stringFromArray($transaction, 'bill_id', null),
+            'subscription_name'               => $transaction['bill_name'],
 
             'reconciled'                      => $transaction['reconciled'],
             'notes'                           => $transaction['notes'],
@@ -183,7 +219,6 @@ class TransactionGroupTransformer extends AbstractTransformer
             'recurrence_id'                   => $transaction['meta']['recurrence_id'] ?? null,
             'recurrence_total'                => $recurrenceTotal,
             'recurrence_count'                => $recurrenceCount,
-            'bunq_payment_id'                 => $transaction['meta']['bunq_payment_id'] ?? null,
             'external_url'                    => $transaction['meta']['external_url'] ?? null,
             'import_hash_v2'                  => $transaction['meta']['import_hash_v2'] ?? null,
 
@@ -196,12 +231,13 @@ class TransactionGroupTransformer extends AbstractTransformer
             'sepa_ci'                         => $transaction['meta']['sepa_ci'] ?? null,
             'sepa_batch_id'                   => $transaction['meta']['sepa_batch_id'] ?? null,
 
-            'interest_date'                   => $transaction['meta_date']['interest_date'] ?? null,
-            'book_date'                       => $transaction['meta_date']['book_date'] ?? null,
-            'process_date'                    => $transaction['meta_date']['process_date'] ?? null,
-            'due_date'                        => $transaction['meta_date']['due_date'] ?? null,
-            'payment_date'                    => $transaction['meta_date']['payment_date'] ?? null,
-            'invoice_date'                    => $transaction['meta_date']['invoice_date'] ?? null,
+            'interest_date'                   => array_key_exists('interest_date', $transaction['meta_date']) ? $transaction['meta_date']['interest_date']->toW3CString() : null,
+            'book_date'                       => array_key_exists('book_date', $transaction['meta_date']) ? $transaction['meta_date']['book_date']->toW3CString() : null,
+            'process_date'                    => array_key_exists('process_date', $transaction['meta_date']) ? $transaction['meta_date']['process_date']->toW3CString() : null,
+            'due_date'                        => array_key_exists('due_date', $transaction['meta_date']) ? $transaction['meta_date']['due_date']->toW3CString() : null,
+            'payment_date'                    => array_key_exists('payment_date', $transaction['meta_date']) ? $transaction['meta_date']['payment_date']->toW3CString() : null,
+            'invoice_date'                    => array_key_exists('invoice_date', $transaction['meta_date']) ? $transaction['meta_date']['invoice_date']->toW3CString() : null,
+
             // location data
             'longitude'                       => $transaction['location']['longitude'],
             'latitude'                        => $transaction['location']['latitude'],
@@ -233,12 +269,6 @@ class TransactionGroupTransformer extends AbstractTransformer
         return null;
     }
 
-    private function getLocation(TransactionJournal $journal): ?Location
-    {
-        /** @var null|Location */
-        return $journal->locations()->first();
-    }
-
     /**
      * @throws FireflyException
      */
@@ -260,8 +290,8 @@ class TransactionGroupTransformer extends AbstractTransformer
                 ],
             ];
         } catch (FireflyException $e) {
-            app('log')->error($e->getMessage());
-            app('log')->error($e->getTraceAsString());
+            Log::error($e->getMessage());
+            Log::error($e->getTraceAsString());
 
             throw new FireflyException(sprintf('Transaction group #%d is broken. Please check out your log files.', $group->id), 0, $e);
         }
@@ -297,8 +327,8 @@ class TransactionGroupTransformer extends AbstractTransformer
         $destination     = $this->getDestinationTransaction($journal);
         $type            = $journal->transactionType->type;
         $currency        = $source->transactionCurrency;
-        $amount          = app('steam')->bcround($this->getAmount($source->amount), $currency->decimal_places ?? 0);
-        $foreignAmount   = $this->getForeignAmount(null === $source->foreign_amount ? null : $source->foreign_amount);
+        $amount          = Steam::bcround($this->getAmount($source->amount), $currency->decimal_places ?? 0);
+        $foreignAmount   = $this->getForeignAmount($source->foreign_amount ?? null);
         $metaFieldData   = $this->groupRepos->getMetaFields($journal->id, $this->metaFields);
         $metaDates       = $this->getDates($this->groupRepos->getMetaDateFields($journal->id, $this->metaDateFields));
         $foreignCurrency = $this->getForeignCurrency($source->foreignCurrency);
@@ -307,14 +337,14 @@ class TransactionGroupTransformer extends AbstractTransformer
         $bill            = $this->getBill($journal->bill);
 
         if (null !== $foreignAmount && null !== $source->foreignCurrency) {
-            $foreignAmount = app('steam')->bcround($foreignAmount, $foreignCurrency['decimal_places'] ?? 0);
+            $foreignAmount = Steam::bcround($foreignAmount, $foreignCurrency['decimal_places'] ?? 0);
         }
 
         $longitude       = null;
         $latitude        = null;
         $zoomLevel       = null;
         $location        = $this->getLocation($journal);
-        if (null !== $location) {
+        if ($location instanceof Location) {
             $longitude = $location->longitude;
             $latitude  = $location->latitude;
             $zoomLevel = $location->zoom_level;
@@ -322,45 +352,45 @@ class TransactionGroupTransformer extends AbstractTransformer
 
         return [
             'user'                            => $journal->user_id,
-            'transaction_journal_id'          => $journal->id,
-            'type'                            => strtolower($type),
+            'transaction_journal_id'          => (string) $journal->id,
+            'type'                            => strtolower((string) $type),
             'date'                            => $journal->date->toAtomString(),
             'order'                           => $journal->order,
 
-            'currency_id'                     => $currency->id,
+            'currency_id'                     => (string) $currency->id,
             'currency_code'                   => $currency->code,
             'currency_symbol'                 => $currency->symbol,
             'currency_decimal_places'         => $currency->decimal_places,
 
-            'foreign_currency_id'             => $foreignCurrency['id'],
+            'foreign_currency_id'             => (string) $foreignCurrency['id'],
             'foreign_currency_code'           => $foreignCurrency['code'],
             'foreign_currency_symbol'         => $foreignCurrency['symbol'],
             'foreign_currency_decimal_places' => $foreignCurrency['decimal_places'],
 
-            'amount'                          => app('steam')->bcround($amount, $currency->decimal_places),
+            'amount'                          => Steam::bcround($amount, $currency->decimal_places),
             'foreign_amount'                  => $foreignAmount,
 
             'description'                     => $journal->description,
             'source_description'              => $source->description,
             'destination_description'         => $destination->description,
 
-            'source_id'                       => $source->account_id,
+            'source_id'                       => (string) $source->account_id,
             'source_name'                     => $source->account->name,
             'source_iban'                     => $source->account->iban,
             'source_type'                     => $source->account->accountType->type,
 
-            'destination_id'                  => $destination->account_id,
+            'destination_id'                  => (string) $destination->account_id,
             'destination_name'                => $destination->account->name,
             'destination_iban'                => $destination->account->iban,
             'destination_type'                => $destination->account->accountType->type,
 
-            'budget_id'                       => $budget['id'],
+            'budget_id'                       => (string) $budget['id'],
             'budget_name'                     => $budget['name'],
 
-            'category_id'                     => $category['id'],
+            'category_id'                     => (string) $category['id'],
             'category_name'                   => $category['name'],
 
-            'bill_id'                         => $bill['id'],
+            'bill_id'                         => (string) $bill['id'],
             'bill_name'                       => $bill['name'],
 
             'reconciled'                      => $source->reconciled,
@@ -433,17 +463,16 @@ class TransactionGroupTransformer extends AbstractTransformer
 
     private function getAmount(string $amount): string
     {
-        return app('steam')->positive($amount);
+        return Steam::positive($amount);
     }
 
     private function getForeignAmount(?string $foreignAmount): ?string
     {
-        $result = null;
         if (null !== $foreignAmount && '' !== $foreignAmount && 0 !== bccomp('0', $foreignAmount)) {
-            $result = app('steam')->positive($foreignAmount);
+            return Steam::positive($foreignAmount);
         }
 
-        return $result;
+        return null;
     }
 
     private function getDates(NullArrayObject $dates): array
@@ -475,7 +504,7 @@ class TransactionGroupTransformer extends AbstractTransformer
             'symbol'         => null,
             'decimal_places' => null,
         ];
-        if (null === $currency) {
+        if (!$currency instanceof TransactionCurrency) {
             return $array;
         }
         $array['id']             = $currency->id;
@@ -492,7 +521,7 @@ class TransactionGroupTransformer extends AbstractTransformer
             'id'   => null,
             'name' => null,
         ];
-        if (null === $budget) {
+        if (!$budget instanceof Budget) {
             return $array;
         }
         $array['id']   = $budget->id;
@@ -507,7 +536,7 @@ class TransactionGroupTransformer extends AbstractTransformer
             'id'   => null,
             'name' => null,
         ];
-        if (null === $category) {
+        if (!$category instanceof Category) {
             return $array;
         }
         $array['id']   = $category->id;
@@ -522,12 +551,18 @@ class TransactionGroupTransformer extends AbstractTransformer
             'id'   => null,
             'name' => null,
         ];
-        if (null === $bill) {
+        if (!$bill instanceof Bill) {
             return $array;
         }
         $array['id']   = (string) $bill->id;
         $array['name'] = $bill->name;
 
         return $array;
+    }
+
+    private function getLocation(TransactionJournal $journal): ?Location
+    {
+        /** @var null|Location */
+        return $journal->locations()->first();
     }
 }

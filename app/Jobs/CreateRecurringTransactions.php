@@ -74,7 +74,7 @@ class CreateRecurringTransactions implements ShouldQueue
         $newDate->startOfDay();
         $this->date              = $newDate;
 
-        if (null !== $date) {
+        if ($date instanceof Carbon) {
             $newDate    = clone $date;
             $newDate->startOfDay();
             $this->date = $newDate;
@@ -156,9 +156,7 @@ class CreateRecurringTransactions implements ShouldQueue
     private function filterRecurrences(Collection $recurrences): Collection
     {
         return $recurrences->filter(
-            function (Recurrence $recurrence) {
-                return $this->validRecurrence($recurrence);
-            }
+            fn (Recurrence $recurrence) => $this->validRecurrence($recurrence)
         );
     }
 
@@ -259,7 +257,7 @@ class CreateRecurringTransactions implements ShouldQueue
     {
         $startDate = clone $recurrence->first_date;
         if (null !== $recurrence->latest_date && $recurrence->latest_date->gte($startDate)) {
-            $startDate = clone $recurrence->latest_date;
+            return clone $recurrence->latest_date;
         }
 
         return $startDate;
@@ -323,7 +321,7 @@ class CreateRecurringTransactions implements ShouldQueue
         /** @var Carbon $date */
         foreach ($occurrences as $date) {
             $result = $this->handleOccurrence($recurrence, $repetition, $date);
-            if (null !== $result) {
+            if ($result instanceof TransactionGroup) {
                 $collection->push($result);
             }
         }
@@ -380,10 +378,10 @@ class CreateRecurringTransactions implements ShouldQueue
         }
 
         $array                      = [
-            'user'               => $recurrence->user,
-            'user_group'         => $recurrence->user->userGroup,
-            'group_title'        => $groupTitle,
-            'transactions'       => $this->getTransactionData($recurrence, $repetition, $date),
+            'user'         => $recurrence->user,
+            'user_group'   => $recurrence->user->userGroup,
+            'group_title'  => $groupTitle,
+            'transactions' => $this->getTransactionData($recurrence, $repetition, $date),
         ];
 
         /** @var TransactionGroup $group */
@@ -420,7 +418,7 @@ class CreateRecurringTransactions implements ShouldQueue
         /** @var RecurrenceTransaction $transaction */
         foreach ($transactions as $index => $transaction) {
             $single   = [
-                'type'                  => null === $transaction?->transactionType?->type ? strtolower($recurrence->transactionType->type) : strtolower($transaction->transactionType->type), // @phpstan-ignore-line
+                'type'                  => null === $transaction?->transactionType?->type ? strtolower((string) $recurrence->transactionType->type) : strtolower($transaction->transactionType->type), // @phpstan-ignore-line
                 'date'                  => $date,
                 'user'                  => $recurrence->user,
                 'user_group'            => $recurrence->user->userGroup,

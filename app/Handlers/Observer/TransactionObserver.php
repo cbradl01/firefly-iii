@@ -45,33 +45,15 @@ class TransactionObserver
                 AccountBalanceCalculator::recalculateForJournal($transaction->transactionJournal);
             }
         }
-        $this->updateNativeAmount($transaction);
+        $this->updatePrimaryCurrencyAmount($transaction);
     }
 
-    public function deleting(?Transaction $transaction): void
+    private function updatePrimaryCurrencyAmount(Transaction $transaction): void
     {
-        app('log')->debug('Observe "deleting" of a transaction.');
-        $transaction?->transactionJournal?->delete();
-    }
-
-    public function updated(Transaction $transaction): void
-    {
-        //        Log::debug('Observe "updated" of a transaction.');
-        if (true === config('firefly.feature_flags.running_balance_column') && true === self::$recalculate) {
-            if (1 === bccomp($transaction->amount, '0')) {
-                Log::debug('Trigger recalculateForJournal');
-                AccountBalanceCalculator::recalculateForJournal($transaction->transactionJournal);
-            }
-        }
-        $this->updateNativeAmount($transaction);
-    }
-
-    private function updateNativeAmount(Transaction $transaction): void
-    {
-        if (!Amount::convertToNative($transaction->transactionJournal->user)) {
+        if (!Amount::convertToPrimary($transaction->transactionJournal->user)) {
             return;
         }
-        $userCurrency                       = app('amount')->getNativeCurrencyByUserGroup($transaction->transactionJournal->user->userGroup);
+        $userCurrency                       = app('amount')->getPrimaryCurrencyByUserGroup($transaction->transactionJournal->user->userGroup);
         $transaction->native_amount         = null;
         $transaction->native_foreign_amount = null;
         // first normal amount
@@ -90,6 +72,24 @@ class TransactionObserver
         }
 
         $transaction->saveQuietly();
-        Log::debug('Transaction native amounts are updated.');
+        Log::debug(sprintf('Transaction #%d primary currency amounts are updated.', $transaction->id));
+    }
+
+    public function deleting(?Transaction $transaction): void
+    {
+        app('log')->debug('Observe "deleting" of a transaction.');
+        $transaction?->transactionJournal?->delete();
+    }
+
+    public function updated(Transaction $transaction): void
+    {
+        //        Log::debug('Observe "updated" of a transaction.');
+        if (true === config('firefly.feature_flags.running_balance_column') && true === self::$recalculate) {
+            if (1 === bccomp($transaction->amount, '0')) {
+                Log::debug('Trigger recalculateForJournal');
+                AccountBalanceCalculator::recalculateForJournal($transaction->transactionJournal);
+            }
+        }
+        $this->updatePrimaryCurrencyAmount($transaction);
     }
 }

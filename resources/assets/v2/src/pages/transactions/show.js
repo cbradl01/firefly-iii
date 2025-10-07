@@ -21,7 +21,7 @@
 import '../../boot/bootstrap.js';
 import dates from "../shared/dates.js";
 import i18next from "i18next";
-import Get from "../../api/v2/model/transaction/get.js";
+import Get from "../../api/v1/model/transaction/get.js";
 import {parseDownloadedSplits} from "./shared/parse-downloaded-splits.js";
 import {format} from "date-fns";
 import formatMoney from "../../util/format-money.js";
@@ -87,10 +87,15 @@ let show = function () {
                     if (this.entries.hasOwnProperty(i)) {
                         const currencyCode = this.entries[i].currency_code;
                         const foreignCurrencyCode = this.entries[i].foreign_currency_code;
+                        const primaryCurrencyCode = this.entries[i].primary_currency_code;
 
                         if (undefined === this.amounts[currencyCode]) {
                             this.amounts[currencyCode] = 0;
                             this.amounts[currencyCode] += parseFloat(this.entries[i].amount);
+                        }
+                        if (undefined === this.amounts[primaryCurrencyCode]) {
+                            this.amounts[primaryCurrencyCode] = 0;
+                            this.amounts[primaryCurrencyCode] += parseFloat(this.entries[i].pc_amount);
                         }
                         if (null !== foreignCurrencyCode && '' !== foreignCurrencyCode && undefined === this.amounts[foreignCurrencyCode]) {
                             this.amounts[foreignCurrencyCode] = 0;

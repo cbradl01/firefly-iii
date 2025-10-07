@@ -28,7 +28,6 @@ use FireflyIII\Models\Category;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\integration\TestCase;
 use FireflyIII\User;
-use FireflyIII\Models\UserGroup;
 
 /**
  * Class CategoryControllerTest
@@ -43,20 +42,6 @@ final class CategoryControllerTest extends TestCase
      * @covers \FireflyIII\Api\V1\Controllers\Autocomplete\CategoryController
      */
     use RefreshDatabase;
-
-    protected function createAuthenticatedUser(): User
-    {
-        $userGroup           = UserGroup::create(['title' => 'Test Group']);
-
-        $user                = User::create([
-            'email'         => 'test@email.com',
-            'password'      => 'password',
-        ]);
-        $user->user_group_id = $userGroup->id;
-        $user->save();
-
-        return $user;
-    }
 
     private function createTestCategories(int $count, User $user): void
     {
@@ -75,7 +60,7 @@ final class CategoryControllerTest extends TestCase
         $response = $this->get(route('api.v1.autocomplete.categories'), ['Accept' => 'application/json']);
         $response->assertStatus(401);
         $response->assertHeader('Content-Type', 'application/json');
-        $response->assertContent('{"message":"Unauthenticated","exception":"AuthenticationException"}');
+        $response->assertContent('{"message":"Unauthenticated.","exception":"AuthenticationException"}');
     }
 
     public function testGivenAuthenticatedRequestWhenCallingTheCategoriesEndpointThenReturns200HttpCode(): void

@@ -24,6 +24,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Controllers\Json;
 
+use Throwable;
 use Carbon\Carbon;
 use FireflyIII\Enums\TransactionTypeEnum;
 use FireflyIII\Exceptions\FireflyException;
@@ -73,11 +74,11 @@ class ReconcileController extends Controller
     {
         $startBalance    = $request->get('startBalance');
         $endBalance      = $request->get('endBalance');
-        $accountCurrency = $this->accountRepos->getAccountCurrency($account) ?? $this->defaultCurrency;
+        $accountCurrency = $this->accountRepos->getAccountCurrency($account) ?? $this->primaryCurrency;
         $amount          = '0';
         $clearedAmount   = '0';
 
-        if (null === $start && null === $end) {
+        if (!$start instanceof Carbon && !$end instanceof Carbon) {
             throw new FireflyException('Invalid dates submitted.');
         }
         if ($end->lt($start)) {
@@ -130,7 +131,7 @@ class ReconcileController extends Controller
 
         try {
             $view = view('accounts.reconcile.overview', compact('account', 'start', 'diffCompare', 'difference', 'end', 'clearedAmount', 'startBalance', 'endBalance', 'amount', 'route', 'countCleared', 'reconSum', 'selectedIds'))->render();
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             app('log')->debug(sprintf('View error: %s', $e->getMessage()));
             app('log')->error($e->getTraceAsString());
             $view = sprintf('Could not render accounts.reconcile.overview: %s', $e->getMessage());
@@ -160,15 +161,15 @@ class ReconcileController extends Controller
         }
         if ($account->id === $journal['destination_account_id']) {
             if ($currency->id === $journal['currency_id']) {
-                $toAdd = bcmul($journal['amount'], '-1');
+                $toAdd = bcmul((string) $journal['amount'], '-1');
             }
             if (null !== $journal['foreign_currency_id'] && $journal['foreign_currency_id'] === $currency->id) {
-                $toAdd = bcmul($journal['foreign_amount'], '-1');
+                $toAdd = bcmul((string) $journal['foreign_amount'], '-1');
             }
         }
 
         app('log')->debug(sprintf('Going to add %s to %s', $toAdd, $amount));
-        $amount = bcadd($amount, $toAdd);
+        $amount = bcadd($amount, (string) $toAdd);
         app('log')->debug(sprintf('Result is %s', $amount));
 
         return $amount;
@@ -183,7 +184,7 @@ class ReconcileController extends Controller
      */
     public function transactions(Account $account, ?Carbon $start = null, ?Carbon $end = null)
     {
-        if (null === $start || null === $end) {
+        if (!$start instanceof Carbon || !$end instanceof Carbon) {
             throw new FireflyException('Invalid dates submitted.');
         }
         if ($end->lt($start)) {
@@ -194,7 +195,7 @@ class ReconcileController extends Controller
         $startDate      = clone $start;
         $startDate->subDay();
 
-        $currency       = $this->accountRepos->getAccountCurrency($account) ?? $this->defaultCurrency;
+        $currency       = $this->accountRepos->getAccountCurrency($account) ?? $this->primaryCurrency;
         // correct
         Log::debug(sprintf('transactions: Call finalAccountBalance with date/time "%s"', $startDate->toIso8601String()));
         Log::debug(sprintf('transactions2: Call finalAccountBalance with date/time "%s"', $end->toIso8601String()));
@@ -216,7 +217,7 @@ class ReconcileController extends Controller
         /** @var GroupCollectorInterface $collector */
         $collector      = app(GroupCollectorInterface::class);
 
-        $collector->setAccounts(new Collection([$account]))
+        $collector->setAccounts(new Collection()->push($account))
             ->setRange($selectionStart, $selectionEnd)
             ->withBudgetInformation()->withCategoryInformation()->withAccountInformation()
         ;
@@ -228,7 +229,7 @@ class ReconcileController extends Controller
                 'accounts.reconcile.transactions',
                 compact('account', 'journals', 'currency', 'start', 'end', 'selectionStart', 'selectionEnd')
             )->render();
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             app('log')->debug(sprintf('Could not render: %s', $e->getMessage()));
             app('log')->error($e->getTraceAsString());
             $html = sprintf('Could not render accounts.reconcile.transactions: %s', $e->getMessage());

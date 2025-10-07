@@ -25,24 +25,27 @@ namespace FireflyIII\Support\Twig;
 
 use Carbon\Carbon;
 use FireflyIII\Models\Account;
-use FireflyIII\Models\TransactionCurrency;
 use FireflyIII\Repositories\Account\AccountRepositoryInterface;
 use FireflyIII\Repositories\User\UserRepositoryInterface;
 use FireflyIII\Support\Facades\Amount;
 use FireflyIII\Support\Facades\Steam;
 use FireflyIII\Support\Search\OperatorQuerySearch;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Route;
 use League\CommonMark\GithubFlavoredMarkdownConverter;
-use Route;
+use Override;
 use Twig\Extension\AbstractExtension;
 use Twig\TwigFilter;
 use Twig\TwigFunction;
+
+use function Safe\parse_url;
 
 /**
  * Class TwigSupport.
  */
 class General extends AbstractExtension
 {
+    #[Override]
     public function getFilters(): array
     {
         return [
@@ -62,40 +65,40 @@ class General extends AbstractExtension
         return new TwigFilter(
             'balance',
             static function (?Account $account): string {
-                if (null === $account) {
+                if (!$account instanceof Account) {
                     return '0';
                 }
 
                 /** @var Carbon $date */
-                $date            = session('end', today(config('app.timezone'))->endOfMonth());
+                $date             = session('end', today(config('app.timezone'))->endOfMonth());
                 Log::debug(sprintf('twig balance: Call finalAccountBalance with date/time "%s"', $date->toIso8601String()));
-                $info            = Steam::finalAccountBalance($account, $date);
-                $currency        = Steam::getAccountCurrency($account);
-                $default         = Amount::getNativeCurrency();
-                $convertToNative = Amount::convertToNative();
-                $useNative       = $convertToNative && $default->id !== $currency->id;
-                $currency        = null === $currency ? $default : $currency;
-                $strings         = [];
+                $info             = Steam::finalAccountBalance($account, $date);
+                $currency         = Steam::getAccountCurrency($account);
+                $primary          = Amount::getPrimaryCurrency();
+                $convertToPrimary = Amount::convertToPrimary();
+                $usePrimary       = $convertToPrimary && $primary->id !== $currency->id;
+                $currency ??= $primary;
+                $strings          = [];
                 foreach ($info as $key => $balance) {
                     if ('balance' === $key) {
                         // balance in account currency.
-                        if (!$useNative) {
+                        if (!$usePrimary) {
                             $strings[] = app('amount')->formatAnything($currency, $balance, false);
                         }
 
                         continue;
                     }
-                    if ('native_balance' === $key) {
-                        // balance in native currency.
-                        if ($useNative) {
-                            $strings[] = app('amount')->formatAnything($default, $balance, false);
+                    if ('pc_balance' === $key) {
+                        // balance in primary currency.
+                        if ($usePrimary) {
+                            $strings[] = app('amount')->formatAnything($primary, $balance, false);
                         }
 
                         continue;
                     }
                     // for multi currency accounts.
-                    if ($useNative && $key !== $default->code) {
-                        $strings[] = app('amount')->formatAnything(TransactionCurrency::where('code', $key)->first(), $balance, false);
+                    if ($usePrimary && $key !== $primary->code) {
+                        $strings[] = app('amount')->formatAnything(Amount::getTransactionCurrencyByCode($key), $balance, false);
                     }
                 }
 
@@ -137,77 +140,15 @@ class General extends AbstractExtension
     {
         return new TwigFilter(
             'mimeIcon',
-            static function (string $string): string {
-                switch ($string) {
-                    default:
-                        return 'fa-file-o';
-
-                    case 'application/pdf':
-                        return 'fa-file-pdf-o';
-
-                        // image
-                    case 'image/png':
-                    case 'image/jpeg':
-                    case 'image/svg+xml':
-                    case 'image/heic':
-                    case 'image/heic-sequence':
-                    case 'application/vnd.oasis.opendocument.image':
-                        return 'fa-file-image-o';
-
-                        // MS word
-                    case 'application/msword':
-                    case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
-                    case 'application/vnd.openxmlformats-officedocument.wordprocessingml.template':
-                    case 'application/x-iwork-pages-sffpages':
-                    case 'application/vnd.sun.xml.writer':
-                    case 'application/vnd.sun.xml.writer.template':
-                    case 'application/vnd.sun.xml.writer.global':
-                    case 'application/vnd.stardivision.writer':
-                    case 'application/vnd.stardivision.writer-global':
-                    case 'application/vnd.oasis.opendocument.text':
-                    case 'application/vnd.oasis.opendocument.text-template':
-                    case 'application/vnd.oasis.opendocument.text-web':
-                    case 'application/vnd.oasis.opendocument.text-master':
-                        return 'fa-file-word-o';
-
-                        // MS excel
-                    case 'application/vnd.ms-excel':
-                    case 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':
-                    case 'application/vnd.openxmlformats-officedocument.spreadsheetml.template':
-                    case 'application/vnd.sun.xml.calc':
-                    case 'application/vnd.sun.xml.calc.template':
-                    case 'application/vnd.stardivision.calc':
-                    case 'application/vnd.oasis.opendocument.spreadsheet':
-                    case 'application/vnd.oasis.opendocument.spreadsheet-template':
-                        return 'fa-file-excel-o';
-
-                        // MS powerpoint
-                    case 'application/vnd.ms-powerpoint':
-                    case 'application/vnd.openxmlformats-officedocument.presentationml.presentation':
-                    case 'application/vnd.openxmlformats-officedocument.presentationml.template':
-                    case 'application/vnd.openxmlformats-officedocument.presentationml.slideshow':
-                    case 'application/vnd.sun.xml.impress':
-                    case 'application/vnd.sun.xml.impress.template':
-                    case 'application/vnd.stardivision.impress':
-                    case 'application/vnd.oasis.opendocument.presentation':
-                    case 'application/vnd.oasis.opendocument.presentation-template':
-                        return 'fa-file-powerpoint-o';
-
-                        // calc
-                    case 'application/vnd.sun.xml.draw':
-                    case 'application/vnd.sun.xml.draw.template':
-                    case 'application/vnd.stardivision.draw':
-                    case 'application/vnd.oasis.opendocument.chart':
-                        return 'fa-paint-brush';
-
-                    case 'application/vnd.oasis.opendocument.graphics':
-                    case 'application/vnd.oasis.opendocument.graphics-template':
-                    case 'application/vnd.sun.xml.math':
-                    case 'application/vnd.stardivision.math':
-                    case 'application/vnd.oasis.opendocument.formula':
-                    case 'application/vnd.oasis.opendocument.database':
-                        return 'fa-calculator';
-                }
+            static fn (string $string): string => match ($string) {
+                'application/pdf'                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           => 'fa-file-pdf-o',
+                'image/webp', 'image/png', 'image/jpeg', 'image/svg+xml', 'image/heic', 'image/heic-sequence', 'application/vnd.oasis.opendocument.image'                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   => 'fa-file-image-o',
+                'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/vnd.openxmlformats-officedocument.wordprocessingml.template', 'application/x-iwork-pages-sffpages', 'application/vnd.sun.xml.writer', 'application/vnd.sun.xml.writer.template', 'application/vnd.sun.xml.writer.global', 'application/vnd.stardivision.writer', 'application/vnd.stardivision.writer-global', 'application/vnd.oasis.opendocument.text', 'application/vnd.oasis.opendocument.text-template', 'application/vnd.oasis.opendocument.text-web', 'application/vnd.oasis.opendocument.text-master' => 'fa-file-word-o',
+                'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.openxmlformats-officedocument.spreadsheetml.template', 'application/vnd.sun.xml.calc', 'application/vnd.sun.xml.calc.template', 'application/vnd.stardivision.calc', 'application/vnd.oasis.opendocument.spreadsheet', 'application/vnd.oasis.opendocument.spreadsheet-template'                                                                                                                                                                                                                          => 'fa-file-excel-o',
+                'application/vnd.ms-powerpoint', 'application/vnd.openxmlformats-officedocument.presentationml.presentation', 'application/vnd.openxmlformats-officedocument.presentationml.template', 'application/vnd.openxmlformats-officedocument.presentationml.slideshow', 'application/vnd.sun.xml.impress', 'application/vnd.sun.xml.impress.template', 'application/vnd.stardivision.impress', 'application/vnd.oasis.opendocument.presentation', 'application/vnd.oasis.opendocument.presentation-template'                                                                                                                       => 'fa-file-powerpoint-o',
+                'application/vnd.sun.xml.draw', 'application/vnd.sun.xml.draw.template', 'application/vnd.stardivision.draw', 'application/vnd.oasis.opendocument.chart'                                                                                                                                                                                                                                                                                                                                                                                                                                                                    => 'fa-paint-brush',
+                'application/vnd.oasis.opendocument.graphics', 'application/vnd.oasis.opendocument.graphics-template', 'application/vnd.sun.xml.math', 'application/vnd.stardivision.math', 'application/vnd.oasis.opendocument.formula', 'application/vnd.oasis.opendocument.database'                                                                                                                                                                                                                                                                                                                                                     => 'fa-calculator',
+                default                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     => 'fa-file-o',
             },
             ['is_safe' => ['html']]
         );
@@ -226,7 +167,7 @@ class General extends AbstractExtension
                     ]
                 );
 
-                return (string) $converter->convert($text);
+                return (string)$converter->convert($text);
             },
             ['is_safe' => ['html']]
         );
@@ -240,14 +181,21 @@ class General extends AbstractExtension
         return new TwigFilter(
             'phphost',
             static function (string $string): string {
-                $proto = (string) parse_url($string, PHP_URL_SCHEME);
-                $host  = (string) parse_url($string, PHP_URL_HOST);
+                $proto = parse_url($string, PHP_URL_SCHEME);
+                $host  = parse_url($string, PHP_URL_HOST);
+                if (is_array($host)) {
+                    $host = implode(' ', $host);
+                }
+                if (is_array($proto)) {
+                    $proto = implode(' ', $proto);
+                }
 
                 return e(sprintf('%s://%s', $proto, $host));
             }
         );
     }
 
+    #[Override]
     public function getFunctions(): array
     {
         return [
@@ -271,9 +219,7 @@ class General extends AbstractExtension
     {
         return new TwigFunction(
             'phpdate',
-            static function (string $str): string {
-                return date($str);
-            }
+            static fn (string $str): string => date($str)
         );
     }
 
@@ -309,7 +255,7 @@ class General extends AbstractExtension
             static function (): string {
                 $args  = func_get_args();
                 $route = $args[0]; // name of the route.
-                $name  = \Route::getCurrentRoute()->getName() ?? '';
+                $name  = Route::getCurrentRoute()->getName() ?? '';
                 if (str_contains($name, $route)) {
                     return 'active';
                 }
@@ -333,8 +279,8 @@ class General extends AbstractExtension
 
                 if ($objectType === $activeObjectType
                     && false !== stripos(
-                        \Route::getCurrentRoute()->getName(),
-                        $route
+                        (string)Route::getCurrentRoute()->getName(),
+                        (string)$route
                     )) {
                     return 'active';
                 }
@@ -356,7 +302,7 @@ class General extends AbstractExtension
             static function (): string {
                 $args  = func_get_args();
                 $route = $args[0]; // name of the route.
-                $name  = \Route::getCurrentRoute()->getName() ?? '';
+                $name  = Route::getCurrentRoute()->getName() ?? '';
                 if (str_contains($name, $route)) {
                     return 'menu-open';
                 }
@@ -435,9 +381,7 @@ class General extends AbstractExtension
     {
         return new TwigFunction(
             'carbonize',
-            static function (string $date): Carbon {
-                return new Carbon($date, config('app.timezone'));
-            }
+            static fn (string $date): Carbon => new Carbon($date, config('app.timezone'))
         );
     }
 }

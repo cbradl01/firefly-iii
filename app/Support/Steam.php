@@ -24,17 +24,25 @@ declare(strict_types=1);
 namespace FireflyIII\Support;
 
 use Carbon\Carbon;
+use Exception;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use FireflyIII\Enums\AccountTypeEnum;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Models\Account;
+use FireflyIII\Models\AccountMeta;
 use FireflyIII\Models\Transaction;
 use FireflyIII\Models\TransactionCurrency;
 use FireflyIII\Support\Facades\Amount;
 use FireflyIII\Support\Http\Api\ExchangeRateConverter;
+use FireflyIII\Support\Singleton\PreferencesSingleton;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Str;
+use ValueError;
+
+use function Safe\parse_url;
+use function Safe\preg_replace;
 
 /**
  * Class Steam.
@@ -504,6 +512,69 @@ class Steam
         return $number;
     }
 
+    public function filterAccountBalances(array $total, Account $account, bool $convertToPrimary, ?TransactionCurrency $currency = null): array
+    {
+        Log::debug(sprintf('filterAccountBalances(#%d)', $account->id));
+        $return = [];
+        foreach ($total as $key => $value) {
+            $return[$key] = $this->filterAccountBalance($value, $account, $convertToPrimary, $currency);
+        }
+        Log::debug(sprintf('end of filterAccountBalances(#%d)', $account->id));
+
+        return $return;
+    }
+
+    public function filterAccountBalance(array $set, Account $account, bool $convertToPrimary, ?TransactionCurrency $currency = null): array
+    {
+        Log::debug(sprintf('filterAccountBalance(#%d)', $account->id), $set);
+        if (0 === count($set)) {
+            Log::debug(sprintf('Return empty array for account #%d', $account->id));
+
+            return [];
+        }
+        $primaryCurrency = Amount::getPrimaryCurrency();
+        if ($convertToPrimary) {
+            if ($primaryCurrency->id === $currency?->id) {
+                Log::debug(sprintf('Unset [%s] for account #%d (no longer unset "pc_balance")', $primaryCurrency->code, $account->id));
+                unset($set[$primaryCurrency->code]);
+            }
+            // todo rethink this logic.
+            if ($currency instanceof TransactionCurrency && $primaryCurrency->id !== $currency->id) {
+                Log::debug(sprintf('Unset balance for account #%d', $account->id));
+                unset($set['balance']);
+            }
+
+            if (!$currency instanceof TransactionCurrency) {
+                Log::debug(sprintf('Unset balance for account #%d', $account->id));
+                unset($set['balance']);
+            }
+        }
+
+        if (!$convertToPrimary) {
+            if (!$currency instanceof TransactionCurrency) {
+                Log::debug(sprintf('Unset pc_balance and make primaryCurrency balance the balance for account #%d', $account->id));
+                $set['balance'] = $set[$primaryCurrency->code] ?? '0';
+                unset($set[$primaryCurrency->code]);
+            }
+
+            if ($currency instanceof TransactionCurrency) {
+                Log::debug(sprintf('Unset [%s] + [%s] balance for account #%d', $primaryCurrency->code, $currency->code, $account->id));
+                unset($set[$primaryCurrency->code], $set[$currency->code]);
+            }
+        }
+
+        // put specific value first in array.
+        if (array_key_exists('pc_balance', $set)) {
+            $set = ['pc_balance' => $set['pc_balance']] + $set;
+        }
+        if (array_key_exists('balance', $set)) {
+            $set = ['balance' => $set['balance']] + $set;
+        }
+        Log::debug(sprintf('Return #%d', $account->id), $set);
+
+        return $set;
+    }
+
     public function filterSpaces(string $string): string
     {
         $search = [
@@ -563,20 +634,220 @@ class Steam
         return str_replace($search, '', $string);
     }
 
+    public function finalAccountBalanceInRange(Account $account, Carbon $start, Carbon $end, bool $convertToPrimary): array
+    {
+        // expand period.
+        $start->startOfDay();
+        $end->endOfDay();
+        Log::debug(sprintf('finalAccountBalanceInRange(#%d, %s, %s)', $account->id, $start->format('Y-m-d H:i:s'), $end->format('Y-m-d H:i:s')));
+
+        // set up cache
+        $cache                = new CacheProperties();
+        $cache->addProperty($account->id);
+        $cache->addProperty('final-balance-in-range');
+        $cache->addProperty($start);
+        $cache->addProperty($convertToPrimary);
+        $cache->addProperty($end);
+        if ($cache->has()) {
+            return $cache->get();
+        }
+
+        $balances             = [];
+        $formatted            = $start->format('Y-m-d');
+        /*
+         * To make sure the start balance is correct, we need to get the balance at the exact end of the previous day.
+         * Since we just did "startOfDay" we can do subDay()->endOfDay() to get the correct moment.
+         * THAT will be the start balance.
+         */
+        $request              = clone $start;
+        $request->subDay()->endOfDay();
+        Log::debug('Get first balance to start.');
+        Log::debug(sprintf('finalAccountBalanceInRange: Call finalAccountBalance with date/time "%s"', $request->toIso8601String()));
+        $startBalance         = $this->finalAccountBalance($account, $request);
+        $primaryCurrency      = Amount::getPrimaryCurrencyByUserGroup($account->user->userGroup);
+        $accountCurrency      = $this->getAccountCurrency($account);
+        $hasCurrency          = $accountCurrency instanceof TransactionCurrency;
+        $currency             = $accountCurrency ?? $primaryCurrency;
+        Log::debug(sprintf('Currency is %s', $currency->code));
+
+
+        // set start balances:
+        $startBalance[$currency->code] ??= '0';
+        if ($hasCurrency) {
+            $startBalance[$accountCurrency->code] ??= '0';
+        }
+        if (!$hasCurrency) {
+            Log::debug(sprintf('Also set start balance in %s', $primaryCurrency->code));
+            $startBalance[$primaryCurrency->code] ??= '0';
+        }
+        $currencies           = [
+            $currency->id        => $currency,
+            $primaryCurrency->id => $primaryCurrency,
+        ];
+
+        $balances[$formatted] = $startBalance;
+        Log::debug('Final start balance: ', $startBalance);
+
+        // sums up the balance changes per day.
+        Log::debug(sprintf('Date >= %s and <= %s', $start->format('Y-m-d H:i:s'), $end->format('Y-m-d H:i:s')));
+        $set                  = $account->transactions()
+            ->leftJoin('transaction_journals', 'transactions.transaction_journal_id', '=', 'transaction_journals.id')
+            ->where('transaction_journals.date', '>=', $start->format('Y-m-d H:i:s'))
+            ->where('transaction_journals.date', '<=', $end->format('Y-m-d  H:i:s'))
+            ->groupBy('transaction_journals.date')
+            ->groupBy('transactions.transaction_currency_id')
+            ->orderBy('transaction_journals.date', 'ASC')
+            ->whereNull('transaction_journals.deleted_at')
+            ->get(
+                [ // @phpstan-ignore-line
+                    'transaction_journals.date',
+                    'transactions.transaction_currency_id',
+                    DB::raw('SUM(transactions.amount) AS sum_of_day'),
+                ]
+            )
+        ;
+
+        $currentBalance       = $startBalance;
+        $converter            = new ExchangeRateConverter();
+
+
+        /** @var Transaction $entry */
+        foreach ($set as $entry) {
+            // get date object
+            $carbon                               = new Carbon($entry->date, $entry->date_tz);
+            $carbonKey                            = $carbon->format('Y-m-d');
+            // make sure sum is a string:
+            $sumOfDay                             = (string)($entry->sum_of_day ?? '0');
+            // #10426 make sure sum is not in scientific notation.
+            $sumOfDay                             = $this->floatalize($sumOfDay);
+
+            // find currency of this entry, does not have to exist.
+            $currencies[$entry->transaction_currency_id] ??= Amount::getTransactionCurrencyById($entry->transaction_currency_id);
+
+            // make sure this $entry has its own $entryCurrency
+            /** @var TransactionCurrency $entryCurrency */
+            $entryCurrency                        = $currencies[$entry->transaction_currency_id];
+
+            Log::debug(sprintf('Processing transaction(s) on moment %s', $carbon->format('Y-m-d H:i:s')));
+
+            // add amount to current balance in currency code.
+            $currentBalance[$entryCurrency->code]        ??= '0';
+            $currentBalance[$entryCurrency->code] = bcadd($sumOfDay, (string)$currentBalance[$entryCurrency->code]);
+
+            // if not requested to convert to primary currency, add the amount to "balance", do nothing else.
+            if (!$convertToPrimary) {
+                $currentBalance['balance'] = bcadd((string)$currentBalance['balance'], $sumOfDay);
+            }
+            // if convert to primary currency add the converted amount to "pc_balance".
+            // if there is a request to convert, convert to "pc_balance" and use "balance" for whichever amount is in the primary currency.
+            if ($convertToPrimary) {
+                $pcSumOfDay                   = $converter->convert($entryCurrency, $primaryCurrency, $carbon, $sumOfDay);
+                $currentBalance['pc_balance'] = bcadd((string)($currentBalance['pc_balance'] ?? '0'), $pcSumOfDay);
+                // if it's the same currency as the entry, also add to balance (see other code).
+                if ($currency->id === $entryCurrency->id) {
+                    $currentBalance['balance'] = bcadd((string)$currentBalance['balance'], $sumOfDay);
+                }
+            }
+            // add to final array.
+            $balances[$carbonKey]                 = $currentBalance;
+            Log::debug(sprintf('Updated entry [%s]', $carbonKey), $currentBalance);
+        }
+        $cache->store($balances);
+        Log::debug('End of method finalAccountBalanceInRange');
+
+        return $balances;
+    }
+
+    public function accountsBalancesOptimized(Collection $accounts, Carbon $date, ?TransactionCurrency $primary = null, ?bool $convertToPrimary = null): array
+    {
+        Log::debug(sprintf('accountsBalancesOptimized: Called for %d account(s) with date/time "%s"', $accounts->count(), $date->toIso8601String()));
+        $result      = [];
+        $convertToPrimary ??= Amount::convertToPrimary();
+        $primary          ??= Amount::getPrimaryCurrency();
+        $currencies  = $this->getCurrencies($accounts);
+
+        // balance(s) in all currencies for ALL accounts.
+        $arrayOfSums = Transaction::whereIn('account_id', $accounts->pluck('id')->toArray())
+            ->leftJoin('transaction_journals', 'transaction_journals.id', '=', 'transactions.transaction_journal_id')
+            ->leftJoin('transaction_currencies', 'transaction_currencies.id', '=', 'transactions.transaction_currency_id')
+            ->where('transaction_journals.date', '<=', $date->format('Y-m-d H:i:s'))
+            ->groupBy(['transactions.account_id', 'transaction_currencies.code'])
+            ->get(['transactions.account_id', 'transaction_currencies.code', DB::raw('SUM(transactions.amount) as sum_of_amount')])->toArray()
+        ;
+
+        /** @var Account $account */
+        foreach ($accounts as $account) {
+            // this array is PER account, so we wait a bit before we change code here.
+            $return               = [
+                'pc_balance' => '0',
+                'balance'    => '0', // this key is overwritten right away, but I must remember it is always created.
+            ];
+            $currency             = $currencies[$account->id];
+
+            // second array
+            $accountSum           = array_filter($arrayOfSums, fn ($entry) => $entry['account_id'] === $account->id);
+            if (0 === count($accountSum)) {
+                $result[$account->id] = $return;
+
+                continue;
+            }
+            $accountSum           = array_values($accountSum)[0];
+            $sumOfAmount          = (string)$accountSum['sum_of_amount'];
+            $sumOfAmount          = $this->floatalize('' === $sumOfAmount ? '0' : $sumOfAmount);
+            $sumsByCode           = [
+                $accountSum['code'] => $sumOfAmount,
+            ];
+
+            // Log::debug('All balances are (joined)', $others);
+            // if there is no request to convert, take this as "balance" and "pc_balance".
+            $return['balance']    = $sumsByCode[$currency->code] ?? '0';
+            if (!$convertToPrimary) {
+                unset($return['pc_balance']);
+                // Log::debug(sprintf('Set balance to %s, unset pc_balance', $return['balance']));
+            }
+            // if there is a request to convert, convert to "pc_balance" and use "balance" for whichever amount is in the primary currency.
+            if ($convertToPrimary) {
+                $return['pc_balance'] = $this->convertAllBalances($sumsByCode, $primary, $date);
+                // Log::debug(sprintf('Set pc_balance to %s', $return['pc_balance']));
+            }
+
+            // either way, the balance is always combined with the virtual balance:
+            $virtualBalance       = (string)('' === (string)$account->virtual_balance ? '0' : $account->virtual_balance);
+
+            if ($convertToPrimary) {
+                // the primary currency balance is combined with a converted virtual_balance:
+                $converter            = new ExchangeRateConverter();
+                $pcVirtualBalance     = $converter->convert($currency, $primary, $date, $virtualBalance);
+                $return['pc_balance'] = bcadd($pcVirtualBalance, $return['pc_balance']);
+                // Log::debug(sprintf('Primary virtual balance makes the primary total %s', $return['pc_balance']));
+            }
+            if (!$convertToPrimary) {
+                // if not, also increase the balance + primary balance for consistency.
+                $return['balance'] = bcadd($return['balance'], $virtualBalance);
+                // Log::debug(sprintf('Virtual balance makes the (primary currency) total %s', $return['balance']));
+            }
+            $final                = array_merge($return, $sumsByCode);
+            $result[$account->id] = $final;
+            // Log::debug('Final balance is', $final);
+        }
+
+        return $result;
+    }
+
     /**
      * Returns smaller than or equal to, so be careful with END OF DAY.
      *
      * Returns the balance of an account at exact moment given. Array with at least one value.
      * Always returns:
-     * "balance": balance in the account's currency OR user's native currency if the account has no currency
+     * "balance": balance in the account's currency OR user's primary currency if the account has no currency
      * "EUR": balance in EUR (or whatever currencies the account has balance in)
      *
-     * If the user has $convertToNative:
-     * "balance": balance in the account's currency OR user's native currency if the account has no currency
-     * --> "native_balance": balance in the user's native balance, with all amounts converted to native.
+     * If the user has $convertToPrimary:
+     * "balance": balance in the account's currency OR user's primary currency if the account has no currency
+     * --> "pc_balance": balance in the user's primary currency, with all amounts converted to the primary currency.
      * "EUR": balance in EUR (or whatever currencies the account has balance in)
      */
-    public function finalAccountBalance(Account $account, Carbon $date, ?TransactionCurrency $native = null, ?bool $convertToNative = null): array
+    public function finalAccountBalance(Account $account, Carbon $date, ?TransactionCurrency $primary = null, ?bool $convertToPrimary = null): array
     {
 
         $newCache             = new CacheProperties();
@@ -809,67 +1080,21 @@ class Steam
         return $array;
     }
 
-    public function filterAccountBalances(array $total, Account $account, bool $convertToNative, ?TransactionCurrency $currency = null): array
+    public function getAccountCurrency(Account $account): ?TransactionCurrency
     {
-        Log::debug(sprintf('filterAccountBalances(#%d)', $account->id));
-        $return = [];
-        foreach ($total as $key => $value) {
-            $return[$key] = $this->filterAccountBalance($value, $account, $convertToNative, $currency);
+        $type   = $account->accountType->type;
+        $list   = config('firefly.valid_currency_account_types');
+
+        // return null if not in this list.
+        if (!in_array($type, $list, true)) {
+            return null;
         }
-        Log::debug(sprintf('end of filterAccountBalances(#%d)', $account->id));
-
-        return $return;
-    }
-
-    public function filterAccountBalance(array $set, Account $account, bool $convertToNative, ?TransactionCurrency $currency = null): array
-    {
-        Log::debug(sprintf('filterAccountBalance(#%d)', $account->id), $set);
-        if (0 === count($set)) {
-            Log::debug(sprintf('Return empty array for account #%d', $account->id));
-
-            return [];
-        }
-        $defaultCurrency = app('amount')->getNativeCurrency();
-        if ($convertToNative) {
-            if ($defaultCurrency->id === $currency?->id) {
-                Log::debug(sprintf('Unset [%s] for account #%d (no longer unset "native_balance")', $defaultCurrency->code, $account->id));
-                unset($set[$defaultCurrency->code]);
-            }
-            // todo rethink this logic.
-            if (null !== $currency && $defaultCurrency->id !== $currency->id) {
-                Log::debug(sprintf('Unset balance for account #%d', $account->id));
-                unset($set['balance']);
-            }
-
-            if (null === $currency) {
-                Log::debug(sprintf('Unset balance for account #%d', $account->id));
-                unset($set['balance']);
-            }
+        $result = $account->accountMeta()->where('name', 'currency_id')->first();
+        if (null === $result) {
+            return null;
         }
 
-        if (!$convertToNative) {
-            if (null === $currency) {
-                Log::debug(sprintf('Unset native_balance and make defaultCurrency balance the balance for account #%d', $account->id));
-                $set['balance'] = $set[$defaultCurrency->code] ?? '0';
-                unset($set[$defaultCurrency->code]);
-            }
-
-            if (null !== $currency) {
-                Log::debug(sprintf('Unset [%s] + [%s] balance for account #%d', $defaultCurrency->code, $currency->code, $account->id));
-                unset($set[$defaultCurrency->code], $set[$currency->code]);
-            }
-        }
-
-        // put specific value first in array.
-        if (array_key_exists('native_balance', $set)) {
-            $set = ['native_balance' => $set['native_balance']] + $set;
-        }
-        if (array_key_exists('balance', $set)) {
-            $set = ['balance' => $set['balance']] + $set;
-        }
-        Log::debug(sprintf('Return #%d', $account->id), $set);
-
-        return $set;
+        return Amount::getTransactionCurrencyById((int)$result->data);
     }
 
     private function groupAndSumTransactions(array $array, string $group, string $field): array
@@ -878,10 +1103,37 @@ class Steam
 
         foreach ($array as $item) {
             $groupKey          = $item[$group] ?? 'unknown';
-            $return[$groupKey] = bcadd($return[$groupKey] ?? '0', $item[$field]);
+            $return[$groupKey] = bcadd($return[$groupKey] ?? '0', (string)$item[$field]);
         }
 
         return $return;
+    }
+
+    private function convertAllBalances(array $others, TransactionCurrency $primary, Carbon $date): string
+    {
+        $total     = '0';
+        $converter = new ExchangeRateConverter();
+        $singleton = PreferencesSingleton::getInstance();
+        foreach ($others as $key => $amount) {
+            $preference = $singleton->getPreference($key);
+
+            try {
+                $currency = $preference ?? Amount::getTransactionCurrencyByCode($key);
+            } catch (FireflyException) {
+                continue;
+            }
+            if (null === $preference) {
+                $singleton->setPreference($key, $currency);
+            }
+            $current    = $amount;
+            if ($currency->id !== $primary->id) {
+                $current = $converter->convert($currency, $primary, $date, $amount);
+                Log::debug(sprintf('Convert %s %s to %s %s', $currency->code, $amount, $primary->code, $current));
+            }
+            $total      = bcadd($current, $total);
+        }
+
+        return $total;
     }
 
     /**
@@ -893,16 +1145,16 @@ class Steam
 
         try {
             $hostName = gethostbyaddr($ipAddress);
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             app('log')->error($e->getMessage());
             $hostName = $ipAddress;
         }
 
-        if ('' !== (string) $hostName && $hostName !== $ipAddress) {
+        if ('' !== (string)$hostName && $hostName !== $ipAddress) {
             $host = $hostName;
         }
 
-        return (string) $host;
+        return (string)$host;
     }
 
     public function getLastActivities(array $accounts): array
@@ -912,14 +1164,14 @@ class Steam
         $set  = auth()->user()->transactions()
             ->whereIn('transactions.account_id', $accounts)
             ->groupBy(['transactions.account_id', 'transaction_journals.user_id'])
-            ->get(['transactions.account_id', \DB::raw('MAX(transaction_journals.date) AS max_date')]) // @phpstan-ignore-line
+            ->get(['transactions.account_id', DB::raw('MAX(transaction_journals.date) AS max_date')]) // @phpstan-ignore-line
         ;
 
         /** @var Transaction $entry */
         foreach ($set as $entry) {
-            $date                           = new Carbon($entry->max_date, config('app.timezone'));
+            $date                          = new Carbon($entry->max_date, config('app.timezone'));
             $date->setTimezone(config('app.timezone'));
-            $list[(int) $entry->account_id] = $date;
+            $list[(int)$entry->account_id] = $date;
         }
 
         return $list;
@@ -937,11 +1189,11 @@ class Steam
         if ('equal' === $locale) {
             $locale = $this->getLanguage();
         }
-        $locale = (string) $locale;
+        $locale = (string)$locale;
 
         // Check for Windows to replace the locale correctly.
         if ('WIN' === strtoupper(substr(PHP_OS, 0, 3))) {
-            $locale = str_replace('_', '-', $locale);
+            return str_replace('_', '-', $locale);
         }
 
         return $locale;
@@ -1034,8 +1286,8 @@ class Steam
 
         // URL must not lead to weird pages
         $forbiddenWords = ['jscript', 'json', 'debug', 'serviceworker', 'offline', 'delete', '/login', '/attachments/view'];
-        if (\Str::contains($returnUrl, $forbiddenWords)) {
-            $returnUrl = $safeUrl;
+        if (Str::contains($returnUrl, $forbiddenWords)) {
+            return $safeUrl;
         }
 
         return $returnUrl;
@@ -1049,7 +1301,7 @@ class Steam
         $amount = $this->floatalize($amount);
 
         if (1 === bccomp($amount, '0')) {
-            $amount = bcmul($amount, '-1');
+            return bcmul($amount, '-1');
         }
 
         return $amount;
@@ -1069,20 +1321,20 @@ class Steam
         }
         Log::debug(sprintf('Floatalizing %s', $value));
 
-        $number = substr($value, 0, (int) strpos($value, 'E'));
+        $number = substr($value, 0, (int)strpos($value, 'E'));
         if (str_contains($number, '.')) {
-            $post   = strlen(substr($number, (int) strpos($number, '.') + 1));
-            $mantis = substr($value, (int) strpos($value, 'E') + 1);
+            $post   = strlen(substr($number, (int)strpos($number, '.') + 1));
+            $mantis = substr($value, (int)strpos($value, 'E') + 1);
             if ($mantis < 0) {
-                $post += abs((int) $mantis);
+                $post += abs((int)$mantis);
             }
 
             // TODO careless float could break financial math.
-            return number_format((float) $value, $post, '.', '');
+            return number_format((float)$value, $post, '.', '');
         }
 
         // TODO careless float could break financial math.
-        return number_format((float) $value, 0, '.', '');
+        return number_format((float)$value, 0, '.', '');
     }
 
     public function opposite(?string $amount = null): ?string
@@ -1102,24 +1354,24 @@ class Steam
             // has a K in it, remove the K and multiply by 1024.
             $bytes = bcmul(rtrim($string, 'k'), '1024');
 
-            return (int) $bytes;
+            return (int)$bytes;
         }
 
         if (false !== stripos($string, 'm')) {
             // has a M in it, remove the M and multiply by 1048576.
             $bytes = bcmul(rtrim($string, 'm'), '1048576');
 
-            return (int) $bytes;
+            return (int)$bytes;
         }
 
         if (false !== stripos($string, 'g')) {
             // has a G in it, remove the G and multiply by (1024)^3.
             $bytes = bcmul(rtrim($string, 'g'), '1073741824');
 
-            return (int) $bytes;
+            return (int)$bytes;
         }
 
-        return (int) $string;
+        return (int)$string;
     }
 
     public function positive(string $amount): string
@@ -1132,7 +1384,7 @@ class Steam
             if (-1 === bccomp($amount, '0')) {
                 $amount = bcmul($amount, '-1');
             }
-        } catch (\ValueError $e) {
+        } catch (ValueError $e) {
             Log::error(sprintf('ValueError in Steam::positive("%s"): %s', $amount, $e->getMessage()));
             Log::error($e->getTraceAsString());
 
@@ -1142,20 +1394,47 @@ class Steam
         return $amount;
     }
 
-    private function convertAllBalances(array $others, TransactionCurrency $native, Carbon $date): string
+    private function getCurrencies(Collection $accounts): array
     {
-        $total     = '0';
-        $converter = new ExchangeRateConverter();
-        foreach ($others as $key => $amount) {
-            $currency = TransactionCurrency::where('code', $key)->first();
-            if (null === $currency) {
-                continue;
+        $currencies               = [];
+        $accountCurrencies        = [];
+        $accountPreferences       = [];
+        $primary                  = Amount::getPrimaryCurrency();
+        $currencies[$primary->id] = $primary;
+
+        $ids                      = $accounts->pluck('id')->toArray();
+        $result                   = AccountMeta::whereIn('account_id', $ids)->where('name', 'currency_id')->get();
+
+        /** @var AccountMeta $item */
+        foreach ($result as $item) {
+            $integer = (int)$item->data;
+            if (0 !== $integer) {
+                $accountPreferences[(int)$item->account_id] = $integer;
             }
-            $current  = $converter->convert($currency, $native, $date, $amount);
-            Log::debug(sprintf('Convert %s %s to %s %s', $currency->code, $amount, $native->code, $current));
-            $total    = bcadd($current, $total);
+        }
+        // collect those currencies, skip primary because we already have it.
+        $set                      = TransactionCurrency::whereIn('id', $accountPreferences)->where('id', '!=', $primary->id)->get();
+        foreach ($set as $item) {
+            $currencies[$item->id] = $item;
         }
 
-        return $total;
+        /** @var Account $account */
+        foreach ($accounts as $account) {
+            $accountId       = $account->id;
+            $currencyPresent = isset($account->meta) && array_key_exists('currency', $account->meta) && null !== $account->meta['currency'];
+            if ($currencyPresent) {
+                $currencyId                    = $account->meta['currency']->id;
+                $currencies[$currencyId] ??= $account->meta['currency'];
+                $accountCurrencies[$accountId] = $account->meta['currency'];
+            }
+            if (!$currencyPresent && !array_key_exists($accountId, $accountPreferences)) {
+                $accountCurrencies[$accountId] = $primary;
+            }
+            if (!$currencyPresent && array_key_exists($accountId, $accountPreferences)) {
+                $accountCurrencies[$accountId] = $currencies[$accountPreferences[$account->id]];
+            }
+        }
+
+        return $accountCurrencies;
     }
 }

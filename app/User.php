@@ -24,6 +24,7 @@ declare(strict_types=1);
 
 namespace FireflyIII;
 
+use Deprecated;
 use FireflyIII\Enums\UserRoleEnum;
 use FireflyIII\Events\RequestedNewPassword;
 use FireflyIII\Exceptions\FireflyException;
@@ -61,24 +62,19 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Notifications\Notification;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Request;
 use Illuminate\Support\Str;
 use Laravel\Passport\HasApiTokens;
 use NotificationChannels\Pushover\PushoverReceiver;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+use Exception;
 
 class User extends Authenticatable
 {
     use HasApiTokens;
     use Notifiable;
     use ReturnsIntegerIdTrait;
-
-    protected $casts
-                        = [
-            'created_at' => 'datetime',
-            'updated_at' => 'datetime',
-            'blocked'    => 'boolean',
-        ];
-    protected $fillable = ['email', 'password', 'blocked', 'blocked_code'];
+    protected $fillable = ['email', 'password', 'blocked', 'blocked_code', 'user_group_id'];
     protected $hidden   = ['password', 'remember_token'];
     protected $table    = 'users';
 
@@ -165,7 +161,7 @@ class User extends Authenticatable
     /**
      * Generates access token.
      *
-     * @throws \Exception
+     * @throws Exception
      */
     public function generateAccessToken(): string
     {
@@ -193,9 +189,8 @@ class User extends Authenticatable
      * Get the models LDAP domain.
      *
      * @return string
-     *
-     * @deprecated
      */
+    #[Deprecated]
     public function getLdapDomain()
     {
         return $this->{$this->getLdapDomainColumn()};
@@ -205,9 +200,8 @@ class User extends Authenticatable
      * Get the database column name of the domain.
      *
      * @return string
-     *
-     * @deprecated
      */
+    #[Deprecated]
     public function getLdapDomainColumn()
     {
         return 'domain';
@@ -217,9 +211,8 @@ class User extends Authenticatable
      * Get the models LDAP GUID.
      *
      * @return string
-     *
-     * @deprecated
      */
+    #[Deprecated]
     public function getLdapGuid()
     {
         return $this->{$this->getLdapGuidColumn()};
@@ -229,9 +222,8 @@ class User extends Authenticatable
      * Get the models LDAP GUID database column name.
      *
      * @return string
-     *
-     * @deprecated
      */
+    #[Deprecated]
     public function getLdapGuidColumn()
     {
         return 'objectguid';
@@ -464,7 +456,7 @@ class User extends Authenticatable
      */
     public function sendPasswordResetNotification($token): void
     {
-        $ipAddress = \Request::ip();
+        $ipAddress = Request::ip();
 
         event(new RequestedNewPassword($this, $token, $ipAddress));
     }
@@ -473,9 +465,8 @@ class User extends Authenticatable
      * Set the models LDAP domain.
      *
      * @param string $domain
-     *
-     * @deprecated
      */
+    #[Deprecated]
     public function setLdapDomain($domain): void
     {
         $this->{$this->getLdapDomainColumn()} = $domain;
@@ -485,9 +476,8 @@ class User extends Authenticatable
      * Set the models LDAP GUID.
      *
      * @param string $guid
-     *
-     * @deprecated
      */
+    #[Deprecated]
     public function setLdapGuid($guid): void
     {
         $this->{$this->getLdapGuidColumn()} = $guid;
@@ -536,5 +526,14 @@ class User extends Authenticatable
     public function webhooks(): HasMany
     {
         return $this->hasMany(Webhook::class);
+    }
+
+    protected function casts(): array
+    {
+        return [
+            'created_at' => 'datetime',
+            'updated_at' => 'datetime',
+            'blocked'    => 'boolean',
+        ];
     }
 }

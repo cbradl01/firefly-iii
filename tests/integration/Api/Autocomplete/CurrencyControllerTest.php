@@ -27,8 +27,6 @@ namespace Tests\integration\Api\Autocomplete;
 use FireflyIII\Models\TransactionCurrency;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\integration\TestCase;
-use FireflyIII\User;
-use FireflyIII\Models\UserGroup;
 
 /**
  * Class CurrencyControllerTest
@@ -43,21 +41,6 @@ final class CurrencyControllerTest extends TestCase
      * @covers \FireflyIII\Api\V1\Controllers\Autocomplete\CurrencyController
      */
     use RefreshDatabase;
-
-    protected function createAuthenticatedUser(): User
-    {
-        $userGroup           = UserGroup::create(['title' => 'Test Group']);
-
-
-        $user                = User::create([
-            'email'         => 'test@email.com',
-            'password'      => 'password',
-        ]);
-        $user->user_group_id = $userGroup->id;
-        $user->save();
-
-        return $user;
-    }
 
     private function createTestCurrencies(int $count, bool $enabled): void
     {
@@ -78,7 +61,7 @@ final class CurrencyControllerTest extends TestCase
         $response = $this->get(route('api.v1.autocomplete.currencies'), ['Accept' => 'application/json']);
         $response->assertStatus(401);
         $response->assertHeader('Content-Type', 'application/json');
-        $response->assertContent('{"message":"Unauthenticated","exception":"AuthenticationException"}');
+        $response->assertContent('{"message":"Unauthenticated.","exception":"AuthenticationException"}');
     }
 
     public function testGivenAuthenticatedRequestWhenCallingTheCurrenciesEndpointThenReturns200HttpCode(): void

@@ -30,41 +30,54 @@ use FireflyIII\Models\Attachment;
 use FireflyIII\Models\Location;
 use FireflyIII\Models\Note;
 use FireflyIII\Models\Tag;
+use FireflyIII\Models\TransactionCurrency;
 use FireflyIII\Models\TransactionGroup;
 use FireflyIII\Models\TransactionJournal;
 use FireflyIII\Models\TransactionJournalMeta;
 use FireflyIII\Models\UserGroup;
+use FireflyIII\Support\Facades\Amount;
 use FireflyIII\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Override;
 
 class TransactionGroupEnrichment implements EnrichmentInterface
 {
-    private Collection $collection;
-    private array      $notes;
-    private array      $tags;
-    private array      $locations;
-    private array      $journalIds;
-    private User       $user;
-    private UserGroup  $userGroup;
-    private array      $metaData;
-    private array      $dateFields;
-    private array      $attachmentCount;
+    private array          $attachmentCount = [];
+    private Collection     $collection;
+    private readonly array $dateFields;
+    private array          $journalIds      = [];
+    private array          $locations       = [];
+    private array          $metaData        = [];
+    private array          $notes           = [];
+    private array          $tags            = [];
+    private User           $user; // @phpstan-ignore-line
+    private readonly TransactionCurrency $primaryCurrency;
+    private UserGroup      $userGroup; // @phpstan-ignore-line
 
     public function __construct()
     {
-        $this->notes           = [];
-        $this->journalIds      = [];
-        $this->tags            = [];
-        $this->metaData        = [];
-        $this->locations       = [];
-        $this->attachmentCount = [];
         $this->dateFields      = ['interest_date', 'book_date', 'process_date', 'due_date', 'payment_date', 'invoice_date'];
+        $this->primaryCurrency = Amount::getPrimaryCurrency();
     }
 
-    #[\Override]
+    #[Override]
+    public function enrichSingle(array|Model $model): array|TransactionGroup
+    {
+        Log::debug(__METHOD__);
+        if (is_array($model)) {
+            $collection = new Collection()->push($model);
+            $collection = $this->enrich($collection);
+
+            return $collection->first();
+        }
+
+        throw new FireflyException('Cannot enrich single model.');
+    }
+
+    #[Override]
     public function enrich(Collection $collection): Collection
     {
         Log::debug(sprintf('Now doing account enrichment for %d transaction group(s)', $collection->count()));
@@ -83,20 +96,6 @@ class TransactionGroupEnrichment implements EnrichmentInterface
         return $this->collection;
     }
 
-    #[\Override]
-    public function enrichSingle(array|Model $model): array|TransactionGroup
-    {
-        Log::debug(__METHOD__);
-        if (is_array($model)) {
-            $collection = new Collection([$model]);
-            $collection = $this->enrich($collection);
-
-            return $collection->first();
-        }
-
-        throw new FireflyException('Cannot enrich single model.');
-    }
-
     private function collectJournalIds(): void
     {
         /** @var array $group */
@@ -106,17 +105,6 @@ class TransactionGroupEnrichment implements EnrichmentInterface
             }
         }
         $this->journalIds = array_unique($this->journalIds);
-    }
-
-    public function setUserGroup(UserGroup $userGroup): void
-    {
-        $this->userGroup = $userGroup;
-    }
-
-    public function setUser(User $user): void
-    {
-        $this->user      = $user;
-        $this->userGroup = $user->userGroup;
     }
 
     private function collectNotes(): void
@@ -155,7 +143,9 @@ class TransactionGroupEnrichment implements EnrichmentInterface
                 continue;
             }
             if (in_array($name, $this->dateFields, true)) {
-                $this->metaData[$entry['transaction_journal_id']][$name] = Carbon::parse($data);
+                // Log::debug(sprintf('Meta data for "%s" is a date  : "%s"', $name, $data));
+                $this->metaData[$entry['transaction_journal_id']][$name] = Carbon::parse($data, config('app.timezone'));
+                // Log::debug(sprintf('Meta data for "%s" converts to: "%s"', $name, $this->metaData[$entry['transaction_journal_id']][$name]->toW3CString()));
 
                 continue;
             }
@@ -187,7 +177,7 @@ class TransactionGroupEnrichment implements EnrichmentInterface
             ->whereIn('attachable_id', $this->journalIds)
             ->where('attachable_type', TransactionJournal::class)
             ->groupBy('attachable_id')
-            ->get(['attachable_id', DB::raw('COUNT(id) as nr_of_attachments')]) // @phpstan-ignore-line
+            ->get(['attachable_id', DB::raw('COUNT(id) as nr_of_attachments')])
             ->toArray()
         ;
         foreach ($attachments as $row) {
@@ -202,8 +192,9 @@ class TransactionGroupEnrichment implements EnrichmentInterface
         $metaData         = $this->metaData;
         $locations        = $this->locations;
         $attachmentCount  = $this->attachmentCount;
+        $primaryCurrency  = $this->primaryCurrency;
 
-        $this->collection = $this->collection->map(function (array $item) use ($notes, $tags, $metaData, $locations, $attachmentCount) {
+        $this->collection = $this->collection->map(function (array $item) use ($primaryCurrency, $notes, $tags, $metaData, $locations, $attachmentCount) {
             foreach ($item['transactions'] as $index => $transaction) {
                 $journalId                                        = (int) $transaction['transaction_journal_id'];
 
@@ -221,6 +212,15 @@ class TransactionGroupEnrichment implements EnrichmentInterface
                     'latitude'   => null,
                     'longitude'  => null,
                     'zoom_level' => null,
+                ];
+
+                // primary currency
+                $item['transactions'][$index]['primary_currency'] = [
+                    'id'               => (string) $primaryCurrency->id,
+                    'code'             => $primaryCurrency->code,
+                    'name'             => $primaryCurrency->name,
+                    'symbol'           => $primaryCurrency->symbol,
+                    'decimal_places'   => $primaryCurrency->decimal_places,
                 ];
 
                 // append meta data
@@ -246,5 +246,16 @@ class TransactionGroupEnrichment implements EnrichmentInterface
 
             return $item;
         });
+    }
+
+    public function setUser(User $user): void
+    {
+        $this->user      = $user;
+        $this->userGroup = $user->userGroup;
+    }
+
+    public function setUserGroup(UserGroup $userGroup): void
+    {
+        $this->userGroup = $userGroup;
     }
 }

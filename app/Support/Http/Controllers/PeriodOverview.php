@@ -31,9 +31,12 @@ use FireflyIII\Helpers\Collector\GroupCollectorInterface;
 use FireflyIII\Models\Account;
 use FireflyIII\Models\Category;
 use FireflyIII\Models\Tag;
+use FireflyIII\Repositories\Account\AccountRepositoryInterface;
 use FireflyIII\Repositories\Journal\JournalRepositoryInterface;
 use FireflyIII\Support\CacheProperties;
-use Illuminate\Support\Collection;
+use FireflyIII\Support\Debug\Timer;
+use FireflyIII\Support\Facades\Navigation;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Trait PeriodOverview.
@@ -64,10 +67,11 @@ use Illuminate\Support\Collection;
  */
 trait PeriodOverview
 {
+    protected AccountRepositoryInterface $accountRepository;
     protected JournalRepositoryInterface $journalRepos;
 
     /**
-     * This method returns "period entries", so nov-2015, dec-2015, etc etc (this depends on the users session range)
+     * This method returns "period entries", so nov-2015, dec-2015, etc. (this depends on the users session range)
      * and for each period, the amount of money spent and earned. This is a complex operation which is cached for
      * performance reasons.
      *
@@ -75,120 +79,115 @@ trait PeriodOverview
      */
     protected function getAccountPeriodOverview(Account $account, Carbon $start, Carbon $end): array
     {
-        $range         = app('navigation')->getViewRange(true);
-        [$start, $end] = $end < $start ? [$end, $start] : [$start, $end];
+        Log::debug('Now in getAccountPeriodOverview()');
+        $timer                   = Timer::getInstance();
+        $timer->start('account-period-total');
+        $this->accountRepository = app(AccountRepositoryInterface::class);
+        $range                   = Navigation::getViewRange(true);
+        [$start, $end]           = $end < $start ? [$end, $start] : [$start, $end];
 
         // properties for cache
-        $cache         = new CacheProperties();
+        $cache                   = new CacheProperties();
         $cache->addProperty($start);
         $cache->addProperty($end);
         $cache->addProperty('account-show-period-entries');
         $cache->addProperty($account->id);
         if ($cache->has()) {
+            Log::debug('Return CACHED in getAccountPeriodOverview()');
+
             return $cache->get();
         }
 
         /** @var array $dates */
-        $dates         = app('navigation')->blockPeriods($start, $end, $range);
-        $entries       = [];
+        $dates                   = Navigation::blockPeriods($start, $end, $range);
+        $entries                 = [];
 
-        // collect all expenses in this period:
-        /** @var GroupCollectorInterface $collector */
-        $collector     = app(GroupCollectorInterface::class);
-        $collector->setAccounts(new Collection([$account]));
-        $collector->setRange($start, $end);
-        $collector->setTypes([TransactionTypeEnum::DEPOSIT->value]);
-        $earnedSet     = $collector->getExtractedJournals();
-
-        // collect all income in this period:
-        /** @var GroupCollectorInterface $collector */
-        $collector     = app(GroupCollectorInterface::class);
-        $collector->setAccounts(new Collection([$account]));
-        $collector->setRange($start, $end);
-        $collector->setTypes([TransactionTypeEnum::WITHDRAWAL->value]);
-        $spentSet      = $collector->getExtractedJournals();
-
-        // collect all transfers in this period:
-        /** @var GroupCollectorInterface $collector */
-        $collector     = app(GroupCollectorInterface::class);
-        $collector->setAccounts(new Collection([$account]));
-        $collector->setRange($start, $end);
-        $collector->setTypes([TransactionTypeEnum::TRANSFER->value]);
-        $transferSet   = $collector->getExtractedJournals();
-
+        // run a custom query because doing this with the collector is MEGA slow.
+        $timer->start('account-period-collect');
+        $transactions            = $this->accountRepository->periodCollection($account, $start, $end);
+        $timer->stop('account-period-collect');
         // loop dates
+        Log::debug(sprintf('Count of loops: %d', count($dates)));
+        $loops                   = 0;
+        // stop after 10 loops for memory reasons.
+        $timer->start('account-period-loop');
         foreach ($dates as $currentDate) {
-            $title           = app('navigation')->periodShow($currentDate['start'], $currentDate['period']);
-            $earned          = $this->filterJournalsByDate($earnedSet, $currentDate['start'], $currentDate['end']);
-            $spent           = $this->filterJournalsByDate($spentSet, $currentDate['start'], $currentDate['end']);
-            $transferredAway = $this->filterTransferredAway($account, $this->filterJournalsByDate($transferSet, $currentDate['start'], $currentDate['end']));
-            $transferredIn   = $this->filterTransferredIn($account, $this->filterJournalsByDate($transferSet, $currentDate['start'], $currentDate['end']));
+            $title                            = Navigation::periodShow($currentDate['start'], $currentDate['period']);
+            [$transactions, $spent]           = $this->filterTransactionsByType(TransactionTypeEnum::WITHDRAWAL, $transactions, $currentDate['start'], $currentDate['end']);
+            [$transactions, $earned]          = $this->filterTransactionsByType(TransactionTypeEnum::DEPOSIT, $transactions, $currentDate['start'], $currentDate['end']);
+            [$transactions, $transferredAway] = $this->filterTransfers('away', $transactions, $currentDate['start'], $currentDate['end']);
+            [$transactions, $transferredIn]   = $this->filterTransfers('in', $transactions, $currentDate['start'], $currentDate['end']);
             $entries[]
-                             = [
-                                 'title'              => $title,
-                                 'route'              => route('accounts.show', [$account->id, $currentDate['start']->format('Y-m-d'), $currentDate['end']->format('Y-m-d')]),
-
-                                 'total_transactions' => count($spent) + count($earned) + count($transferredAway) + count($transferredIn),
-                                 'spent'              => $this->groupByCurrency($spent),
-                                 'earned'             => $this->groupByCurrency($earned),
-                                 'transferred_away'   => $this->groupByCurrency($transferredAway),
-                                 'transferred_in'     => $this->groupByCurrency($transferredIn),
-                             ];
+                                              = [
+                                                  'title'              => $title,
+                                                  'route'              => route('accounts.show', [$account->id, $currentDate['start']->format('Y-m-d'), $currentDate['end']->format('Y-m-d')]),
+                                                  'total_transactions' => count($spent) + count($earned) + count($transferredAway) + count($transferredIn),
+                                                  'spent'              => $this->groupByCurrency($spent),
+                                                  'earned'             => $this->groupByCurrency($earned),
+                                                  'transferred_away'   => $this->groupByCurrency($transferredAway),
+                                                  'transferred_in'     => $this->groupByCurrency($transferredIn),
+                                              ];
+            ++$loops;
         }
+        $timer->stop('account-period-loop');
         $cache->store($entries);
+        $timer->stop('account-period-total');
+        Log::debug('End of getAccountPeriodOverview()');
 
         return $entries;
     }
 
-    /**
-     * Filter a list of journals by a set of dates, and then group them by currency.
-     */
-    private function filterJournalsByDate(array $array, Carbon $start, Carbon $end): array
+    private function filterTransactionsByType(TransactionTypeEnum $type, array $transactions, Carbon $start, Carbon $end): array
     {
-        $result = [];
+        $result   = [];
+        $filtered = [];
 
-        /** @var array $journal */
-        foreach ($array as $journal) {
-            if ($journal['date'] <= $end && $journal['date'] >= $start) {
-                $result[] = $journal;
+        /**
+         * @var int   $index
+         * @var array $item
+         */
+        foreach ($transactions as $index => $item) {
+            $date = Carbon::parse($item['date']);
+            $fits = $item['type'] === $type->value && $date >= $start && $date <= $end;
+            if ($fits) {
+                $result[] = $item;
+                unset($transactions[$index]);
+            }
+            if (!$fits) {
+                $filtered[] = $item;
             }
         }
 
-        return $result;
+        return [$filtered, $result];
     }
 
-    /**
-     * Return only transactions where $account is the source.
-     */
-    private function filterTransferredAway(Account $account, array $journals): array
+    private function filterTransfers(string $direction, array $transactions, Carbon $start, Carbon $end): array
     {
-        $return = [];
+        $result   = [];
+        $filtered = [];
 
-        /** @var array $journal */
-        foreach ($journals as $journal) {
-            if ($account->id === (int) $journal['source_account_id']) {
-                $return[] = $journal;
+        /**
+         * @var int   $index
+         * @var array $item
+         */
+        foreach ($transactions as $index => $item) {
+            $date       = Carbon::parse($item['date']);
+            if ($date >= $start && $date <= $end) {
+                if ('away' === $direction && -1 === bccomp((string)$item['amount'], '0')) {
+                    $result[] = $item;
+
+                    continue;
+                }
+                if ('in' === $direction && 1 === bccomp((string)$item['amount'], '0')) {
+                    $result[] = $item;
+
+                    continue;
+                }
             }
+            $filtered[] = $item;
         }
 
-        return $return;
-    }
-
-    /**
-     * Return only transactions where $account is the source.
-     */
-    private function filterTransferredIn(Account $account, array $journals): array
-    {
-        $return = [];
-
-        /** @var array $journal */
-        foreach ($journals as $journal) {
-            if ($account->id === (int) $journal['destination_account_id']) {
-                $return[] = $journal;
-            }
-        }
-
-        return $return;
+        return [$filtered, $result];
     }
 
     private function groupByCurrency(array $journals): array
@@ -197,7 +196,7 @@ trait PeriodOverview
 
         /** @var array $journal */
         foreach ($journals as $journal) {
-            $currencyId                    = (int) $journal['currency_id'];
+            $currencyId                    = (int)$journal['currency_id'];
             $currencyCode                  = $journal['currency_code'];
             $currencyName                  = $journal['currency_name'];
             $currencySymbol                = $journal['currency_symbol'];
@@ -205,16 +204,16 @@ trait PeriodOverview
             $foreignCurrencyId             = $journal['foreign_currency_id'];
             $amount                        = $journal['amount'] ?? '0';
 
-            if ($this->convertToNative && $currencyId !== $this->defaultCurrency->id && $foreignCurrencyId !== $this->defaultCurrency->id) {
-                $amount                = $journal['native_amount'] ?? '0';
-                $currencyId            = $this->defaultCurrency->id;
-                $currencyCode          = $this->defaultCurrency->code;
-                $currencyName          = $this->defaultCurrency->name;
-                $currencySymbol        = $this->defaultCurrency->symbol;
-                $currencyDecimalPlaces = $this->defaultCurrency->decimal_places;
+            if ($this->convertToPrimary && $currencyId !== $this->primaryCurrency->id && $foreignCurrencyId !== $this->primaryCurrency->id) {
+                $amount                = $journal['pc_amount'] ?? '0';
+                $currencyId            = $this->primaryCurrency->id;
+                $currencyCode          = $this->primaryCurrency->code;
+                $currencyName          = $this->primaryCurrency->name;
+                $currencySymbol        = $this->primaryCurrency->symbol;
+                $currencyDecimalPlaces = $this->primaryCurrency->decimal_places;
             }
-            if ($this->convertToNative && $currencyId !== $this->defaultCurrency->id && $foreignCurrencyId === $this->defaultCurrency->id) {
-                $currencyId            = (int) $foreignCurrencyId;
+            if ($this->convertToPrimary && $currencyId !== $this->primaryCurrency->id && $foreignCurrencyId === $this->primaryCurrency->id) {
+                $currencyId            = (int)$foreignCurrencyId;
                 $currencyCode          = $journal['foreign_currency_code'];
                 $currencyName          = $journal['foreign_currency_name'];
                 $currencySymbol        = $journal['foreign_currency_symbol'];
@@ -246,7 +245,7 @@ trait PeriodOverview
      */
     protected function getCategoryPeriodOverview(Category $category, Carbon $start, Carbon $end): array
     {
-        $range         = app('navigation')->getViewRange(true);
+        $range         = Navigation::getViewRange(true);
         [$start, $end] = $end < $start ? [$end, $start] : [$start, $end];
 
         // properties for entries with their amounts.
@@ -262,7 +261,7 @@ trait PeriodOverview
         }
 
         /** @var array $dates */
-        $dates         = app('navigation')->blockPeriods($start, $end, $range);
+        $dates         = Navigation::blockPeriods($start, $end, $range);
         $entries       = [];
 
         // collect all expenses in this period:
@@ -292,7 +291,7 @@ trait PeriodOverview
             $spent       = $this->filterJournalsByDate($spentSet, $currentDate['start'], $currentDate['end']);
             $earned      = $this->filterJournalsByDate($earnedSet, $currentDate['start'], $currentDate['end']);
             $transferred = $this->filterJournalsByDate($transferSet, $currentDate['start'], $currentDate['end']);
-            $title       = app('navigation')->periodShow($currentDate['end'], $currentDate['period']);
+            $title       = Navigation::periodShow($currentDate['end'], $currentDate['period']);
             $entries[]
                          = [
                              'transactions'       => 0,
@@ -313,6 +312,23 @@ trait PeriodOverview
     }
 
     /**
+     * Filter a list of journals by a set of dates, and then group them by currency.
+     */
+    private function filterJournalsByDate(array $array, Carbon $start, Carbon $end): array
+    {
+        $result = [];
+
+        /** @var array $journal */
+        foreach ($array as $journal) {
+            if ($journal['date'] <= $end && $journal['date'] >= $start) {
+                $result[] = $journal;
+            }
+        }
+
+        return $result;
+    }
+
+    /**
      * Same as above, but for lists that involve transactions without a budget.
      *
      * This method has been refactored recently.
@@ -321,14 +337,14 @@ trait PeriodOverview
      */
     protected function getNoBudgetPeriodOverview(Carbon $start, Carbon $end): array
     {
-        $range         = app('navigation')->getViewRange(true);
+        $range         = Navigation::getViewRange(true);
 
         [$start, $end] = $end < $start ? [$end, $start] : [$start, $end];
 
         $cache         = new CacheProperties();
         $cache->addProperty($start);
         $cache->addProperty($end);
-        $cache->addProperty($this->convertToNative);
+        $cache->addProperty($this->convertToPrimary);
         $cache->addProperty('no-budget-period-entries');
 
         if ($cache->has()) {
@@ -336,7 +352,7 @@ trait PeriodOverview
         }
 
         /** @var array $dates */
-        $dates         = app('navigation')->blockPeriods($start, $end, $range);
+        $dates         = Navigation::blockPeriods($start, $end, $range);
         $entries       = [];
 
         // get all expenses without a budget.
@@ -347,7 +363,7 @@ trait PeriodOverview
 
         foreach ($dates as $currentDate) {
             $set   = $this->filterJournalsByDate($journals, $currentDate['start'], $currentDate['end']);
-            $title = app('navigation')->periodShow($currentDate['end'], $currentDate['period']);
+            $title = Navigation::periodShow($currentDate['end'], $currentDate['period']);
             $entries[]
                    = [
                        'title'              => $title,
@@ -374,17 +390,17 @@ trait PeriodOverview
     protected function getNoCategoryPeriodOverview(Carbon $theDate): array
     {
         app('log')->debug(sprintf('Now in getNoCategoryPeriodOverview(%s)', $theDate->format('Y-m-d')));
-        $range       = app('navigation')->getViewRange(true);
+        $range       = Navigation::getViewRange(true);
         $first       = $this->journalRepos->firstNull();
         $start       = null === $first ? new Carbon() : $first->date;
         $end         = clone $theDate;
-        $end         = app('navigation')->endOfPeriod($end, $range);
+        $end         = Navigation::endOfPeriod($end, $range);
 
         app('log')->debug(sprintf('Start for getNoCategoryPeriodOverview() is %s', $start->format('Y-m-d')));
         app('log')->debug(sprintf('End for getNoCategoryPeriodOverview() is %s', $end->format('Y-m-d')));
 
         // properties for cache
-        $dates       = app('navigation')->blockPeriods($start, $end, $range);
+        $dates       = Navigation::blockPeriods($start, $end, $range);
         $entries     = [];
 
         // collect all expenses in this period:
@@ -416,7 +432,7 @@ trait PeriodOverview
             $spent       = $this->filterJournalsByDate($spentSet, $currentDate['start'], $currentDate['end']);
             $earned      = $this->filterJournalsByDate($earnedSet, $currentDate['start'], $currentDate['end']);
             $transferred = $this->filterJournalsByDate($transferSet, $currentDate['start'], $currentDate['end']);
-            $title       = app('navigation')->periodShow($currentDate['end'], $currentDate['period']);
+            $title       = Navigation::periodShow($currentDate['end'], $currentDate['period']);
             $entries[]
                          = [
                              'title'              => $title,
@@ -439,7 +455,7 @@ trait PeriodOverview
      */
     protected function getTagPeriodOverview(Tag $tag, Carbon $start, Carbon $end): array // period overview for tags.
     {
-        $range         = app('navigation')->getViewRange(true);
+        $range         = Navigation::getViewRange(true);
         [$start, $end] = $end < $start ? [$end, $start] : [$start, $end];
 
         // properties for cache
@@ -453,7 +469,7 @@ trait PeriodOverview
         }
 
         /** @var array $dates */
-        $dates         = app('navigation')->blockPeriods($start, $end, $range);
+        $dates         = Navigation::blockPeriods($start, $end, $range);
         $entries       = [];
 
         // collect all expenses in this period:
@@ -489,7 +505,7 @@ trait PeriodOverview
             $spent       = $this->filterJournalsByDate($spentSet, $currentDate['start'], $currentDate['end']);
             $earned      = $this->filterJournalsByDate($earnedSet, $currentDate['start'], $currentDate['end']);
             $transferred = $this->filterJournalsByDate($transferSet, $currentDate['start'], $currentDate['end']);
-            $title       = app('navigation')->periodShow($currentDate['end'], $currentDate['period']);
+            $title       = Navigation::periodShow($currentDate['end'], $currentDate['period']);
             $entries[]
                          = [
                              'transactions'       => 0,
@@ -534,7 +550,7 @@ trait PeriodOverview
      */
     protected function getTransactionPeriodOverview(string $transactionType, Carbon $start, Carbon $end): array
     {
-        $range         = app('navigation')->getViewRange(true);
+        $range         = Navigation::getViewRange(true);
         $types         = config(sprintf('firefly.transactionTypesByType.%s', $transactionType));
         [$start, $end] = $end < $start ? [$end, $start] : [$start, $end];
 
@@ -549,41 +565,78 @@ trait PeriodOverview
         }
 
         /** @var array $dates */
-        $dates         = app('navigation')->blockPeriods($start, $end, $range);
+        $dates         = Navigation::blockPeriods($start, $end, $range);
         $entries       = [];
-
+        $spent         = [];
+        $earned        = [];
+        $transferred   = [];
         // collect all journals in this period (regardless of type)
         $collector     = app(GroupCollectorInterface::class);
         $collector->setTypes($types)->setRange($start, $end);
         $genericSet    = $collector->getExtractedJournals();
+        $loops         = 0;
 
         foreach ($dates as $currentDate) {
-            $spent       = [];
-            $earned      = [];
-            $transferred = [];
-            $title       = app('navigation')->periodShow($currentDate['end'], $currentDate['period']);
+            $title = Navigation::periodShow($currentDate['end'], $currentDate['period']);
 
-            // set to correct array
-            if ('expenses' === $transactionType || 'withdrawal' === $transactionType) {
-                $spent = $this->filterJournalsByDate($genericSet, $currentDate['start'], $currentDate['end']);
-            }
-            if ('revenue' === $transactionType || 'deposit' === $transactionType) {
-                $earned = $this->filterJournalsByDate($genericSet, $currentDate['start'], $currentDate['end']);
-            }
-            if ('transfer' === $transactionType || 'transfers' === $transactionType) {
-                $transferred = $this->filterJournalsByDate($genericSet, $currentDate['start'], $currentDate['end']);
+            if ($loops < 10) {
+                // set to correct array
+                if ('expenses' === $transactionType || 'withdrawal' === $transactionType) {
+                    $spent = $this->filterJournalsByDate($genericSet, $currentDate['start'], $currentDate['end']);
+                }
+                if ('revenue' === $transactionType || 'deposit' === $transactionType) {
+                    $earned = $this->filterJournalsByDate($genericSet, $currentDate['start'], $currentDate['end']);
+                }
+                if ('transfer' === $transactionType || 'transfers' === $transactionType) {
+                    $transferred = $this->filterJournalsByDate($genericSet, $currentDate['start'], $currentDate['end']);
+                }
             }
             $entries[]
-                         = [
-                             'title'              => $title,
-                             'route'              => route('transactions.index', [$transactionType, $currentDate['start']->format('Y-m-d'), $currentDate['end']->format('Y-m-d')]),
-                             'total_transactions' => count($spent) + count($earned) + count($transferred),
-                             'spent'              => $this->groupByCurrency($spent),
-                             'earned'             => $this->groupByCurrency($earned),
-                             'transferred'        => $this->groupByCurrency($transferred),
-                         ];
+                   = [
+                       'title'              => $title,
+                       'route'              => route('transactions.index', [$transactionType, $currentDate['start']->format('Y-m-d'), $currentDate['end']->format('Y-m-d')]),
+                       'total_transactions' => count($spent) + count($earned) + count($transferred),
+                       'spent'              => $this->groupByCurrency($spent),
+                       'earned'             => $this->groupByCurrency($earned),
+                       'transferred'        => $this->groupByCurrency($transferred),
+                   ];
+            ++$loops;
         }
 
         return $entries;
+    }
+
+    /**
+     * Return only transactions where $account is the source.
+     */
+    private function filterTransferredAway(Account $account, array $journals): array
+    {
+        $return = [];
+
+        /** @var array $journal */
+        foreach ($journals as $journal) {
+            if ($account->id === (int)$journal['source_account_id']) {
+                $return[] = $journal;
+            }
+        }
+
+        return $return;
+    }
+
+    /**
+     * Return only transactions where $account is the source.
+     */
+    private function filterTransferredIn(Account $account, array $journals): array
+    {
+        $return = [];
+
+        /** @var array $journal */
+        foreach ($journals as $journal) {
+            if ($account->id === (int)$journal['destination_account_id']) {
+                $return[] = $journal;
+            }
+        }
+
+        return $return;
     }
 }

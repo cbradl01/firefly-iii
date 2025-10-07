@@ -24,6 +24,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Api\V1\Controllers\Models\TransactionLinkType;
 
+use Illuminate\Support\Facades\Validator;
 use FireflyIII\Api\V1\Controllers\Controller;
 use FireflyIII\Api\V1\Requests\Models\TransactionLinkType\UpdateRequest;
 use FireflyIII\Exceptions\FireflyException;
@@ -34,6 +35,7 @@ use FireflyIII\Support\Http\Api\TransactionFilter;
 use FireflyIII\Transformers\LinkTypeTransformer;
 use FireflyIII\User;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Validation\ValidationException;
 use League\Fractal\Resource\Item;
 
 /**
@@ -72,6 +74,7 @@ class UpdateController extends Controller
      * Update object.
      *
      * @throws FireflyException
+     * @throws ValidationException
      */
     public function update(UpdateRequest $request, LinkType $linkType): JsonResponse
     {
@@ -85,7 +88,7 @@ class UpdateController extends Controller
 
         if (!$this->userRepository->hasRole($admin, 'owner')) {
             $messages = ['name' => '200005: You need the "owner" role to do this.'];
-            \Validator::make([], $rules, $messages)->validate();
+            Validator::make([], $rules, $messages)->validate();
         }
 
         $data        = $request->getAll();

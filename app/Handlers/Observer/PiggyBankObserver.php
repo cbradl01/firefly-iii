@@ -38,7 +38,27 @@ class PiggyBankObserver
     public function created(PiggyBank $piggyBank): void
     {
         Log::debug('Observe "created" of a piggy bank.');
-        $this->updateNativeAmount($piggyBank);
+        $this->updatePrimaryCurrencyAmount($piggyBank);
+    }
+
+    private function updatePrimaryCurrencyAmount(PiggyBank $piggyBank): void
+    {
+        $group                           = $piggyBank->accounts()->first()?->user->userGroup;
+        if (null === $group) {
+            Log::debug(sprintf('No account(s) yet for piggy bank #%d.', $piggyBank->id));
+
+            return;
+        }
+        $userCurrency                    = app('amount')->getPrimaryCurrencyByUserGroup($group);
+        $piggyBank->native_target_amount = null;
+        if ($piggyBank->transactionCurrency->id !== $userCurrency->id) {
+            $converter                       = new ExchangeRateConverter();
+            $converter->setIgnoreSettings(true);
+            $converter->setUserGroup($group);
+            $piggyBank->native_target_amount = $converter->convert($piggyBank->transactionCurrency, $userCurrency, today(), $piggyBank->target_amount);
+        }
+        $piggyBank->saveQuietly();
+        Log::debug('Piggy bank primary currency target amount is updated.');
     }
 
     /**
@@ -65,26 +85,6 @@ class PiggyBankObserver
     public function updated(PiggyBank $piggyBank): void
     {
         Log::debug('Observe "updated" of a piggy bank.');
-        $this->updateNativeAmount($piggyBank);
-    }
-
-    private function updateNativeAmount(PiggyBank $piggyBank): void
-    {
-        $group                           = $piggyBank->accounts()->first()?->user->userGroup;
-        if (null === $group) {
-            Log::debug(sprintf('No account(s) yet for piggy bank #%d.', $piggyBank->id));
-
-            return;
-        }
-        $userCurrency                    = app('amount')->getNativeCurrencyByUserGroup($group);
-        $piggyBank->native_target_amount = null;
-        if ($piggyBank->transactionCurrency->id !== $userCurrency->id) {
-            $converter                       = new ExchangeRateConverter();
-            $converter->setIgnoreSettings(true);
-            $converter->setUserGroup($group);
-            $piggyBank->native_target_amount = $converter->convert($piggyBank->transactionCurrency, $userCurrency, today(), $piggyBank->target_amount);
-        }
-        $piggyBank->saveQuietly();
-        Log::debug('Piggy bank native target amount is updated.');
+        $this->updatePrimaryCurrencyAmount($piggyBank);
     }
 }

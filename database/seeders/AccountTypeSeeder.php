@@ -26,6 +26,7 @@ namespace Database\Seeders;
 use FireflyIII\Enums\AccountTypeEnum;
 use FireflyIII\Models\AccountType;
 use Illuminate\Database\Seeder;
+use PDOException;
 
 /**
  * Class AccountTypeSeeder.
@@ -34,26 +35,11 @@ class AccountTypeSeeder extends Seeder
 {
     public function run(): void
     {
-        $types = [
-            AccountTypeEnum::DEFAULT->value,
-            AccountTypeEnum::CASH->value,
-            AccountTypeEnum::ASSET->value,
-            AccountTypeEnum::EXPENSE->value,
-            AccountTypeEnum::REVENUE->value,
-            AccountTypeEnum::INITIAL_BALANCE->value,
-            AccountTypeEnum::BENEFICIARY->value,
-            AccountTypeEnum::IMPORT->value,
-            AccountTypeEnum::LOAN->value,
-            AccountTypeEnum::RECONCILIATION->value,
-            AccountTypeEnum::DEBT->value,
-            AccountTypeEnum::MORTGAGE->value,
-            AccountTypeEnum::LIABILITY_CREDIT->value,
-        ];
-        foreach ($types as $type) {
-            if (null === AccountType::where('type', $type)->first()) {
+        foreach(AccountTypeEnum::cases() as $type) {
+            if (null === AccountType::where('type', $type->value)->first()) {
                 try {
-                    AccountType::create(['type' => $type]);
-                } catch (\PDOException $e) {
+                    AccountType::create(['type' => $type->value]);
+                } catch (PDOException $e) {
                     // @ignoreException
                 }
             }

@@ -23,8 +23,11 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Controllers;
 
+use FireflyIII\Support\Singleton\PreferencesSingleton;
+use JsonException;
+use Carbon\Carbon;
 use FireflyIII\Enums\AccountTypeEnum;
-use FireflyIII\Events\Preferences\UserGroupChangedDefaultCurrency;
+use FireflyIII\Events\Preferences\UserGroupChangedPrimaryCurrency;
 use FireflyIII\Events\Test\UserTestNotificationChannel;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Http\Requests\PreferencesRequest;
@@ -39,6 +42,9 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Redirector;
 use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
+
+use function Safe\json_decode;
+use function Safe\file_get_contents;
 
 /**
  * Class PreferencesController.
@@ -106,11 +112,11 @@ class PreferencesController extends Controller
         $darkMode                       = Preferences::get('darkMode', 'browser')->data;
         $customFiscalYear               = Preferences::get('customFiscalYear', 0)->data;
         $fiscalYearStartStr             = Preferences::get('fiscalYearStart', '01-01')->data;
-        $convertToNative                = $this->convertToNative;
+        $convertToPrimary               = $this->convertToPrimary;
         if (is_array($fiscalYearStartStr)) {
             $fiscalYearStartStr = '01-01';
         }
-        $fiscalYearStart                = sprintf('%s-%s', date('Y'), (string) $fiscalYearStartStr);
+        $fiscalYearStart                = sprintf('%s-%s', Carbon::now()->format('Y'), (string) $fiscalYearStartStr);
         $tjOptionalFields               = Preferences::get('transaction_journal_optional_fields', [])->data;
         $availableDarkModes             = config('firefly.available_dark_modes');
 
@@ -149,8 +155,8 @@ class PreferencesController extends Controller
         // list of locales also has "equal" which makes it equal to whatever the language is.
 
         try {
-            $locales = json_decode((string) file_get_contents(resource_path(sprintf('locales/%s/locales.json', $language))), true, 512, JSON_THROW_ON_ERROR);
-        } catch (\JsonException $e) {
+            $locales = json_decode(file_get_contents(resource_path(sprintf('locales/%s/locales.json', $language))), true, 512, JSON_THROW_ON_ERROR);
+        } catch (JsonException $e) {
             app('log')->error($e->getMessage());
             $locales = [];
         }
@@ -195,7 +201,7 @@ class PreferencesController extends Controller
             'darkMode',
             'availableDarkModes',
             'notifications',
-            'convertToNative',
+            'convertToPrimary',
             'slackUrl',
             'locales',
             'locale',
@@ -263,22 +269,24 @@ class PreferencesController extends Controller
             Preferences::set('ntfy_auth', $all['ntfy_auth'] ?? false);
         }
 
-        // convert native
-        $convertToNative   = 1 === (int) $request->get('convertToNative');
-        if ($convertToNative && !$this->convertToNative) {
+        // convert primary
+        $convertToPrimary  = 1 === (int) $request->get('convertToPrimary');
+        if ($convertToPrimary && !$this->convertToPrimary) {
             // set to true!
-            Log::debug('User sets convertToNative to true.');
-            Preferences::set('convert_to_native', $convertToNative);
-            event(new UserGroupChangedDefaultCurrency(auth()->user()->userGroup));
+            Log::debug('User sets convertToPrimary to true.');
+            Preferences::set('convert_to_primary', true);
+            $singleton = PreferencesSingleton::getInstance();
+            $singleton->resetPreferences();
+            event(new UserGroupChangedPrimaryCurrency(auth()->user()->userGroup));
         }
-        Preferences::set('convert_to_native', $convertToNative);
+        Preferences::set('convert_to_primary', $convertToPrimary);
 
         // custom fiscal year
         $customFiscalYear  = 1 === (int) $request->get('customFiscalYear');
-        $string            = strtotime((string) $request->get('fiscalYearStart'));
-        if (false !== $string) {
-            $fiscalYearStart = date('m-d', $string);
-            Preferences::set('customFiscalYear', $customFiscalYear);
+        Preferences::set('customFiscalYear', $customFiscalYear);
+        $fiscalYearString  = (string) $request->get('fiscalYearStart');
+        if ('' !== $fiscalYearString) {
+            $fiscalYearStart = Carbon::parse($fiscalYearString, config('app.timezone'))->format('m-d');
             Preferences::set('fiscalYearStart', $fiscalYearStart);
         }
 

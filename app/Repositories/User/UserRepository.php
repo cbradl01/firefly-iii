@@ -23,6 +23,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Repositories\User;
 
+use Carbon\Carbon;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Models\BudgetLimit;
 use FireflyIII\Models\GroupMembership;
@@ -33,6 +34,9 @@ use FireflyIII\User;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
+use Exception;
+use Override;
 
 /**
  * Class UserRepository.
@@ -43,7 +47,7 @@ class UserRepository implements UserRepositoryInterface
      * This updates the users email address and records some things so it can be confirmed or undone later.
      * The user is blocked until the change is confirmed.
      *
-     * @throws \Exception
+     * @throws Exception
      *
      * @see updateEmail
      */
@@ -53,7 +57,7 @@ class UserRepository implements UserRepositoryInterface
 
         // save old email as pref
         app('preferences')->setForUser($user, 'previous_email_latest', $oldEmail);
-        app('preferences')->setForUser($user, 'previous_email_'.date('Y-m-d-H-i-s'), $oldEmail);
+        app('preferences')->setForUser($user, 'previous_email_'.Carbon::now()->format('Y-m-d-H-i-s'), $oldEmail);
 
         // set undo and confirm token:
         app('preferences')->setForUser($user, 'email_change_undo_token', bin2hex(random_bytes(16)));
@@ -98,7 +102,7 @@ class UserRepository implements UserRepositoryInterface
     }
 
     /**
-     * @throws \Exception
+     * @throws Exception
      */
     public function destroy(User $user): bool
     {
@@ -225,9 +229,9 @@ class UserRepository implements UserRepositoryInterface
         return $return;
     }
 
-    public function hasRole(null|Authenticatable|User $user, string $role): bool
+    public function hasRole(Authenticatable|User|null $user, string $role): bool
     {
-        if (null === $user) {
+        if (!$user instanceof Authenticatable) {
             return false;
         }
         if ($user instanceof User) {
@@ -242,7 +246,7 @@ class UserRepository implements UserRepositoryInterface
         return false;
     }
 
-    #[\Override]
+    #[Override]
     public function getUserGroups(User $user): Collection
     {
         $memberships = $user->groupMemberships()->get();
@@ -266,7 +270,7 @@ class UserRepository implements UserRepositoryInterface
         return $collection;
     }
 
-    public function inviteUser(null|Authenticatable|User $user, string $email): InvitedUser
+    public function inviteUser(Authenticatable|User|null $user, string $email): InvitedUser
     {
         if (!$user instanceof User) {
             throw new FireflyException('User is not a User object.');
@@ -275,7 +279,7 @@ class UserRepository implements UserRepositoryInterface
         $now->addDays(2);
         $invitee              = new InvitedUser();
         $invitee->user()->associate($user);
-        $invitee->invite_code = \Str::random(64);
+        $invitee->invite_code = Str::random(64);
         $invitee->email       = $email;
         $invitee->redeemed    = false;
         $invitee->expires     = $now;
@@ -310,7 +314,7 @@ class UserRepository implements UserRepositoryInterface
                 'blocked'      => $data['blocked'] ?? false,
                 'blocked_code' => $data['blocked_code'] ?? null,
                 'email'        => $data['email'],
-                'password'     => \Str::random(24),
+                'password'     => Str::random(24),
             ]
         );
         $role = $data['role'] ?? '';
@@ -388,7 +392,7 @@ class UserRepository implements UserRepositoryInterface
 
         // save old email as pref
         app('preferences')->setForUser($user, 'admin_previous_email_latest', $oldEmail);
-        app('preferences')->setForUser($user, 'admin_previous_email_'.date('Y-m-d-H-i-s'), $oldEmail);
+        app('preferences')->setForUser($user, 'admin_previous_email_'.Carbon::now()->format('Y-m-d-H-i-s'), $oldEmail);
 
         $user->email = $newEmail;
         $user->save();
@@ -402,7 +406,7 @@ class UserRepository implements UserRepositoryInterface
     public function removeRole(User $user, string $role): void
     {
         $roleObj = $this->getRole($role);
-        if (null === $roleObj) {
+        if (!$roleObj instanceof Role) {
             return;
         }
         $user->roles()->detach($roleObj->id);

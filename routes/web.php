@@ -19,8 +19,11 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-
 declare(strict_types=1);
+
+use Illuminate\Support\Facades\Route;
+
+use function Safe\define;
 
 if (!defined('DATEFORMAT')) {
     define('DATEFORMAT', '(19|20)[0-9]{2}-?[0-9]{2}-?[0-9]{2}');
@@ -122,6 +125,7 @@ Route::group(
         Route::get('flush', ['uses' => 'DebugController@flush', 'as' => 'flush']);
         Route::get('routes', ['uses' => 'DebugController@routes', 'as' => 'routes']);
         Route::get('debug', 'DebugController@index')->name('debug');
+        Route::get('debug/api-test', 'DebugController@apiTest')->name('api-test');
     }
 );
 
@@ -185,7 +189,7 @@ Route::group(
 
         // show
         Route::get('show/{account}/all', ['uses' => 'Account\ShowController@showAll', 'as' => 'show.all']);
-        Route::get('show/{account}/{start_date?}/{end_date?}', ['uses' => 'Account\ShowController@show', 'as' => 'show'])
+        Route::get('show/{account?}/{start_date?}/{end_date?}', ['uses' => 'Account\ShowController@show', 'as' => 'show'])
             ->where(['start_date' => DATEFORMAT])
             ->where(['end_date' => DATEFORMAT])
         ;
@@ -265,7 +269,7 @@ Route::group(
         Route::get('create', ['uses' => 'Bill\CreateController@create', 'as' => 'create']);
         Route::get('edit/{bill}', ['uses' => 'Bill\EditController@edit', 'as' => 'edit']);
         Route::get('delete/{bill}', ['uses' => 'Bill\DeleteController@delete', 'as' => 'delete']);
-        Route::get('show/{bill}', ['uses' => 'Bill\ShowController@show', 'as' => 'show']);
+        Route::get('show/{bill?}', ['uses' => 'Bill\ShowController@show', 'as' => 'show']);
 
         Route::post('store', ['uses' => 'Bill\CreateController@store', 'as' => 'store']);
         Route::post('update/{bill}', ['uses' => 'Bill\EditController@update', 'as' => 'update']);
@@ -813,6 +817,7 @@ Route::group(
         Route::post('store', ['uses' => 'PiggyBank\CreateController@store', 'as' => 'store']);
         Route::post('update/{piggyBank}', ['uses' => 'PiggyBank\EditController@update', 'as' => 'update']);
         Route::post('destroy/{piggyBank}', ['uses' => 'PiggyBank\DeleteController@destroy', 'as' => 'destroy']);
+        Route::post('reset-history/{piggyBank}', ['uses' => 'PiggyBank\EditController@resetHistory', 'as' => 'reset']);
         Route::post('add/{piggyBank}', ['uses' => 'PiggyBank\AmountController@postAdd', 'as' => 'add']);
         Route::post('remove/{piggyBank}', ['uses' => 'PiggyBank\AmountController@postRemove', 'as' => 'remove']);
 
@@ -1305,7 +1310,7 @@ Route::group(
         // unreconcile
         Route::post('unreconcile/{tj}', ['uses' => 'Transaction\EditController@unreconcile', 'as' => 'unreconcile']);
 
-        Route::get('show/{transactionGroup}', ['uses' => 'Transaction\ShowController@show', 'as' => 'show']);
+        Route::get('show/{transactionGroup?}', ['uses' => 'Transaction\ShowController@show', 'as' => 'show']);
         Route::get('debug/{transactionGroup}', ['uses' => 'Transaction\ShowController@debugShow', 'as' => 'debug']);
     }
 );
@@ -1314,8 +1319,8 @@ Route::group(
 Route::group(
     ['middleware' => 'user-full-auth', 'namespace' => 'FireflyIII\Http\Controllers\Transaction', 'prefix' => 'transactions/mass', 'as' => 'transactions.mass.'],
     static function (): void {
-        Route::get('edit/{journalList}', ['uses' => 'MassController@edit', 'as' => 'edit']);
-        Route::get('delete/{journalList}', ['uses' => 'MassController@delete', 'as' => 'delete']);
+        Route::get('edit/{journalList?}', ['uses' => 'MassController@edit', 'as' => 'edit']);
+        Route::get('delete/{journalList?}', ['uses' => 'MassController@delete', 'as' => 'delete']);
         Route::post('update', ['uses' => 'MassController@update', 'as' => 'update']);
         Route::post('destroy', ['uses' => 'MassController@destroy', 'as' => 'destroy']);
     }
@@ -1325,7 +1330,7 @@ Route::group(
 Route::group(
     ['middleware' => 'user-full-auth', 'namespace' => 'FireflyIII\Http\Controllers\Transaction', 'prefix' => 'transactions/bulk', 'as' => 'transactions.bulk.'],
     static function (): void {
-        Route::get('edit/{journalList}', ['uses' => 'BulkController@edit', 'as' => 'edit']);
+        Route::get('edit/{journalList?}', ['uses' => 'BulkController@edit', 'as' => 'edit']);
         Route::post('update', ['uses' => 'BulkController@update', 'as' => 'update']);
     }
 );

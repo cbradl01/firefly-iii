@@ -28,21 +28,17 @@ use FireflyIII\Events\TriggeredAuditLog;
 use FireflyIII\Models\Note;
 use FireflyIII\Models\RuleAction;
 use FireflyIII\Models\TransactionJournal;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Class ClearNotes.
  */
 class ClearNotes implements ActionInterface
 {
-    private RuleAction $action;
-
     /**
      * TriggerInterface constructor.
      */
-    public function __construct(RuleAction $action)
-    {
-        $this->action = $action;
-    }
+    public function __construct(private readonly RuleAction $action) {}
 
     public function actOnArray(array $journal): bool
     {
@@ -59,7 +55,7 @@ class ClearNotes implements ActionInterface
         }
         $before = $notes->text;
 
-        \DB::table('notes')
+        DB::table('notes')
             ->where('noteable_id', $journal['transaction_journal_id'])
             ->where('noteable_type', TransactionJournal::class)
             ->delete()

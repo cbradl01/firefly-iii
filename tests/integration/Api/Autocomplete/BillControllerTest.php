@@ -28,7 +28,6 @@ use FireflyIII\Models\Bill;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\integration\TestCase;
 use FireflyIII\User;
-use FireflyIII\Models\UserGroup;
 
 /**
  * Class BillControllerTest
@@ -44,20 +43,6 @@ final class BillControllerTest extends TestCase
      */
     use RefreshDatabase;
 
-    protected function createAuthenticatedUser(): User
-    {
-        $userGroup           = UserGroup::create(['title' => 'Test Group']);
-
-        $user                = User::create([
-            'email'         => 'test@email.com',
-            'password'      => 'password',
-        ]);
-        $user->user_group_id = $userGroup->id;
-        $user->save();
-
-        return $user;
-    }
-
     private function createTestBills(int $count, User $user): void
     {
         for ($i = 1; $i <= $count; ++$i) {
@@ -65,8 +50,8 @@ final class BillControllerTest extends TestCase
                 'user_id'       => $user->id,
                 'name'          => 'Bill '.$i,
                 'user_group_id' => $user->user_group_id,
-                'amount_min'    => rand(1, 100), // random amount
-                'amount_max'    => rand(101, 200), // random amount
+                'amount_min'    => random_int(1, 100), // random amount
+                'amount_max'    => random_int(101, 200), // random amount
                 'match'         => 'MIGRATED_TO_RULES',
                 'date'          => '2024-01-01',
                 'repeat_freq'   => 'monthly',
@@ -82,7 +67,7 @@ final class BillControllerTest extends TestCase
         $response = $this->get(route('api.v1.autocomplete.bills'), ['Accept' => 'application/json']);
         $response->assertStatus(401);
         $response->assertHeader('Content-Type', 'application/json');
-        $response->assertContent('{"message":"Unauthenticated","exception":"AuthenticationException"}');
+        $response->assertContent('{"message":"Unauthenticated.","exception":"AuthenticationException"}');
     }
 
     public function testGivenAuthenticatedRequestWhenCallingTheBillsEndpointThenReturns200HttpCode(): void
@@ -94,7 +79,6 @@ final class BillControllerTest extends TestCase
         $response = $this->get(route('api.v1.autocomplete.bills'), ['Accept' => 'application/json']);
         $response->assertStatus(200);
         $response->assertHeader('Content-Type', 'application/json');
-
     }
 
     public function testGivenAuthenticatedRequestWhenCallingTheBillsEndpointThenReturnsBills(): void

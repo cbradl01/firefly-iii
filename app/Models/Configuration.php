@@ -23,41 +23,35 @@ declare(strict_types=1);
 
 namespace FireflyIII\Models;
 
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use FireflyIII\Support\Models\ReturnsIntegerIdTrait;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+
+use function Safe\json_decode;
+use function Safe\json_encode;
 
 class Configuration extends Model
 {
     use ReturnsIntegerIdTrait;
     use SoftDeletes;
 
-    protected $casts
-                     = [
-            'created_at' => 'datetime',
-            'updated_at' => 'datetime',
-            'deleted_at' => 'datetime',
-        ];
-
     protected $table = 'configuration';
 
     /**
      * TODO can be replaced with native laravel code.
-     *
-     * @param mixed $value
-     *
-     * @return mixed
      */
-    public function getDataAttribute($value)
+    protected function data(): Attribute
     {
-        return json_decode($value);
+        return Attribute::make(get: fn ($value) => json_decode((string) $value), set: fn ($value) => ['data' => json_encode($value)]);
     }
 
-    /**
-     * @param mixed $value
-     */
-    public function setDataAttribute($value): void
+    protected function casts(): array
     {
-        $this->attributes['data'] = json_encode($value);
+        return [
+            'created_at' => 'datetime',
+            'updated_at' => 'datetime',
+            'deleted_at' => 'datetime',
+        ];
     }
 }

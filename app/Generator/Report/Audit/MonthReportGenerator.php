@@ -34,6 +34,7 @@ use FireflyIII\Repositories\Journal\JournalRepositoryInterface;
 use FireflyIII\Support\Facades\Steam;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
+use Throwable;
 
 /**
  * Class MonthReportGenerator.
@@ -103,7 +104,7 @@ class MonthReportGenerator implements ReportGeneratorInterface
                 ->with('start', $this->start)->with('end', $this->end)->with('accounts', $this->accounts)
                 ->render()
             ;
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             app('log')->error(sprintf('Cannot render reports.audit.report: %s', $e->getMessage()));
             app('log')->error($e->getTraceAsString());
             $result = sprintf('Could not render report view: %s', $e->getMessage());
@@ -131,7 +132,7 @@ class MonthReportGenerator implements ReportGeneratorInterface
 
         /** @var GroupCollectorInterface $collector */
         $collector         = app(GroupCollectorInterface::class);
-        $collector->setAccounts(new Collection([$account]))->setRange($this->start, $this->end)->withAccountInformation()
+        $collector->setAccounts(new Collection()->push($account))->setRange($this->start, $this->end)->withAccountInformation()
             ->withBudgetInformation()->withCategoryInformation()->withBillInformation()->withNotes()
         ;
         $journals          = $collector->getExtractedJournals();
@@ -140,8 +141,8 @@ class MonthReportGenerator implements ReportGeneratorInterface
         Log::debug(sprintf('getAuditReport: Call finalAccountBalance with date/time "%s"', $date->toIso8601String()));
         $dayBeforeBalance  = Steam::finalAccountBalance($account, $date);
         $startBalance      = $dayBeforeBalance['balance'];
-        $defaultCurrency   = app('amount')->getNativeCurrencyByUserGroup($account->user->userGroup);
-        $currency          = $accountRepository->getAccountCurrency($account) ?? $defaultCurrency;
+        $primaryCurrency   = app('amount')->getPrimaryCurrencyByUserGroup($account->user->userGroup);
+        $currency          = $accountRepository->getAccountCurrency($account) ?? $primaryCurrency;
 
         foreach ($journals as $index => $journal) {
             $journals[$index]['balance_before'] = $startBalance;
@@ -159,7 +160,7 @@ class MonthReportGenerator implements ReportGeneratorInterface
                 }
             }
 
-            $newBalance                         = bcadd($startBalance, $transactionAmount);
+            $newBalance                         = bcadd((string) $startBalance, (string) $transactionAmount);
             $journals[$index]['balance_after']  = $newBalance;
             $startBalance                       = $newBalance;
 

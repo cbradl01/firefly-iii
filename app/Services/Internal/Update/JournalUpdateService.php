@@ -27,6 +27,7 @@ namespace FireflyIII\Services\Internal\Update;
 use Carbon\Carbon;
 use Carbon\Exceptions\InvalidDateException;
 use Carbon\Exceptions\InvalidFormatException;
+use FireflyIII\Enums\AccountTypeEnum;
 use FireflyIII\Enums\TransactionTypeEnum;
 use FireflyIII\Events\TriggeredAuditLog;
 use FireflyIII\Exceptions\FireflyException;
@@ -41,7 +42,8 @@ use FireflyIII\Repositories\Account\AccountRepositoryInterface;
 use FireflyIII\Repositories\Bill\BillRepositoryInterface;
 use FireflyIII\Repositories\Budget\BudgetRepositoryInterface;
 use FireflyIII\Repositories\Category\CategoryRepositoryInterface;
-use FireflyIII\Repositories\UserGroups\Currency\CurrencyRepositoryInterface;
+use FireflyIII\Repositories\Currency\CurrencyRepositoryInterface;
+use FireflyIII\Repositories\TransactionGroup\TransactionGroupRepositoryInterface;
 use FireflyIII\Services\Internal\Support\JournalServiceTrait;
 use FireflyIII\Support\Facades\FireflyConfig;
 use FireflyIII\Support\NullArrayObject;
@@ -57,36 +59,39 @@ class JournalUpdateService
 {
     use JournalServiceTrait;
 
-    private BillRepositoryInterface     $billRepository;
+    private BillRepositoryInterface $billRepository;
     private CurrencyRepositoryInterface $currencyRepository;
-    private array                       $data;
-    private ?Account                    $destinationAccount;
-    private ?Transaction                $destinationTransaction;
-    private array                       $metaDate;
-    private array                       $metaString;
-    private ?Account                    $sourceAccount;
-    private ?Transaction                $sourceTransaction;
-    private ?TransactionGroup           $transactionGroup;
-    private ?TransactionJournal         $transactionJournal;
+    private TransactionGroupRepositoryInterface $transactionGroupRepository;
+    private array $data;
+    private ?Account $destinationAccount;
+    private ?Transaction $destinationTransaction;
+    private array $metaDate;
+    private array $metaString;
+    private ?Account $sourceAccount;
+    private ?Transaction $sourceTransaction;
+    private ?TransactionGroup $transactionGroup;
+    private ?TransactionJournal $transactionJournal;
+    private string $startCompareHash = '';
 
     /**
      * JournalUpdateService constructor.
      */
     public function __construct()
     {
-        $this->destinationAccount     = null;
-        $this->destinationTransaction = null;
-        $this->sourceAccount          = null;
-        $this->sourceTransaction      = null;
-        $this->transactionGroup       = null;
-        $this->transactionJournal     = null;
-        $this->billRepository         = app(BillRepositoryInterface::class);
-        $this->categoryRepository     = app(CategoryRepositoryInterface::class);
-        $this->budgetRepository       = app(BudgetRepositoryInterface::class);
-        $this->tagFactory             = app(TagFactory::class);
-        $this->accountRepository      = app(AccountRepositoryInterface::class);
-        $this->currencyRepository     = app(CurrencyRepositoryInterface::class);
-        $this->metaString             = [
+        $this->destinationAccount         = null;
+        $this->destinationTransaction     = null;
+        $this->sourceAccount              = null;
+        $this->sourceTransaction          = null;
+        $this->transactionGroup           = null;
+        $this->transactionJournal         = null;
+        $this->billRepository             = app(BillRepositoryInterface::class);
+        $this->categoryRepository         = app(CategoryRepositoryInterface::class);
+        $this->budgetRepository           = app(BudgetRepositoryInterface::class);
+        $this->tagFactory                 = app(TagFactory::class);
+        $this->accountRepository          = app(AccountRepositoryInterface::class);
+        $this->currencyRepository         = app(CurrencyRepositoryInterface::class);
+        $this->transactionGroupRepository = app(TransactionGroupRepositoryInterface::class);
+        $this->metaString                 = [
             'sepa_cc',
             'sepa_ct_op',
             'sepa_ct_id',
@@ -101,7 +106,7 @@ class JournalUpdateService
             'external_id',
             'external_url',
         ];
-        $this->metaDate               = ['interest_date', 'book_date', 'process_date', 'due_date', 'payment_date',
+        $this->metaDate                   = ['interest_date', 'book_date', 'process_date', 'due_date', 'payment_date',
             'invoice_date', ];
     }
 
@@ -118,10 +123,12 @@ class JournalUpdateService
         $this->budgetRepository->setUser($transactionGroup->user);
         $this->tagFactory->setUser($transactionGroup->user);
         $this->accountRepository->setUser($transactionGroup->user);
+        $this->transactionGroupRepository->setUser($transactionGroup->user);
         $this->destinationAccount     = null;
         $this->destinationTransaction = null;
         $this->sourceAccount          = null;
         $this->sourceTransaction      = null;
+        $this->startCompareHash       = $this->transactionGroupRepository->getCompareHash($transactionGroup);
     }
 
     public function setTransactionJournal(TransactionJournal $transactionJournal): void
@@ -214,18 +221,12 @@ class JournalUpdateService
 
     private function hasFields(array $fields): bool
     {
-        foreach ($fields as $field) {
-            if (array_key_exists($field, $this->data)) {
-                return true;
-            }
-        }
-
-        return false;
+        return array_any($fields, fn ($field) => array_key_exists($field, $this->data));
     }
 
     private function getOriginalSourceAccount(): Account
     {
-        if (null === $this->sourceAccount) {
+        if (!$this->sourceAccount instanceof Account) {
             $source              = $this->getSourceTransaction();
             $this->sourceAccount = $source->account;
         }
@@ -235,7 +236,7 @@ class JournalUpdateService
 
     private function getSourceTransaction(): Transaction
     {
-        if (null === $this->sourceTransaction) {
+        if (!$this->sourceTransaction instanceof Transaction) {
             /** @var null|Transaction $result */
             $result                  = $this->transactionJournal->transactions()->with(['account'])->where('amount', '<', 0)->first();
             $this->sourceTransaction = $result;
@@ -303,7 +304,7 @@ class JournalUpdateService
 
     private function getOriginalDestinationAccount(): Account
     {
-        if (null === $this->destinationAccount) {
+        if (!$this->destinationAccount instanceof Account) {
             $destination              = $this->getDestinationTransaction();
             $this->destinationAccount = $destination->account;
         }
@@ -316,7 +317,7 @@ class JournalUpdateService
      */
     private function getDestinationTransaction(): Transaction
     {
-        if (null === $this->destinationTransaction) {
+        if (!$this->destinationTransaction instanceof Transaction) {
             /** @var null|Transaction $result */
             $result                       = $this->transactionJournal->transactions()->where('amount', '>', 0)->first();
             $this->destinationTransaction = $result;
@@ -337,7 +338,7 @@ class JournalUpdateService
         }
 
         $sourceInfo   = [
-            'id'     => (int) ($this->data['source_id'] ?? null),
+            'id'     => (int)($this->data['source_id'] ?? null),
             'name'   => $this->data['source_name'] ?? null,
             'iban'   => $this->data['source_iban'] ?? null,
             'number' => $this->data['source_number'] ?? null,
@@ -401,7 +402,7 @@ class JournalUpdateService
         }
 
         $destInfo     = [
-            'id'     => (int) ($this->data['destination_id'] ?? null),
+            'id'     => (int)($this->data['destination_id'] ?? null),
             'name'   => $this->data['destination_name'] ?? null,
             'iban'   => $this->data['destination_iban'] ?? null,
             'number' => $this->data['destination_number'] ?? null,
@@ -467,8 +468,8 @@ class JournalUpdateService
         )
             && TransactionTypeEnum::WITHDRAWAL->value === $type
         ) {
-            $billId                            = (int) ($this->data['bill_id'] ?? 0);
-            $billName                          = (string) ($this->data['bill_name'] ?? '');
+            $billId                            = (int)($this->data['bill_id'] ?? 0);
+            $billName                          = (string)($this->data['bill_name'] ?? '');
             $bill                              = $this->billRepository->findBill($billId, $billName);
             $this->transactionJournal->bill_id = $bill?->id;
             Log::debug('Updated bill ID');
@@ -480,7 +481,7 @@ class JournalUpdateService
      */
     private function updateField(string $fieldName): void
     {
-        if (array_key_exists($fieldName, $this->data) && '' !== (string) $this->data[$fieldName]) {
+        if (array_key_exists($fieldName, $this->data) && '' !== (string)$this->data[$fieldName]) {
             $value                                  = $this->data[$fieldName];
 
             if ('date' === $fieldName) {
@@ -556,7 +557,7 @@ class JournalUpdateService
     {
         // update notes.
         if ($this->hasFields(['notes'])) {
-            $notes = '' === (string) $this->data['notes'] ? null : $this->data['notes'];
+            $notes = '' === (string)$this->data['notes'] ? null : $this->data['notes'];
             $this->storeNotes($this->transactionJournal, $notes);
         }
     }
@@ -604,7 +605,7 @@ class JournalUpdateService
         foreach ($this->metaDate as $field) {
             if ($this->hasFields([$field])) {
                 try {
-                    $value = '' === (string) $this->data[$field] ? null : new Carbon($this->data[$field]);
+                    $value = '' === (string)$this->data[$field] ? null : new Carbon($this->data[$field]);
                 } catch (InvalidDateException|InvalidFormatException $e) { // @phpstan-ignore-line
                     Log::debug(sprintf('%s is not a valid date value: %s', $this->data[$field], $e->getMessage()));
 
@@ -672,7 +673,6 @@ class JournalUpdateService
 
             return;
         }
-
         $origSourceTransaction                = $this->getSourceTransaction();
         $origSourceTransaction->amount        = app('steam')->negative($amount);
         $origSourceTransaction->balance_dirty = true;
@@ -703,8 +703,8 @@ class JournalUpdateService
         // find currency in data array
         $newForeignId    = $this->data['foreign_currency_id'] ?? null;
         $newForeignCode  = $this->data['foreign_currency_code'] ?? null;
-        $foreignCurrency = $this->currencyRepository->findCurrencyNull($newForeignId, $newForeignCode) ??
-                           $foreignCurrency;
+        $foreignCurrency = $this->currencyRepository->findCurrencyNull($newForeignId, $newForeignCode)
+            ?? $foreignCurrency;
 
         // not the same as normal currency
         if (null !== $foreignCurrency && $foreignCurrency->id === $this->transactionJournal->transaction_currency_id) {
@@ -723,14 +723,17 @@ class JournalUpdateService
             // the correct fields to update in the destination transaction are NOT the foreign amount and currency
             // but rather the normal amount and currency. This is new behavior.
             $isTransfer                  = TransactionTypeEnum::TRANSFER->value === $this->transactionJournal->transactionType->type;
-            if ($isTransfer) {
+            // also check if it is not between an asset account and a liability, because then the same rule applies.
+            $isBetween                   = $this->isBetweenAssetAndLiability();
+
+            if ($isTransfer || $isBetween) {
                 Log::debug('Switch amounts, store in amount and not foreign_amount');
                 $dest->transaction_currency_id = $foreignCurrency->id;
                 $dest->amount                  = app('steam')->positive($foreignAmount);
                 $dest->foreign_amount          = app('steam')->positive($source->amount);
                 $dest->foreign_currency_id     = $source->transaction_currency_id;
             }
-            if (!$isTransfer) {
+            if (!$isTransfer && !$isBetween) {
                 $dest->foreign_currency_id = $foreignCurrency->id;
                 $dest->foreign_amount      = app('steam')->positive($foreignAmount);
             }
@@ -767,5 +770,65 @@ class JournalUpdateService
         // refresh transactions.
         $this->sourceTransaction->refresh();
         $this->destinationTransaction->refresh();
+    }
+
+    private function isBetweenAssetAndLiability(): bool
+    {
+        /** @var null|Transaction $sourceTransaction */
+        $sourceTransaction      = $this->transactionJournal->transactions()->where('amount', '<', 0)->first();
+
+        /** @var null|Transaction $destinationTransaction */
+        $destinationTransaction = $this->transactionJournal->transactions()->where('amount', '>', 0)->first();
+        if (null === $sourceTransaction || null === $destinationTransaction) {
+            Log::warning('Either transaction is false, stop.');
+
+            return false;
+        }
+        if (null === $sourceTransaction->foreign_amount || null === $destinationTransaction->foreign_amount) {
+            Log::warning('Either foreign amount is false, stop.');
+
+            return false;
+        }
+
+        $source                 = $sourceTransaction->account;
+        $destination            = $destinationTransaction->account;
+
+        if (null === $source || null === $destination) {
+            Log::warning('Either is false, stop.');
+
+            return false;
+        }
+        $sourceTypes            = [AccountTypeEnum::LOAN->value, AccountTypeEnum::DEBT->value, AccountTypeEnum::MORTGAGE->value];
+
+        // source is liability, destination is asset
+        if (in_array($source->accountType->type, $sourceTypes, true) && AccountTypeEnum::ASSET->value === $destination->accountType->type) {
+            Log::debug('Source is a liability account, destination is an asset account, return TRUE.');
+
+            return true;
+        }
+        // source is asset, destination is liability
+        if (in_array($destination->accountType->type, $sourceTypes, true) && AccountTypeEnum::ASSET->value === $source->accountType->type) {
+            Log::debug('Destination is a liability account, source is an asset account, return TRUE.');
+
+            return true;
+        }
+
+        return false;
+    }
+
+    public function isCompareHashChanged(): bool
+    {
+        Log::debug(sprintf('Now in %s', __METHOD__));
+        $compareHash = hash('sha256', sprintf('%s', Carbon::now()->getTimestamp()));
+        if (!$this->transactionGroup instanceof TransactionGroup) {
+            $compareHash = $this->transactionGroupRepository->getCompareHash($this->transactionJournal->transactionGroup);
+        }
+        if ($this->transactionGroup instanceof TransactionGroup) {
+            $this->transactionGroupRepository->getCompareHash($this->transactionGroup);
+        }
+        Log::debug(sprintf('Compare hash is       "%s".', $compareHash));
+        Log::debug(sprintf('Start compare hash is "%s".', $this->startCompareHash));
+
+        return $compareHash !== $this->startCompareHash;
     }
 }

@@ -29,7 +29,6 @@ use FireflyIII\Enums\TransactionTypeEnum;
 use FireflyIII\Models\Account;
 use FireflyIII\Models\UserGroup;
 use FireflyIII\Repositories\Account\AccountRepositoryInterface;
-use FireflyIII\Repositories\UserGroups\Account\AccountRepositoryInterface as UserGroupAccountRepositoryInterface;
 use FireflyIII\User;
 use FireflyIII\Validation\Account\DepositValidation;
 use FireflyIII\Validation\Account\LiabilityValidation;
@@ -50,30 +49,27 @@ class AccountValidator
     use TransferValidation;
     use WithdrawalValidation;
 
-    public bool                                 $createMode;
-    public string                               $destError;
-    public ?Account                             $destination;
-    public ?Account                             $source;
-    public string                               $sourceError;
-    private AccountRepositoryInterface          $accountRepository;
-    private array                               $combinations;
-    private string                              $transactionType;
-    private bool                                $useUserGroupRepository = false;
-    private UserGroupAccountRepositoryInterface $userGroupAccountRepository;
+    public bool                        $createMode;
+    public string                      $destError;
+    public ?Account                    $destination;
+    public ?Account                    $source;
+    public string                      $sourceError;
+    private AccountRepositoryInterface $accountRepository;
+    private array                      $combinations;
+    private string                     $transactionType;
 
     /**
      * AccountValidator constructor.
      */
     public function __construct()
     {
-        $this->createMode                 = false;
-        $this->destError                  = 'No error yet.';
-        $this->sourceError                = 'No error yet.';
-        $this->combinations               = config('firefly.source_dests'); // TODO: get the cache to update on save
-        $this->source                     = null;
-        $this->destination                = null;
-        $this->accountRepository          = app(AccountRepositoryInterface::class);
-        $this->userGroupAccountRepository = app(UserGroupAccountRepositoryInterface::class);
+        $this->createMode        = false;
+        $this->destError         = 'No error yet.';
+        $this->sourceError       = 'No error yet.';
+        $this->combinations      = config('firefly.source_dests'); // TODO: get the cache to update on save
+        $this->source            = null;
+        $this->destination       = null;
+        $this->accountRepository = app(AccountRepositoryInterface::class);
     }
 
     public function getSource(): ?Account
@@ -83,10 +79,10 @@ class AccountValidator
 
     public function setSource(?Account $account): void
     {
-        if (null === $account) {
+        if (!$account instanceof Account) {
             app('log')->debug('AccountValidator source is set to NULL');
         }
-        if (null !== $account) {
+        if ($account instanceof Account) {
             app('log')->debug(sprintf('AccountValidator source is set to #%d: "%s" (%s)', $account->id, $account->name, $account->accountType?->type));
         }
         $this->source = $account;
@@ -94,10 +90,10 @@ class AccountValidator
 
     public function setDestination(?Account $account): void
     {
-        if (null === $account) {
+        if (!$account instanceof Account) {
             app('log')->debug('AccountValidator destination is set to NULL');
         }
-        if (null !== $account) {
+        if ($account instanceof Account) {
             app('log')->debug(sprintf('AccountValidator destination is set to #%d: "%s" (%s)', $account->id, $account->name, $account->accountType->type));
         }
         $this->destination = $account;
@@ -112,19 +108,17 @@ class AccountValidator
     public function setUser(User $user): void
     {
         $this->accountRepository->setUser($user);
-        $this->useUserGroupRepository = false;
     }
 
     public function setUserGroup(UserGroup $userGroup): void
     {
-        $this->userGroupAccountRepository->setUserGroup($userGroup);
-        $this->useUserGroupRepository = true;
+        $this->accountRepository->setUserGroup($userGroup);
     }
 
     public function validateDestination(array $array): bool
     {
         app('log')->debug('Now in AccountValidator::validateDestination()', $array);
-        if (null === $this->source) {
+        if (!$this->source instanceof Account) {
             app('log')->error('Source is NULL, always FALSE.');
             $this->destError = 'No source account validation has taken place yet. Please do this first or overrule the object.';
 
@@ -256,7 +250,7 @@ class AccountValidator
      */
     protected function findExistingAccount(array $validTypes, array $data, bool $inverse = false): ?Account
     {
-        app('log')->debug('Now in findExistingAccount', $data);
+        app('log')->debug('Now in findExistingAccount', [$validTypes, $data]);
         app('log')->debug('The search will be reversed!');
         $accountId     = array_key_exists('id', $data) ? $data['id'] : null;
         $accountIban   = array_key_exists('iban', $data) ? $data['iban'] : null;
@@ -265,13 +259,11 @@ class AccountValidator
 
         // find by ID
         if (null !== $accountId && $accountId > 0) {
-            app('log')->debug(sprintf('Searching for account ID %d', $accountId));
-            app('log')->debug(sprintf('Valid types: %s', implode(', ', $validTypes)));
-            $first       = $this->getRepository()->find($accountId);
-            $accountType = null === $first ? 'invalid' : $first->accountType->type;
+            $first       = $this->accountRepository->find($accountId);
+            $accountType = $first instanceof Account ? $first->accountType->type : 'invalid';
             $check       = in_array($accountType, $validTypes, true);
             $check       = $inverse ? !$check : $check; // reverse the validation check if necessary.
-            if ((null !== $first) && $check) {
+            if (($first instanceof Account) && $check) {
                 app('log')->debug(sprintf('ID: Found %s account #%d ("%s", IBAN "%s")', $first->accountType->type, $first->id, $first->name, $first->iban ?? 'no iban'));
 
                 return $first;
@@ -280,11 +272,11 @@ class AccountValidator
 
         // find by iban
         if (null !== $accountIban && '' !== (string) $accountIban) {
-            $first       = $this->getRepository()->findByIbanNull($accountIban, $validTypes);
-            $accountType = null === $first ? 'invalid' : $first->accountType->type;
+            $first       = $this->accountRepository->findByIbanNull($accountIban, $validTypes);
+            $accountType = $first instanceof Account ? $first->accountType->type : 'invalid';
             $check       = in_array($accountType, $validTypes, true);
             $check       = $inverse ? !$check : $check; // reverse the validation check if necessary.
-            if ((null !== $first) && $check) {
+            if (($first instanceof Account) && $check) {
                 app('log')->debug(sprintf('Iban: Found %s account #%d ("%s", IBAN "%s")', $first->accountType->type, $first->id, $first->name, $first->iban ?? 'no iban'));
 
                 return $first;
@@ -293,11 +285,11 @@ class AccountValidator
 
         // find by number
         if (null !== $accountNumber && '' !== (string) $accountNumber) {
-            $first       = $this->getRepository()->findByAccountNumber($accountNumber, $validTypes);
-            $accountType = null === $first ? 'invalid' : $first->accountType->type;
+            $first       = $this->accountRepository->findByAccountNumber($accountNumber, $validTypes);
+            $accountType = $first instanceof Account ? $first->accountType->type : 'invalid';
             $check       = in_array($accountType, $validTypes, true);
             $check       = $inverse ? !$check : $check; // reverse the validation check if necessary.
-            if ((null !== $first) && $check) {
+            if (($first instanceof Account) && $check) {
                 app('log')->debug(sprintf('Number: Found %s account #%d ("%s", IBAN "%s")', $first->accountType->type, $first->id, $first->name, $first->iban ?? 'no iban'));
 
                 return $first;
@@ -306,24 +298,15 @@ class AccountValidator
 
         // find by name:
         if ('' !== (string) $accountName) {
-            $first = $this->getRepository()->findByName($accountName, $validTypes);
-            if (null !== $first) {
+            $first = $this->accountRepository->findByName($accountName, $validTypes);
+            if ($first instanceof Account) {
                 app('log')->debug(sprintf('Name: Found %s account #%d ("%s", IBAN "%s")', $first->accountType->type, $first->id, $first->name, $first->iban ?? 'no iban'));
 
                 return $first;
             }
         }
-        app('log')->debug('Found nothing!');
+        app('log')->debug('Found nothing in findExistingAccount()');
 
         return null;
-    }
-
-    private function getRepository(): AccountRepositoryInterface|UserGroupAccountRepositoryInterface
-    {
-        if ($this->useUserGroupRepository) {
-            return $this->userGroupAccountRepository;
-        }
-
-        return $this->accountRepository;
     }
 }

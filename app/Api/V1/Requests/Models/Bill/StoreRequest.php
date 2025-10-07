@@ -24,13 +24,15 @@ declare(strict_types=1);
 
 namespace FireflyIII\Api\V1\Requests\Models\Bill;
 
+use Illuminate\Validation\Validator;
+use ValueError;
+use TypeError;
 use FireflyIII\Rules\IsBoolean;
 use FireflyIII\Rules\IsValidPositiveAmount;
 use FireflyIII\Support\Request\ChecksLogin;
 use FireflyIII\Support\Request\ConvertsDataTypes;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Validation\Validator;
 
 /**
  * Class StoreRequest
@@ -45,7 +47,7 @@ class StoreRequest extends FormRequest
      */
     public function getAll(): array
     {
-        app('log')->debug('Raw fields in Bill StoreRequest', $this->all());
+        Log::debug('Raw fields in Bill StoreRequest', $this->all());
         $fields = [
             'name'               => ['name', 'convertString'],
             'amount_min'         => ['amount_min', 'convertString'],
@@ -78,9 +80,9 @@ class StoreRequest extends FormRequest
             'amount_max'     => ['required', new IsValidPositiveAmount()],
             'currency_id'    => 'numeric|exists:transaction_currencies,id',
             'currency_code'  => 'min:3|max:51|exists:transaction_currencies,code',
-            'date'           => 'date|required|after:1900-01-01|before:2099-12-31',
-            'end_date'       => 'nullable|date|after:date|after:1900-01-01|before:2099-12-31',
-            'extension_date' => 'nullable|date|after:date|after:1900-01-01|before:2099-12-31',
+            'date'           => 'date|required|after:1970-01-02|before:2038-01-17',
+            'end_date'       => 'nullable|date|after:date|after:1970-01-02|before:2038-01-17',
+            'extension_date' => 'nullable|date|after:date|after:1970-01-02|before:2038-01-17',
             'repeat_freq'    => 'in:weekly,monthly,quarterly,half-year,yearly|required',
             'skip'           => 'min:0|max:31|numeric',
             'active'         => [new IsBoolean()],
@@ -109,7 +111,7 @@ class StoreRequest extends FormRequest
 
                 try {
                     $result = bccomp($min, $max);
-                } catch (\ValueError $e) {
+                } catch (ValueError $e) {
                     Log::error($e->getMessage());
                     $validator->errors()->add('amount_min', (string) trans('validation.generic_invalid'));
                     $validator->errors()->add('amount_max', (string) trans('validation.generic_invalid'));
@@ -124,12 +126,11 @@ class StoreRequest extends FormRequest
 
         try {
             $failed = $validator->fails();
-        } catch (\TypeError $e) {
+        } catch (TypeError $e) {
             Log::error($e->getMessage());
-            $failed = false;
         }
         if ($failed) {
-            Log::channel('audit')->error(sprintf('Validation errors in %s', __CLASS__), $validator->errors()->toArray());
+            Log::channel('audit')->error(sprintf('Validation errors in %s', self::class), $validator->errors()->toArray());
         }
     }
 }
