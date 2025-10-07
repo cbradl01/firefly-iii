@@ -47,6 +47,18 @@
                             <table class="table table-hover">
                                 <tbody>
                                     <tr>
+                                        <td style="width:40%;">{{ trans('list.current_balance') }}</td>
+                                        <td>
+                                            {% if balances.balance %}
+                                                {{ formatAmountBySymbol(balances.balance, currency.symbol, currency.decimal_places, true)|raw }}
+                                            {% elseif balances.native_balance %}
+                                                {{ formatAmountBySymbol(balances.native_balance, defaultCurrency.symbol, defaultCurrency.decimal_places, true)|raw }}
+                                            {% else %}
+                                                {{ 'no_data'|_ }}
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    <tr>
                                         <td style="width:40%;">{{ trans('list.name') }}</td>
                                         <td>{{ account.name|escape }}</td>
                                     </tr>
@@ -72,18 +84,6 @@
                         <div class="col-md-6">
                             <table class="table table-hover">
                                 <tbody>
-                                    <tr>
-                                        <td style="width:40%;">{{ trans('list.current_balance') }}</td>
-                                        <td>
-                                            {% if balances.balance %}
-                                                {{ formatAmountBySymbol(balances.balance, currency.symbol, currency.decimal_places, true)|raw }}
-                                            {% elseif balances.native_balance %}
-                                                {{ formatAmountBySymbol(balances.native_balance, defaultCurrency.symbol, defaultCurrency.decimal_places, true)|raw }}
-                                            {% else %}
-                                                {{ 'no_data'|_ }}
-                                            {% endif %}
-                                        </td>
-                                    </tr>
                                     <tr>
                                         <td>Period</td>
                                         <td>
@@ -118,7 +118,9 @@
                     <!-- Chart Section -->
                     <div class="row">
                         <div class="col-12">
-                            <h4><span class="fa fa-line-chart"></span> Balance Chart</h4>
+                            <h4 style="text-align: center; margin-bottom: 20px; color: white;">
+                                Account Balance Over Time
+                            </h4>
                             <div>
                                 <canvas id="overview-chart" style="width:100%;height:400px;" height="400" width="100%"></canvas>
                             </div>
@@ -232,11 +234,6 @@
                 <div class="box-header with-border">
                     <h3 class="box-title">
                         {{ 'transactions'|_ }}
-                        {% if balances.balance %}
-                            ({{ formatAmountBySymbol(balances.balance, currency.symbol, currency.decimal_places, true)|raw }})
-                        {% elseif balances.native_balance %}
-                            ({{ formatAmountBySymbol(balances.native_balance, defaultCurrency.symbol, defaultCurrency.decimal_places, true)|raw }})
-                        {% endif %}
                     </h3>
                     <div class="box-tools pull-right">
                         <button class="btn btn-primary btn-sm" id="consolidate-transactions-btn" data-account-id="{{ account.id }}">
@@ -322,6 +319,8 @@
             nonce="{{ JS_NONCE }}"></script>
     <script type="text/javascript" src="v1/js/lib/chartjs-plugin-annotation.min.js?v={{ FF_VERSION }}"
             nonce="{{ JS_NONCE }}"></script>
+    <!-- Chart.js Crosshair Plugin -->
+    <script type="text/javascript" src="v1/js/lib/chartjs-plugin-crosshair.min.js?v={{ FF_VERSION }}" nonce="{{ JS_NONCE }}"></script>
     <script type="text/javascript" src="v1/js/ff/charts.defaults.js?v={{ FF_VERSION }}" nonce="{{ JS_NONCE }}"></script>
     <script type="text/javascript" src="v1/js/ff/charts.js?v={{ FF_VERSION }}" nonce="{{ JS_NONCE }}"></script>
 
@@ -330,6 +329,71 @@
             nonce="{{ JS_NONCE }}"></script>
     <script src="v1/js/ff/shared/consolidate-and-generate.js?v={{ FF_VERSION }}" type="text/javascript" nonce="{{ JS_NONCE }}"></script>
     <script src="v1/js/ff/accounts/show.js?v={{ FF_VERSION }}" type="text/javascript" nonce="{{ JS_NONCE }}"></script>
+    
+    <!-- Custom chart initialization with crosshair and enhanced tooltips -->
+    <script type="text/javascript" nonce="{{ JS_NONCE }}">
+        $(function() {
+            // Override the default lineNoStartZeroChart call with crosshair and enhanced tooltips
+            var colorData = true;
+            var options = $.extend(true, {}, defaultChartOptions);
+            var chartType = 'line';
+            
+            // Update for Chart.js 4.x syntax
+            if (options.scales && options.scales.yAxes) {
+                // Convert v2 syntax to v4 syntax
+                options.scales.y = options.scales.yAxes[0];
+                options.scales.y.ticks = options.scales.y.ticks || {};
+                options.scales.y.ticks.beginAtZero = false;
+                delete options.scales.yAxes;
+            }
+            
+            // Enhanced tooltip configuration for Chart.js 4.x
+            options.plugins = options.plugins || {};
+            options.plugins.tooltip = {
+                mode: 'index',
+                intersect: false,
+                callbacks: {
+                    title: function(context) {
+                        // Show date in tooltip title
+                        if (context.length > 0) {
+                            var date = new Date(context[0].parsed.x);
+                            return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+                        }
+                        return '';
+                    },
+                    label: function(context) {
+                        // Show account name, currency, and balance
+                        var dataset = context.dataset;
+                        var value = context.parsed.y;
+                        var currency = dataset.currency || '';
+                        var accountName = dataset.label || 'Account';
+                        
+                        return accountName + ': ' + currency + value;
+                    }
+                }
+            };
+            
+            // Add crosshair plugin configuration
+            options.plugins.crosshair = {
+                line: {
+                    color: '#666',
+                    width: 1,
+                    dashPattern: [5, 5]
+                },
+                sync: {
+                    enabled: true
+                },
+                zoom: {
+                    enabled: true
+                }
+            };
+            
+            // Chart title is now handled by HTML above the chart
+            
+            // Call the chart drawing function with our custom options
+            drawAChart(chartUrl, 'overview-chart', chartType, options, colorData);
+        });
+    </script>
     {# required for groups.twig #}
     <script type="text/javascript" src="v1/js/ff/list/groups.js?v={{ FF_VERSION }}" nonce="{{ JS_NONCE }}"></script>
     
