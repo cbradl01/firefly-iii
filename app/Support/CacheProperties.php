@@ -85,7 +85,7 @@ class CacheProperties
         // }
         $this->hash();
 
-        \Cache::forget($this->hash);
+        Cache::forget($this->hash);
     }
 
     public function hash(): void

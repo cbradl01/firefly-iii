@@ -68,7 +68,7 @@ class AccountTransformer extends AbstractTransformer
         // get account type:
         $accountType                           = (string)config(sprintf('firefly.shortNamesByFullName.%s', $account->full_account_type));
         $liabilityType                         = (string)config(sprintf('firefly.shortLiabilityNameByFullName.%s', $account->full_account_type));
-        $liabilityType                         = '' === $liabilityType ? null : strtolower($liabilityType);
+        $liabilityType                         = '' === $liabilityType ? null : $liabilityType;
         $liabilityDirection                    = $account->meta['liability_direction'] ?? null;
         $accountRole                           = $this->getAccountRole($account, $accountType);
         $hasCurrencySettings                   = null !== $account->meta['currency'];
