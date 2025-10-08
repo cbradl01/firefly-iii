@@ -50,10 +50,10 @@ for (var i = 0; i < colourSet.length; i++) {
     fillColors.push("rgba(" + colourSet[i][0] + ", " + colourSet[i][1] + ", " + colourSet[i][2] + ", 0.5)");
 }
 
-Chart.defaults.global.legend.display = false;
-Chart.defaults.global.animation.duration = 0;
-Chart.defaults.global.responsive = true;
-Chart.defaults.global.maintainAspectRatio = false;
+Chart.defaults.plugins.legend.display = false;
+Chart.defaults.animation.duration = 0;
+Chart.defaults.responsive = true;
+Chart.defaults.maintainAspectRatio = false;
 
 /**
  *
