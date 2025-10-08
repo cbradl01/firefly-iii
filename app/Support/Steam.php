@@ -209,7 +209,7 @@ class Steam
         $newCache             = new CacheProperties();
         $newCache->addProperty($account->id);
         $newCache->addProperty("dailyBalances");
-        $newCache->delete();
+        // $newCache->delete();
 
         if ($newCache->has()) {
             // Check the needs_recalculation flag in the account_balance_flags table
