@@ -338,6 +338,8 @@
     {% if location %}
         <script src="v1/lib/leaflet/leaflet.js?v={{ FF_VERSION }}" nonce="{{ JS_NONCE }}"></script>
     {% endif %}
+    <script type="text/javascript" src="v1/js/lib/moment.min.js?v={{ FF_VERSION }}"
+            nonce="{{ JS_NONCE }}"></script>
     <script type="text/javascript" src="v1/js/lib/Chart.bundle.min.js?v={{ FF_VERSION }}"
             nonce="{{ JS_NONCE }}"></script>
     <script type="text/javascript" src="v1/js/lib/chartjs-plugin-annotation.min.js?v={{ FF_VERSION }}"
@@ -356,45 +358,46 @@
     <!-- Custom chart initialization with crosshair and enhanced tooltips -->
     <script type="text/javascript" nonce="{{ JS_NONCE }}">
         $(function() {
+            // Note: Using category scale instead of time scale to avoid date adapter issues
+            
             // Override the default lineNoStartZeroChart call with crosshair and enhanced tooltips
             var colorData = true;
             var options = $.extend(true, {}, defaultChartOptions);
             var chartType = 'line';
             
-            // Update for Chart.js 4.x syntax
-            if (options.scales && options.scales.yAxes) {
-                // Convert v2 syntax to v4 syntax
-                options.scales.y = options.scales.yAxes[0];
-                options.scales.y.ticks = options.scales.y.ticks || {};
-                options.scales.y.ticks.beginAtZero = false;
-                delete options.scales.yAxes;
-            }
+            // Set beginAtZero to false for account balance charts
+            options.scales.y.ticks.beginAtZero = false;
             
             // Enhanced tooltip configuration for Chart.js 4.x
             options.plugins = options.plugins || {};
-            options.plugins.tooltip = {
+            options.plugins.tooltip = $.extend(true, options.plugins.tooltip || {}, {
                 mode: 'index',
                 intersect: false,
+                enabled: true,
+                position: 'nearest',
                 callbacks: {
                     title: function(context) {
-                        // Show date in tooltip title
-                        if (context.length > 0) {
-                            var date = new Date(context[0].parsed.x);
-                            return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+                        // Show the actual label from the chart data
+                        if (context.length > 0 && context[0].chart && context[0].chart.data && context[0].chart.data.labels) {
+                            var index = context[0].dataIndex;
+                            return context[0].chart.data.labels[index] || '';
                         }
                         return '';
                     },
                     label: function(context) {
-                        // Show account name, currency, and balance
+                        // Show account name, currency, and balance using proper accounting formatting
                         var dataset = context.dataset;
                         var value = context.parsed.y;
-                        var currency = dataset.currency || '';
+                        var currency = dataset.currency_symbol || '';
                         var accountName = dataset.label || 'Account';
                         
-                        return accountName + ': ' + currency + value;
+                        // Use accounting.formatMoney for proper currency formatting (like the original)
+                        var formattedValue = accounting.formatMoney(value, currency);
+                        
+                        return accountName + ': ' + formattedValue;
                     }
                 }
-            };
+            });
             
             // Add crosshair plugin configuration
             options.plugins.crosshair = {
@@ -411,7 +414,33 @@
                 }
             };
             
+            // Debug: Log the final options
+            console.log('Final chart options:', options);
+            
+            // Register the crosshair plugin
+            try {
+                if (typeof ChartCrosshair !== 'undefined') {
+                    Chart.register(ChartCrosshair);
+                    console.log('ChartCrosshair registered successfully');
+                } else if (typeof window.ChartCrosshair !== 'undefined') {
+                    Chart.register(window.ChartCrosshair);
+                    console.log('window.ChartCrosshair registered successfully');
+                } else if (typeof Chart.plugins !== 'undefined' && Chart.plugins.crosshair) {
+                    console.log('ChartCrosshair plugin already registered');
+                } else {
+                    console.log('ChartCrosshair plugin not found');
+                    console.log('Available Chart plugins:', Object.keys(Chart.plugins || {}));
+                    console.log('Chart version:', Chart.version);
+                }
+            } catch (error) {
+                console.error('Error registering crosshair plugin:', error);
+            }
+            
             // Chart title is now handled by HTML above the chart
+            
+            // Debug: Log the chart options
+            console.log('Chart options:', options);
+            console.log('Chart URL:', chartUrl);
             
             // Call the chart drawing function with our custom options
             drawAChart(chartUrl, 'overview-chart', chartType, options, colorData);
