@@ -121,12 +121,6 @@
                             <h4 style="text-align: center; margin-bottom: 20px; color: white;">
                                 Account Balance Over Time
                             </h4>
-                            <!-- Date Range Picker -->
-                            <div style="text-align: center; margin-bottom: 15px;">
-                                <label for="chart-date-range" style="color: white; margin-right: 10px;">{{ 'date_range'|_ }}:</label>
-                                <input type="text" id="chart-date-range" class="form-control" style="display: inline-block; width: 250px;" 
-                                       value="{{ start.format('Y-m-d') }} - {{ end.format('Y-m-d') }}" />
-                            </div>
                             <div>
                                 <canvas id="overview-chart" style="width:100%;height:400px;" height="400" width="100%"></canvas>
                             </div>
@@ -351,6 +345,55 @@
     <script type="text/javascript" src="v1/js/lib/daterangepicker.js?v={{ FF_VERSION }}"
             nonce="{{ JS_NONCE }}"></script>
     <link rel="stylesheet" type="text/css" href="v1/css/daterangepicker-default.css?v={{ FF_VERSION }}" />
+    <style>
+        /* Custom styling for the date range picker */
+        .daterangepicker {
+            width: auto !important;
+            max-width: calc(100vw - 40px) !important; /* Ensure it fits within viewport with some margin */
+        }
+        .daterangepicker .ranges {
+            width: 160px !important;
+            float: left;
+        }
+        .daterangepicker .drp-calendar {
+            width: 280px !important;
+            float: left;
+        }
+        .daterangepicker .drp-calendar.left {
+            margin-right: 0 !important;
+        }
+        .daterangepicker .drp-calendar.right {
+            margin-left: 0 !important;
+        }
+        .daterangepicker .drp-calendar.left,
+        .daterangepicker .drp-calendar.right {
+            display: inline-block !important;
+            vertical-align: top !important;
+        }
+        /* Clear floats to prevent layout issues */
+        .daterangepicker::after {
+            content: "";
+            display: table;
+            clear: both;
+        }
+        /* Responsive behavior for smaller screens */
+        @media (max-width: 768px) {
+            .daterangepicker .drp-calendar {
+                width: 240px !important;
+            }
+            .daterangepicker .ranges {
+                width: 140px !important;
+            }
+        }
+        @media (max-width: 600px) {
+            .daterangepicker .drp-calendar {
+                width: 200px !important;
+            }
+            .daterangepicker .ranges {
+                width: 120px !important;
+            }
+        }
+    </style>
     <script type="text/javascript" src="v1/js/lib/chartjs-plugin-annotation.min.js?v={{ FF_VERSION }}"
             nonce="{{ JS_NONCE }}"></script>
     <!-- Chart.js Crosshair Plugin (patched with safety fix) -->
@@ -367,19 +410,25 @@
     <!-- Custom chart initialization with crosshair and enhanced tooltips -->
     <script type="text/javascript" nonce="{{ JS_NONCE }}">
         $(function() {
-            // Set initial value before initializing the date range picker
-            $('#chart-date-range').val('{{ start.format('Y-m-d') }} - {{ end.format('Y-m-d') }}');
+            // Set initial value in header date range display with readable format
+            $('#daterange').text('{{ start.format('F jS, Y') }} - {{ end.format('F jS, Y') }}');
             
-            // Initialize enhanced date range picker with quick selection options
-            $('#chart-date-range').daterangepicker({
+            // Make the header date range clickable and initialize enhanced date range picker
+            $('#daterange').attr('title', 'Click to change date range');
+            $('#daterange').daterangepicker({
                 startDate: moment('{{ start.format('Y-m-d') }}'),
                 endDate: moment('{{ end.format('Y-m-d') }}'),
                 opens: 'center',
                 showDropdowns: true,
-                showWeekNumbers: true,
-                showISOWeekNumbers: true,
+                showWeekNumbers: false,
+                showISOWeekNumbers: false,
                 autoUpdateInput: false,
-                alwaysShowCalendars: true,
+                alwaysShowCalendars: false,
+                drops: 'down',
+                singleDatePicker: false,
+                linkedCalendars: false,
+                minDate: moment('2000-01-01'),
+                maxDate: moment(),
                 locale: {
                     format: 'YYYY-MM-DD',
                     separator: ' - ',
@@ -424,14 +473,66 @@
                 var startFormatted = start.format('YYYY-MM-DD');
                 var endFormatted = end.format('YYYY-MM-DD');
                 
-                // Update the input field
-                $('#chart-date-range').val(startFormatted + ' - ' + endFormatted);
+                // Update the header date range display with readable format
+                var startReadable = start.format('MMMM Do, YYYY');
+                var endReadable = end.format('MMMM Do, YYYY');
+                $('#daterange').text(startReadable + ' - ' + endReadable);
                 
                 // Debug: Log the formatted dates
                 console.log('Date range picker callback - formatted start:', startFormatted, 'formatted end:', endFormatted);
                 
                 // Update chart when date range changes
                 updateChartDateRange(start, end);
+            });
+            
+            // Custom logic to filter end year options based on start year
+            $('#daterange').on('show.daterangepicker', function(ev, picker) {
+                // Function to update end year options based on start year
+                function updateEndYearOptions() {
+                    var startYear = picker.startDate.year();
+                    var endYearSelect = picker.container.find('.drp-calendar.right .yearselect');
+                    var currentEndYear = picker.endDate.year();
+                    
+                    // Clear existing options
+                    endYearSelect.empty();
+                    
+                    // Add years from start year to current year
+                    for (var year = startYear; year <= moment().year(); year++) {
+                        var option = $('<option></option>')
+                            .attr('value', year)
+                            .text(year)
+                            .prop('selected', year === currentEndYear);
+                        endYearSelect.append(option);
+                    }
+                }
+                
+                // Update end year options when start year changes
+                picker.container.find('.drp-calendar.left .yearselect').on('change', function() {
+                    var newStartYear = parseInt($(this).val());
+                    var newStartDate = picker.startDate.clone().year(newStartYear);
+                    
+                    // Update start date
+                    picker.setStartDate(newStartDate);
+                    
+                    // Update end year options
+                    updateEndYearOptions();
+                    
+                    // If current end year is before new start year, adjust end date
+                    if (picker.endDate.year() < newStartYear) {
+                        var newEndDate = newStartDate.clone();
+                        picker.setEndDate(newEndDate);
+                    }
+                });
+                
+                // Update end date when end year changes
+                picker.container.find('.drp-calendar.right .yearselect').on('change', function() {
+                    var newEndYear = parseInt($(this).val());
+                    var newEndDate = picker.endDate.clone().year(newEndYear);
+                    picker.setEndDate(newEndDate);
+                });
+                
+                // Initial setup
+                updateEndYearOptions();
             });
             
             // Note: Using category scale instead of time scale to avoid date adapter issues
@@ -525,6 +626,15 @@
             
             // Show loading indicator
             $('#overview-chart').css('opacity', '0.5');
+            
+            // Update the page URL to reflect the new date range (as path parameters, not query parameters)
+            // TODO: Consider updating the backend route to accept start/end dates as query parameters instead of path parameters
+            // This would be more intuitive: /accounts/show/123?start=2025-01-01&end=2025-10-08
+            // Current route expects: /accounts/show/123/2025-01-01/2025-10-08
+            var currentPath = window.location.pathname;
+            var accountId = currentPath.match(/\/accounts\/show\/(\d+)/)[1];
+            var newUrl = '/accounts/show/' + accountId + '/' + startDate + '/' + endDate;
+            window.history.pushState({}, '', newUrl);
             
             // Update the chart with new data
             $.getJSON(newChartUrl).done(function(data) {
