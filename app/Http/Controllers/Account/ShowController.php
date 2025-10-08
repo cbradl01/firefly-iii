@@ -118,6 +118,9 @@ class ShowController extends Controller
         $sortField        = $request->get('sort', 'date');
         $sortDirection    = $request->get('direction', 'desc');
         
+        // Handle Hold transaction filtering for brokerage accounts
+        $hideHoldTransactions = $request->get('hide_hold', false);
+        
         // Map frontend field names to database field names
         $fieldMapping = [
             'description' => 'description',
@@ -162,8 +165,15 @@ class ShowController extends Controller
         /** @var GroupCollectorInterface $collector */
         if ($account->accountType->type == AccountTypeEnum::BROKERAGE->value) {
             $collector        = app(GroupCollectorInterface::class);
-            $anotherAccounts = Account::where('name', "Stock Market")->get();
-            $accountsCollection = (new Collection([$account]))->merge($anotherAccounts);
+            if ($hideHoldTransactions) {
+                // Only include the brokerage account itself, exclude Stock Market accounts
+                $accountsCollection = new Collection([$account]);
+            } else {
+                // Include both the brokerage account and Stock Market accounts
+                $stockMarketAccountName = config('firefly.brokerage.stock_market_account_name');
+                $anotherAccounts = Account::where('name', $stockMarketAccountName)->get();
+                $accountsCollection = (new Collection([$account]))->merge($anotherAccounts);
+            }
         } else {
             $collector = app(GroupCollectorInterface::class); 
             $accountsCollection = (new Collection([$account]));
@@ -189,8 +199,16 @@ class ShowController extends Controller
         Log::debug('End collect transactions');
         $timer->stop('collection');
         $paginationUrl = route('accounts.show', [$account->id, $start->format('Y-m-d'), $end->format('Y-m-d')]);
+        $queryParams = [];
         if ($sortField !== 'date' || $sortDirection !== 'desc') {
-            $paginationUrl .= '?sort=' . $sortField . '&direction=' . $sortDirection;
+            $queryParams['sort'] = $sortField;
+            $queryParams['direction'] = $sortDirection;
+        }
+        if ($hideHoldTransactions) {
+            $queryParams['hide_hold'] = '1';
+        }
+        if (!empty($queryParams)) {
+            $paginationUrl .= '?' . http_build_query($queryParams);
         }
         $groups->setPath($paginationUrl);
         $showAll          = false;
@@ -221,7 +239,8 @@ class ShowController extends Controller
                 'location',
                 'balances',
                 'sortField',
-                'sortDirection'
+                'sortDirection',
+                'hideHoldTransactions'
             )
         );
     }
@@ -255,6 +274,9 @@ class ShowController extends Controller
         $sortField       = $request->get('sort', 'date');
         $sortDirection   = $request->get('direction', 'desc');
         
+        // Handle Hold transaction filtering for brokerage accounts
+        $hideHoldTransactions = $request->get('hide_hold', false);
+        
         // Map frontend field names to database field names
         $fieldMapping = [
             'description' => 'description',
@@ -276,13 +298,21 @@ class ShowController extends Controller
         /** @var GroupCollectorInterface $collector */
         if ($account->accountType->type == AccountTypeEnum::BROKERAGE->value) {
             $collector       = app(GroupCollectorInterface::class);
-            $anotherAccounts = Account::where('name', "Stock Market")->get();
-            $accountsCollection = (new Collection([$account]))->merge($anotherAccounts);
+            if ($hideHoldTransactions) {
+                // Only include the brokerage account itself, exclude Stock Market accounts
+                $accountsCollection = new Collection([$account]);
+            } else {
+                // Include both the brokerage account and Stock Market accounts
+                $stockMarketAccountName = config('firefly.brokerage.stock_market_account_name');
+                $anotherAccounts = Account::where('name', $stockMarketAccountName)->get();
+                $accountsCollection = (new Collection([$account]))->merge($anotherAccounts);
+            }
             $collector->setAccounts($accountsCollection)->setLimit($pageSize)->setPage($page)->withAccountInformation()->withCategoryInformation()->setSorting($sorting);
         } else {
             $collector = app(GroupCollectorInterface::class);
             $collector->setAccounts(new Collection([$account]))->setLimit($pageSize)->setPage($page)->withAccountInformation()->withCategoryInformation()->setSorting($sorting);
         }
+        
         
         // this search will not include transaction groups where this asset account (or liability)
         // is just part of ONE of the journals. To force this:
@@ -292,8 +322,16 @@ class ShowController extends Controller
         
         // Build pagination URL with sorting parameters
         $paginationUrl = route('accounts.show.all', [$account->id]);
+        $queryParams = [];
         if ($sortField !== 'date' || $sortDirection !== 'desc') {
-            $paginationUrl .= '?sort=' . $sortField . '&direction=' . $sortDirection;
+            $queryParams['sort'] = $sortField;
+            $queryParams['direction'] = $sortDirection;
+        }
+        if ($hideHoldTransactions) {
+            $queryParams['hide_hold'] = '1';
+        }
+        if (!empty($queryParams)) {
+            $paginationUrl .= '?' . http_build_query($queryParams);
         }
         $groups->setPath($paginationUrl);
         $chartUrl        = route('chart.account.period', [$account->id, $start->format('Y-m-d'), $end->format('Y-m-d')]);
@@ -322,7 +360,8 @@ class ShowController extends Controller
                 'end',
                 'balances',
                 'sortField',
-                'sortDirection'
+                'sortDirection',
+                'hideHoldTransactions'
             )
         );
     }
