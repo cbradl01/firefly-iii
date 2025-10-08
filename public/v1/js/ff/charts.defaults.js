@@ -80,20 +80,23 @@ var defaultChartOptions = {
         }
     },
     scales: {
-        xAxes: [
-            {
-                gridLines: {
-                    display: false
-                },
-                ticks: {
-                    // break ticks when too long.
-                    callback: function (value, index, values) {
-                        return formatLabel(value, 20);
+        x: {
+            grid: {
+                display: false
+            },
+            ticks: {
+                // break ticks when too long.
+                callback: function (value, index, values) {
+                    // Get the actual label from the chart data
+                    if (this.chart && this.chart.data && this.chart.data.labels && this.chart.data.labels[index]) {
+                        return formatLabel(this.chart.data.labels[index], 20);
                     }
+                    // Fallback to the value if no label found
+                    return formatLabel(value, 20);
                 }
             }
-        ],
-        yAxes: [{
+        },
+        y: {
             display: true,
             ticks: {
                 callback: function (tickValue) {
@@ -105,27 +108,31 @@ var defaultChartOptions = {
                 beginAtZero: true
             }
 
-        }]
+        }
     },
-    tooltips: {
-        mode: 'label',
-        callbacks: {
-            label: function (tooltipItem, data) {
-                "use strict";
-                return data.datasets[tooltipItem.datasetIndex].label + ': ' +
-                       accounting.formatMoney(tooltipItem.yLabel, data.datasets[tooltipItem.datasetIndex].currency_symbol);
+    plugins: {
+        tooltip: {
+            mode: 'index',
+            callbacks: {
+                label: function (context) {
+                    "use strict";
+                    return context.dataset.label + ': ' +
+                           accounting.formatMoney(context.parsed.y, context.dataset.currency_symbol);
+                }
             }
         }
     }
 };
 
 var pieOptionsWithCurrency = {
-    tooltips: {
-        callbacks: {
-            label: function (tooltipItem, data) {
-                "use strict";
-                var value = data.datasets[0].data[tooltipItem.index];
-                return data.labels[tooltipItem.index] + ': ' + accounting.formatMoney(value, data.datasets[tooltipItem.datasetIndex].currency_symbol[tooltipItem.index]);
+    plugins: {
+        tooltip: {
+            callbacks: {
+                label: function (context) {
+                    "use strict";
+                    var value = context.parsed;
+                    return context.label + ': ' + accounting.formatMoney(value, context.dataset.currency_symbol[context.dataIndex]);
+                }
             }
         }
     },
@@ -134,12 +141,14 @@ var pieOptionsWithCurrency = {
 };
 
 var defaultPieOptions = {
-    tooltips: {
-        callbacks: {
-            label: function (tooltipItem, data) {
-                "use strict";
-                var value = data.datasets[0].data[tooltipItem.index];
-                return data.labels[tooltipItem.index] + ': ' + accounting.formatMoney(value);
+    plugins: {
+        tooltip: {
+            callbacks: {
+                label: function (context) {
+                    "use strict";
+                    var value = context.parsed;
+                    return context.label + ': ' + accounting.formatMoney(value);
+                }
             }
         }
     },
@@ -148,12 +157,14 @@ var defaultPieOptions = {
 };
 
 var neutralDefaultPieOptions = {
-    tooltips: {
-        callbacks: {
-            label: function (tooltipItem, data) {
-                "use strict";
-                var value = data.datasets[0].data[tooltipItem.index];
-                return data.labels[tooltipItem.index] + ': ' + accounting.formatMoney(value, '¤');
+    plugins: {
+        tooltip: {
+            callbacks: {
+                label: function (context) {
+                    "use strict";
+                    var value = context.parsed;
+                    return context.label + ': ' + accounting.formatMoney(value, '¤');
+                }
             }
         }
     },

@@ -100,7 +100,7 @@ function lineNoStartZeroChart(URL, container) {
     var colorData = true;
     var options = $.extend(true, {}, defaultChartOptions);
     var chartType = 'line';
-    options.scales.yAxes[0].ticks.beginAtZero = false;
+    options.scales.y.ticks.beginAtZero = false;
 
     drawAChart(URL, container, chartType, options, colorData);
 }
@@ -118,20 +118,18 @@ function otherCurrencyLineChart(URL, container, currencySymbol) {
 
     var newOpts = {
         scales: {
-            xAxes: [
-                {
-                    gridLines: {
-                        display: false
-                    },
-                    ticks: {
-                        // break ticks when too long.
-                        callback: function (value, index, values) {
-                            return formatLabel(value, 20);
-                        }
+            x: {
+                grid: {
+                    display: false
+                },
+                ticks: {
+                    // break ticks when too long.
+                    callback: function (value, index, values) {
+                        return formatLabel(value, 20);
                     }
                 }
-            ],
-            yAxes: [{
+            },
+            y: {
                 display: true,
                 //hello: 'fresh',
                 ticks: {
@@ -143,7 +141,7 @@ function otherCurrencyLineChart(URL, container, currencySymbol) {
                     },
                     beginAtZero: true
                 }
-            }]
+            }
         },
     };
 
@@ -167,39 +165,34 @@ function doubleYChart(URL, container) {
 
     var colorData = true;
     var options = $.extend(true, {}, defaultChartOptions);
-    options.scales.yAxes = [
-        // y axis 0:
-        {
-            display: true,
-            ticks: {
-                callback: function (tickValue) {
-                    "use strict";
-                    return accounting.formatMoney(tickValue);
+    options.scales.y = {
+        display: true,
+        ticks: {
+            callback: function (tickValue) {
+                "use strict";
+                return accounting.formatMoney(tickValue);
 
-                },
-                beginAtZero: true
             },
-            position: "left",
-            "id": "y-axis-0"
+            beginAtZero: true
         },
-        // and y axis 1:
-        {
-            display: true,
-            ticks: {
-                callback: function (tickValue) {
-                    "use strict";
-                    return accounting.formatMoney(tickValue);
+        position: "left",
+        "id": "y-axis-0"
+    };
+    options.scales.y1 = {
+        display: true,
+        ticks: {
+            callback: function (tickValue) {
+                "use strict";
+                return accounting.formatMoney(tickValue);
 
-                },
-                beginAtZero: true
             },
-            position: "right",
-            "id": "y-axis-1"
-        }
-
-    ];
+            beginAtZero: true
+        },
+        position: "right",
+        "id": "y-axis-1"
+    };
     options.stacked = true;
-    options.scales.xAxes[0].stacked = true;
+    options.scales.x.stacked = true;
 
     var chartType = 'bar';
 
@@ -217,37 +210,32 @@ function doubleYNonStackedChart(URL, container) {
 
     var colorData = true;
     var options = $.extend(true, {}, defaultChartOptions);
-    options.scales.yAxes = [
-        // y axis 0:
-        {
-            display: true,
-            ticks: {
-                callback: function (tickValue) {
-                    "use strict";
-                    return accounting.formatMoney(tickValue);
+    options.scales.y = {
+        display: true,
+        ticks: {
+            callback: function (tickValue) {
+                "use strict";
+                return accounting.formatMoney(tickValue);
 
-                },
-                beginAtZero: true
             },
-            position: "left",
-            "id": "y-axis-0"
+            beginAtZero: true
         },
-        // and y axis 1:
-        {
-            display: true,
-            ticks: {
-                callback: function (tickValue) {
-                    "use strict";
-                    return accounting.formatMoney(tickValue);
+        position: "left",
+        "id": "y-axis-0"
+    };
+    options.scales.y1 = {
+        display: true,
+        ticks: {
+            callback: function (tickValue) {
+                "use strict";
+                return accounting.formatMoney(tickValue);
 
-                },
-                beginAtZero: true
             },
-            position: "right",
-            "id": "y-axis-1"
-        }
-
-    ];
+            beginAtZero: true
+        },
+        position: "right",
+        "id": "y-axis-1"
+    };
     var chartType = 'bar';
 
     drawAChart(URL, container, chartType, options, colorData);
@@ -297,8 +285,8 @@ function stackedColumnChart(URL, container) {
     var options = $.extend(true, {}, defaultChartOptions);
 
     options.stacked = true;
-    options.scales.xAxes[0].stacked = true;
-    options.scales.yAxes[0].stacked = true;
+    options.scales.x.stacked = true;
+    options.scales.y.stacked = true;
 
     var chartType = 'bar';
 
@@ -352,7 +340,9 @@ function drawAChart(URL, container, chartType, options, colorData) {
     }
 
     $.getJSON(URL).done(function (data) {
-        console.log("HERE")
+        console.log("Chart data received:", data);
+        console.log("Chart labels:", data.labels);
+        console.log("Chart datasets:", data.datasets);
         containerObj.removeClass('general-chart-error');
 
         // if result is empty array, or the labels array is empty, show error.
@@ -394,6 +384,8 @@ function drawAChart(URL, container, chartType, options, colorData) {
         } else {
             // new chart!
             var ctx = document.getElementById(container).getContext("2d");
+            console.log("Creating new chart with data:", data);
+            console.log("Chart options:", options);
             var chartOpts = {
                 type: chartType,
                 data: data,
@@ -427,6 +419,10 @@ function drawAChart(URL, container, chartType, options, colorData) {
                         }]
                     };
                 }
+            }
+            // Destroy existing chart if it exists
+            if (allCharts[container]) {
+                allCharts[container].destroy();
             }
             allCharts[container] = new Chart(ctx, chartOpts);
         }
