@@ -68,6 +68,13 @@ return [
         'single_user_mode' => true,
         'is_demo_site'     => false,
     ],
+    // chart configuration:
+    'charts'                       => [
+        'pie_chart'               => [
+            'max_slices'          => 7,    // Maximum number of individual slices to show
+            'min_percentage'      => 5,    // Minimum percentage to show as individual slice
+        ],
+    ],
     // some feature flags:
     'feature_flags'                => [
         'export'                 => true,
