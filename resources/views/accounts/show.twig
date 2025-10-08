@@ -121,6 +121,12 @@
                             <h4 style="text-align: center; margin-bottom: 20px; color: white;">
                                 Account Balance Over Time
                             </h4>
+                            <!-- Date Range Picker -->
+                            <div style="text-align: center; margin-bottom: 15px;">
+                                <label for="chart-date-range" style="color: white; margin-right: 10px;">{{ 'date_range'|_ }}:</label>
+                                <input type="text" id="chart-date-range" class="form-control" style="display: inline-block; width: 250px;" 
+                                       value="{{ start.format('Y-m-d') }} - {{ end.format('Y-m-d') }}" />
+                            </div>
                             <div>
                                 <canvas id="overview-chart" style="width:100%;height:400px;" height="400" width="100%"></canvas>
                             </div>
@@ -342,6 +348,9 @@
             nonce="{{ JS_NONCE }}"></script>
     <script type="text/javascript" src="v1/js/lib/Chart.bundle.min.js?v={{ FF_VERSION }}"
             nonce="{{ JS_NONCE }}"></script>
+    <script type="text/javascript" src="v1/js/lib/daterangepicker.js?v={{ FF_VERSION }}"
+            nonce="{{ JS_NONCE }}"></script>
+    <link rel="stylesheet" type="text/css" href="v1/css/daterangepicker-default.css?v={{ FF_VERSION }}" />
     <script type="text/javascript" src="v1/js/lib/chartjs-plugin-annotation.min.js?v={{ FF_VERSION }}"
             nonce="{{ JS_NONCE }}"></script>
     <!-- Chart.js Crosshair Plugin -->
@@ -358,6 +367,73 @@
     <!-- Custom chart initialization with crosshair and enhanced tooltips -->
     <script type="text/javascript" nonce="{{ JS_NONCE }}">
         $(function() {
+            // Set initial value before initializing the date range picker
+            $('#chart-date-range').val('{{ start.format('Y-m-d') }} - {{ end.format('Y-m-d') }}');
+            
+            // Initialize enhanced date range picker with quick selection options
+            $('#chart-date-range').daterangepicker({
+                startDate: moment('{{ start.format('Y-m-d') }}'),
+                endDate: moment('{{ end.format('Y-m-d') }}'),
+                opens: 'center',
+                showDropdowns: true,
+                showWeekNumbers: true,
+                showISOWeekNumbers: true,
+                autoUpdateInput: false,
+                alwaysShowCalendars: true,
+                locale: {
+                    format: 'YYYY-MM-DD',
+                    separator: ' - ',
+                    applyLabel: 'Apply',
+                    cancelLabel: 'Cancel',
+                    fromLabel: 'From',
+                    toLabel: 'To',
+                    customRangeLabel: 'Custom',
+                    weekLabel: 'W',
+                    daysOfWeek: ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'],
+                    monthNames: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
+                    firstDay: 1
+                },
+                ranges: {
+                    'Today': [moment(), moment()],
+                    'Yesterday': [moment().subtract(1, 'days'), moment().subtract(1, 'days')],
+                    'Last 7 Days': [moment().subtract(6, 'days'), moment()],
+                    'Last 30 Days': [moment().subtract(29, 'days'), moment()],
+                    'This Month': [moment().startOf('month'), moment().endOf('month')],
+                    'Last Month': [moment().subtract(1, 'month').startOf('month'), moment().subtract(1, 'month').endOf('month')],
+                    'Last 3 Months': [moment().subtract(3, 'months'), moment()],
+                    'Last 6 Months': [moment().subtract(6, 'months'), moment()],
+                    'This Year': [moment().startOf('year'), moment().endOf('year')],
+                    'Last Year': [moment().subtract(1, 'year').startOf('year'), moment().subtract(1, 'year').endOf('year')],
+                    'Last 2 Years': [moment().subtract(2, 'years'), moment()],
+                    'Last 5 Years': [moment().subtract(5, 'years'), moment()],
+                    'All Time': [moment().subtract(10, 'years'), moment()]
+                }
+            }, function(start, end, label) {
+                // Debug: Log the raw callback parameters
+                console.log('Date range picker callback - raw start:', start, 'raw end:', end, 'label:', label);
+                console.log('Start type:', typeof start, 'End type:', typeof end);
+                console.log('Start isMoment:', moment.isMoment(start), 'End isMoment:', moment.isMoment(end));
+                
+                // Ensure we have valid moment objects
+                if (!moment.isMoment(start) || !moment.isMoment(end)) {
+                    console.error('Invalid moment objects in callback:', start, end);
+                    return;
+                }
+                
+                // Format dates using the same format as the working URL
+                var startFormatted = start.format('YYYY-MM-DD');
+                var endFormatted = end.format('YYYY-MM-DD');
+                
+                // Update the input field
+                $('#chart-date-range').val(startFormatted + ' - ' + endFormatted);
+                
+                // Debug: Log the formatted dates
+                console.log('Date range picker callback - formatted start:', startFormatted, 'formatted end:', endFormatted);
+                
+                // Update chart when date range changes
+                updateChartDateRange(start, end);
+            });
+            
             // Note: Using category scale instead of time scale to avoid date adapter issues
             
             // Override the default lineNoStartZeroChart call with crosshair and enhanced tooltips
@@ -414,6 +490,9 @@
                 }
             };
             
+            // Note: Chart.js v4 zoom requires a separate plugin
+            // For now, we'll use the date range picker for zoom functionality
+            
             // Debug: Log the final options
             console.log('Final chart options:', options);
             
@@ -445,6 +524,65 @@
             // Call the chart drawing function with our custom options
             drawAChart(chartUrl, 'overview-chart', chartType, options, colorData);
         });
+        
+        // Function to update chart when date range changes
+        function updateChartDateRange(start, end) {
+            // Ensure we have valid moment objects
+            if (!moment.isMoment(start) || !moment.isMoment(end)) {
+                console.error('Invalid date objects passed to updateChartDateRange:', start, end);
+                return;
+            }
+            
+            var startDate = start.format('YYYY-MM-DD');
+            var endDate = end.format('YYYY-MM-DD');
+            
+            // Validate the formatted dates
+            if (!startDate.match(/^\d{4}-\d{2}-\d{2}$/) || !endDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                console.error('Invalid date format:', startDate, endDate);
+                return;
+            }
+            
+            // Build new chart URL with updated date range
+            // Use the same pattern as the original chartUrl but replace the dates
+            var baseUrl = '{{ chartUrl }}';
+            var newChartUrl = baseUrl.replace(/\/\d{4}-\d{2}-\d{2}\/\d{4}-\d{2}-\d{2}$/, '/' + startDate + '/' + endDate);
+            
+            console.log('Updating chart with new date range:', startDate, 'to', endDate);
+            console.log('Original chart URL:', baseUrl);
+            console.log('New chart URL:', newChartUrl);
+            console.log('Current chart exists:', !!allCharts['overview-chart']);
+            
+            // Show loading indicator
+            $('#overview-chart').css('opacity', '0.5');
+            
+            // Update the chart with new data
+            $.getJSON(newChartUrl).done(function(data) {
+                console.log('New chart data received:', data);
+                console.log('Data labels:', data.labels);
+                console.log('Data datasets:', data.datasets);
+                
+                // Update the existing chart with new data
+                if (allCharts['overview-chart']) {
+                    console.log('Updating existing chart...');
+                    allCharts['overview-chart'].data.labels = data.labels;
+                    allCharts['overview-chart'].data.datasets = data.datasets;
+                    allCharts['overview-chart'].update('none'); // Use 'none' for instant update
+                    console.log('Chart updated successfully');
+                } else {
+                    console.error('Chart not found in allCharts');
+                }
+                
+                // Hide loading indicator
+                $('#overview-chart').css('opacity', '1');
+            }).fail(function(xhr, status, error) {
+                console.error('Failed to load new chart data:', status, error);
+                console.error('Response:', xhr.responseText);
+                alert('Failed to load chart data for the selected date range: ' + error);
+                
+                // Hide loading indicator
+                $('#overview-chart').css('opacity', '1');
+            });
+        }
     </script>
     {# required for groups.twig #}
     <script type="text/javascript" src="v1/js/ff/list/groups.js?v={{ FF_VERSION }}" nonce="{{ JS_NONCE }}"></script>
