@@ -391,30 +391,21 @@ class ImportController extends Controller
                         unset($accountData['source_account_id']); // Remove from account data
                     }
                     
-                    // Create account via API endpoint (same as POST /v1/accounts)
-                    Log::info('Creating account from JSON via API', ['account_data' => $accountData]);
+                    // Create account directly using the repository
+                    Log::info('Creating account from JSON', ['account_data' => $accountData]);
                     
-                    // Make an internal HTTP request to the API endpoint
-                    $response = \Http::withHeaders([
-                        'Authorization' => 'Bearer ' . Auth::user()->createToken('import')->accessToken,
-                        'Accept' => 'application/json',
-                        'Content-Type' => 'application/json',
-                    ])->post('http://localhost:8080/api/v1/accounts', $accountData);
+                    // Use the account factory to create the account
+                    $factory = app(\FireflyIII\Factory\AccountFactory::class);
+                    $factory->setUser(auth()->user());
+                    $account = $factory->create($accountData);
                     
-                    if ($response->successful()) {
-                        $responseData = $response->json();
-                        $account = \FireflyIII\Models\Account::find($responseData['data']['id']);
-                        
-                        // Update the opening balance transaction to use the real source account
-                        if ($sourceAccountId && $account) {
-                            $this->updateOpeningBalanceSourceAccount($account, $sourceAccountId);
-                        }
-                    } else {
-                        Log::error('API request failed', [
-                            'status' => $response->status(),
-                            'body' => $response->body(),
-                        ]);
-                        throw new \Exception('API request failed: ' . $response->body());
+                    if (!$account) {
+                        throw new \Exception('Failed to create account');
+                    }
+                    
+                    // Update the opening balance transaction to use the real source account
+                    if ($sourceAccountId && $account) {
+                        $this->updateOpeningBalanceSourceAccount($account, $sourceAccountId);
                     }
                     
                     $createdCount++;
