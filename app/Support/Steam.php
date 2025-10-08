@@ -49,24 +49,7 @@ use function Safe\preg_replace;
  */
 class Steam
 {
-    public function getAccountCurrency(Account $account): ?TransactionCurrency
-    {
-        $type   = $account->accountType->type;
-        $list   = config('firefly.valid_currency_account_types');
-
-        // return null if not in this list.
-        if (!in_array($type, $list, true)) {
-            return null;
-        }
-        $result = $account->accountMeta()->where('name', 'currency_id')->first();
-        if (null === $result) {
-            return null;
-        }
-
-        return TransactionCurrency::find((int) $result->data);
-    }
-
-    public function finalAccountBalanceInRange(Account $account, Carbon $start, Carbon $end, bool $convertToNative): array
+    public function finalAccountBalanceInRange(Account $account, Carbon $start, Carbon $end, bool $convertToPrimary): array
     {
         // expand period.
         $start->startOfDay();
@@ -79,7 +62,7 @@ class Steam
         // Use a default balance if dailyBalances is empty
         $defaultBalance = [
             'balance' => '0',
-            'native_balance' => '0', # TODO: should this key be a currency code?
+            'pc_balance' => '0', # TODO: should this key be a currency code?
         ];
 
         $dateRangeBalances = [];
@@ -102,7 +85,7 @@ class Steam
         $cache->addProperty($account->id);
         $cache->addProperty('final-balance-in-range');
         $cache->addProperty($start);
-        $cache->addProperty($convertToNative);
+        $cache->addProperty($convertToPrimary);
         $cache->addProperty($end);
         if ($cache->has()) {
             return $cache->get();
@@ -119,10 +102,10 @@ class Steam
         $request->subDay()->endOfDay();
         Log::debug(sprintf('finalAccountBalanceInRange: Call finalAccountBalance with date/time "%s"', $request->toIso8601String()));
         $startBalance         = $this->finalAccountBalance($account, $request);
-        $nativeCurrency       = app('amount')->getNativeCurrencyByUserGroup($account->user->userGroup);
+        $primaryCurrency      = Amount::getPrimaryCurrencyByUserGroup($account->user->userGroup);
         $accountCurrency      = $this->getAccountCurrency($account);
         $hasCurrency          = null !== $accountCurrency;
-        $currency             = $accountCurrency ?? $nativeCurrency;
+        $currency             = $accountCurrency ?? $primaryCurrency;
         Log::debug(sprintf('Currency is %s', $currency->code));
 
 
@@ -132,12 +115,12 @@ class Steam
             $startBalance[$accountCurrency->code] ??= '0';
         }
         if (!$hasCurrency) {
-            Log::debug(sprintf('Also set start balance in %s', $nativeCurrency->code));
-            $startBalance[$nativeCurrency->code] ??= '0';
+            Log::debug(sprintf('Also set start balance in %s', $primaryCurrency->code));
+            $startBalance[$primaryCurrency->code] ??= '0';
         }
         $currencies           = [
             $currency->id       => $currency,
-            $nativeCurrency->id => $nativeCurrency,
+            $primaryCurrency->id => $primaryCurrency,
         ];
 
         $balances[$formatted] = $startBalance;
@@ -188,14 +171,14 @@ class Steam
             $currentBalance[$entryCurrency->code] = bcadd($sumOfDay, $currentBalance[$entryCurrency->code]);
 
             // if not convert to native, add the amount to "balance", do nothing else.
-            if (!$convertToNative) {
+            if (!$convertToPrimary) {
                 $currentBalance['balance'] = bcadd($currentBalance['balance'], $sumOfDay);
             }
-            // if convert to native add the converted amount to "native_balance".
-            // if there is a request to convert, convert to "native_balance" and use "balance" for whichever amount is in the native currency.
-            if ($convertToNative) {
-                $nativeSumOfDay                   = $converter->convert($entryCurrency, $nativeCurrency, $carbon, $sumOfDay);
-                $currentBalance['native_balance'] = bcadd($currentBalance['native_balance'], $nativeSumOfDay);
+            // if convert to primary add the converted amount to "pc_balance".
+            // if there is a request to convert, convert to "pc_balance" and use "balance" for whichever amount is in the primary currency.
+            if ($convertToPrimary) {
+                $nativeSumOfDay                   = $converter->convert($entryCurrency, $primaryCurrency, $carbon, $sumOfDay);
+                $currentBalance['pc_balance'] = bcadd($currentBalance['pc_balance'], $nativeSumOfDay);
                 if ($currency->id === $entryCurrency->id) {
                     $currentBalance['balance'] = bcadd($currentBalance['balance'], $sumOfDay);
                 }
@@ -374,7 +357,8 @@ class Steam
             $invertAccountIds = []; // Initialize array for accounts to invert
             $invertAccountIdsString = '{}';
             if ($account->accountType->type == AccountTypeEnum::BROKERAGE->value) {
-                $stockMarketAccounts = Account::where('name', "Stock Market")->get();
+                $stockMarketAccountName = config('firefly.brokerage.stock_market_account_name');
+                $stockMarketAccounts = Account::where('name', $stockMarketAccountName)->get();
                 $stockAccountIds = $stockMarketAccounts->pluck('id')->toArray();
                 $accountIds = array_merge($accountIds, $stockAccountIds); // Append stock account IDs
                 $invertAccountIds = $stockAccountIds; // These are the accounts we want to invert
@@ -634,129 +618,129 @@ class Steam
         return str_replace($search, '', $string);
     }
 
-    public function finalAccountBalanceInRange(Account $account, Carbon $start, Carbon $end, bool $convertToPrimary): array
-    {
-        // expand period.
-        $start->startOfDay();
-        $end->endOfDay();
-        Log::debug(sprintf('finalAccountBalanceInRange(#%d, %s, %s)', $account->id, $start->format('Y-m-d H:i:s'), $end->format('Y-m-d H:i:s')));
+    // public function finalAccountBalanceInRange(Account $account, Carbon $start, Carbon $end, bool $convertToPrimary): array
+    // {
+    //     // expand period.
+    //     $start->startOfDay();
+    //     $end->endOfDay();
+    //     Log::debug(sprintf('finalAccountBalanceInRange(#%d, %s, %s)', $account->id, $start->format('Y-m-d H:i:s'), $end->format('Y-m-d H:i:s')));
 
-        // set up cache
-        $cache                = new CacheProperties();
-        $cache->addProperty($account->id);
-        $cache->addProperty('final-balance-in-range');
-        $cache->addProperty($start);
-        $cache->addProperty($convertToPrimary);
-        $cache->addProperty($end);
-        if ($cache->has()) {
-            return $cache->get();
-        }
+    //     // set up cache
+    //     $cache                = new CacheProperties();
+    //     $cache->addProperty($account->id);
+    //     $cache->addProperty('final-balance-in-range');
+    //     $cache->addProperty($start);
+    //     $cache->addProperty($convertToPrimary);
+    //     $cache->addProperty($end);
+    //     if ($cache->has()) {
+    //         return $cache->get();
+    //     }
 
-        $balances             = [];
-        $formatted            = $start->format('Y-m-d');
-        /*
-         * To make sure the start balance is correct, we need to get the balance at the exact end of the previous day.
-         * Since we just did "startOfDay" we can do subDay()->endOfDay() to get the correct moment.
-         * THAT will be the start balance.
-         */
-        $request              = clone $start;
-        $request->subDay()->endOfDay();
-        Log::debug('Get first balance to start.');
-        Log::debug(sprintf('finalAccountBalanceInRange: Call finalAccountBalance with date/time "%s"', $request->toIso8601String()));
-        $startBalance         = $this->finalAccountBalance($account, $request);
-        $primaryCurrency      = Amount::getPrimaryCurrencyByUserGroup($account->user->userGroup);
-        $accountCurrency      = $this->getAccountCurrency($account);
-        $hasCurrency          = $accountCurrency instanceof TransactionCurrency;
-        $currency             = $accountCurrency ?? $primaryCurrency;
-        Log::debug(sprintf('Currency is %s', $currency->code));
-
-
-        // set start balances:
-        $startBalance[$currency->code] ??= '0';
-        if ($hasCurrency) {
-            $startBalance[$accountCurrency->code] ??= '0';
-        }
-        if (!$hasCurrency) {
-            Log::debug(sprintf('Also set start balance in %s', $primaryCurrency->code));
-            $startBalance[$primaryCurrency->code] ??= '0';
-        }
-        $currencies           = [
-            $currency->id        => $currency,
-            $primaryCurrency->id => $primaryCurrency,
-        ];
-
-        $balances[$formatted] = $startBalance;
-        Log::debug('Final start balance: ', $startBalance);
-
-        // sums up the balance changes per day.
-        Log::debug(sprintf('Date >= %s and <= %s', $start->format('Y-m-d H:i:s'), $end->format('Y-m-d H:i:s')));
-        $set                  = $account->transactions()
-            ->leftJoin('transaction_journals', 'transactions.transaction_journal_id', '=', 'transaction_journals.id')
-            ->where('transaction_journals.date', '>=', $start->format('Y-m-d H:i:s'))
-            ->where('transaction_journals.date', '<=', $end->format('Y-m-d  H:i:s'))
-            ->groupBy('transaction_journals.date')
-            ->groupBy('transactions.transaction_currency_id')
-            ->orderBy('transaction_journals.date', 'ASC')
-            ->whereNull('transaction_journals.deleted_at')
-            ->get(
-                [ // @phpstan-ignore-line
-                    'transaction_journals.date',
-                    'transactions.transaction_currency_id',
-                    DB::raw('SUM(transactions.amount) AS sum_of_day'),
-                ]
-            )
-        ;
-
-        $currentBalance       = $startBalance;
-        $converter            = new ExchangeRateConverter();
+    //     $balances             = [];
+    //     $formatted            = $start->format('Y-m-d');
+    //     /*
+    //      * To make sure the start balance is correct, we need to get the balance at the exact end of the previous day.
+    //      * Since we just did "startOfDay" we can do subDay()->endOfDay() to get the correct moment.
+    //      * THAT will be the start balance.
+    //      */
+    //     $request              = clone $start;
+    //     $request->subDay()->endOfDay();
+    //     Log::debug('Get first balance to start.');
+    //     Log::debug(sprintf('finalAccountBalanceInRange: Call finalAccountBalance with date/time "%s"', $request->toIso8601String()));
+    //     $startBalance         = $this->finalAccountBalance($account, $request);
+    //     $primaryCurrency      = Amount::getPrimaryCurrencyByUserGroup($account->user->userGroup);
+    //     $accountCurrency      = $this->getAccountCurrency($account);
+    //     $hasCurrency          = $accountCurrency instanceof TransactionCurrency;
+    //     $currency             = $accountCurrency ?? $primaryCurrency;
+    //     Log::debug(sprintf('Currency is %s', $currency->code));
 
 
-        /** @var Transaction $entry */
-        foreach ($set as $entry) {
-            // get date object
-            $carbon                               = new Carbon($entry->date, $entry->date_tz);
-            $carbonKey                            = $carbon->format('Y-m-d');
-            // make sure sum is a string:
-            $sumOfDay                             = (string)($entry->sum_of_day ?? '0');
-            // #10426 make sure sum is not in scientific notation.
-            $sumOfDay                             = $this->floatalize($sumOfDay);
+    //     // set start balances:
+    //     $startBalance[$currency->code] ??= '0';
+    //     if ($hasCurrency) {
+    //         $startBalance[$accountCurrency->code] ??= '0';
+    //     }
+    //     if (!$hasCurrency) {
+    //         Log::debug(sprintf('Also set start balance in %s', $primaryCurrency->code));
+    //         $startBalance[$primaryCurrency->code] ??= '0';
+    //     }
+    //     $currencies           = [
+    //         $currency->id        => $currency,
+    //         $primaryCurrency->id => $primaryCurrency,
+    //     ];
 
-            // find currency of this entry, does not have to exist.
-            $currencies[$entry->transaction_currency_id] ??= Amount::getTransactionCurrencyById($entry->transaction_currency_id);
+    //     $balances[$formatted] = $startBalance;
+    //     Log::debug('Final start balance: ', $startBalance);
 
-            // make sure this $entry has its own $entryCurrency
-            /** @var TransactionCurrency $entryCurrency */
-            $entryCurrency                        = $currencies[$entry->transaction_currency_id];
+    //     // sums up the balance changes per day.
+    //     Log::debug(sprintf('Date >= %s and <= %s', $start->format('Y-m-d H:i:s'), $end->format('Y-m-d H:i:s')));
+    //     $set                  = $account->transactions()
+    //         ->leftJoin('transaction_journals', 'transactions.transaction_journal_id', '=', 'transaction_journals.id')
+    //         ->where('transaction_journals.date', '>=', $start->format('Y-m-d H:i:s'))
+    //         ->where('transaction_journals.date', '<=', $end->format('Y-m-d  H:i:s'))
+    //         ->groupBy('transaction_journals.date')
+    //         ->groupBy('transactions.transaction_currency_id')
+    //         ->orderBy('transaction_journals.date', 'ASC')
+    //         ->whereNull('transaction_journals.deleted_at')
+    //         ->get(
+    //             [ // @phpstan-ignore-line
+    //                 'transaction_journals.date',
+    //                 'transactions.transaction_currency_id',
+    //                 DB::raw('SUM(transactions.amount) AS sum_of_day'),
+    //             ]
+    //         )
+    //     ;
 
-            Log::debug(sprintf('Processing transaction(s) on moment %s', $carbon->format('Y-m-d H:i:s')));
+    //     $currentBalance       = $startBalance;
+    //     $converter            = new ExchangeRateConverter();
 
-            // add amount to current balance in currency code.
-            $currentBalance[$entryCurrency->code]        ??= '0';
-            $currentBalance[$entryCurrency->code] = bcadd($sumOfDay, (string)$currentBalance[$entryCurrency->code]);
 
-            // if not requested to convert to primary currency, add the amount to "balance", do nothing else.
-            if (!$convertToPrimary) {
-                $currentBalance['balance'] = bcadd((string)$currentBalance['balance'], $sumOfDay);
-            }
-            // if convert to primary currency add the converted amount to "pc_balance".
-            // if there is a request to convert, convert to "pc_balance" and use "balance" for whichever amount is in the primary currency.
-            if ($convertToPrimary) {
-                $pcSumOfDay                   = $converter->convert($entryCurrency, $primaryCurrency, $carbon, $sumOfDay);
-                $currentBalance['pc_balance'] = bcadd((string)($currentBalance['pc_balance'] ?? '0'), $pcSumOfDay);
-                // if it's the same currency as the entry, also add to balance (see other code).
-                if ($currency->id === $entryCurrency->id) {
-                    $currentBalance['balance'] = bcadd((string)$currentBalance['balance'], $sumOfDay);
-                }
-            }
-            // add to final array.
-            $balances[$carbonKey]                 = $currentBalance;
-            Log::debug(sprintf('Updated entry [%s]', $carbonKey), $currentBalance);
-        }
-        $cache->store($balances);
-        Log::debug('End of method finalAccountBalanceInRange');
+    //     /** @var Transaction $entry */
+    //     foreach ($set as $entry) {
+    //         // get date object
+    //         $carbon                               = new Carbon($entry->date, $entry->date_tz);
+    //         $carbonKey                            = $carbon->format('Y-m-d');
+    //         // make sure sum is a string:
+    //         $sumOfDay                             = (string)($entry->sum_of_day ?? '0');
+    //         // #10426 make sure sum is not in scientific notation.
+    //         $sumOfDay                             = $this->floatalize($sumOfDay);
 
-        return $balances;
-    }
+    //         // find currency of this entry, does not have to exist.
+    //         $currencies[$entry->transaction_currency_id] ??= Amount::getTransactionCurrencyById($entry->transaction_currency_id);
+
+    //         // make sure this $entry has its own $entryCurrency
+    //         /** @var TransactionCurrency $entryCurrency */
+    //         $entryCurrency                        = $currencies[$entry->transaction_currency_id];
+
+    //         Log::debug(sprintf('Processing transaction(s) on moment %s', $carbon->format('Y-m-d H:i:s')));
+
+    //         // add amount to current balance in currency code.
+    //         $currentBalance[$entryCurrency->code]        ??= '0';
+    //         $currentBalance[$entryCurrency->code] = bcadd($sumOfDay, (string)$currentBalance[$entryCurrency->code]);
+
+    //         // if not requested to convert to primary currency, add the amount to "balance", do nothing else.
+    //         if (!$convertToPrimary) {
+    //             $currentBalance['balance'] = bcadd((string)$currentBalance['balance'], $sumOfDay);
+    //         }
+    //         // if convert to primary currency add the converted amount to "pc_balance".
+    //         // if there is a request to convert, convert to "pc_balance" and use "balance" for whichever amount is in the primary currency.
+    //         if ($convertToPrimary) {
+    //             $pcSumOfDay                   = $converter->convert($entryCurrency, $primaryCurrency, $carbon, $sumOfDay);
+    //             $currentBalance['pc_balance'] = bcadd((string)($currentBalance['pc_balance'] ?? '0'), $pcSumOfDay);
+    //             // if it's the same currency as the entry, also add to balance (see other code).
+    //             if ($currency->id === $entryCurrency->id) {
+    //                 $currentBalance['balance'] = bcadd((string)$currentBalance['balance'], $sumOfDay);
+    //             }
+    //         }
+    //         // add to final array.
+    //         $balances[$carbonKey]                 = $currentBalance;
+    //         Log::debug(sprintf('Updated entry [%s]', $carbonKey), $currentBalance);
+    //     }
+    //     $cache->store($balances);
+    //     Log::debug('End of method finalAccountBalanceInRange');
+
+    //     return $balances;
+    // }
 
     public function accountsBalancesOptimized(Collection $accounts, Carbon $date, ?TransactionCurrency $primary = null, ?bool $convertToPrimary = null): array
     {

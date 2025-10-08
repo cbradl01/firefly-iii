@@ -324,7 +324,8 @@ class AccountController extends Controller
         /** @var GroupCollectorInterface $collector */
         $collector = app(GroupCollectorInterface::class);
         if ($account->account == AccountTypeEnum::BROKERAGE->value) {
-            $anotherAccounts = Account::where('name', "Stock Market")->get();
+            $stockMarketAccountName = config('firefly.brokerage.stock_market_account_name');
+            $anotherAccounts = Account::where('name', $stockMarketAccountName)->get();
             $accountsCollection = (new Collection([$account]))->merge($anotherAccounts);
         } else {
             $accountsCollection = new Collection([$account]);
@@ -436,7 +437,8 @@ class AccountController extends Controller
         /** @var GroupCollectorInterface $collector */
         $collector = app(GroupCollectorInterface::class);
         if ($account->accountType->type == AccountTypeEnum::BROKERAGE->value) {
-            $anotherAccounts = Account::where('name', "Stock Market")->get();
+            $stockMarketAccountName = config('firefly.brokerage.stock_market_account_name');
+            $anotherAccounts = Account::where('name', $stockMarketAccountName)->get();
             $accountsCollection = (new Collection([$account]))->merge($anotherAccounts);
         } else {
             $accountsCollection = new Collection([$account]);
@@ -629,6 +631,7 @@ class AccountController extends Controller
         foreach ($return as $key => $info) {
             if ('balance' !== $key && 'pc_balance' !== $key) {
                 // assume it's a currency:
+                Log::debug(sprintf('Found currency test %s', $key));
                 $setCurrency             = $this->currencyRepository->findByCode((string)$key);
                 $info['currency_symbol'] = $setCurrency->symbol;
                 $info['currency_code']   = $setCurrency->code;
