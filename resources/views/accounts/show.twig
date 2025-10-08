@@ -353,7 +353,8 @@
     <link rel="stylesheet" type="text/css" href="v1/css/daterangepicker-default.css?v={{ FF_VERSION }}" />
     <script type="text/javascript" src="v1/js/lib/chartjs-plugin-annotation.min.js?v={{ FF_VERSION }}"
             nonce="{{ JS_NONCE }}"></script>
-    <!-- Chart.js Crosshair Plugin removed to avoid pie chart conflicts -->
+    <!-- Chart.js Crosshair Plugin (patched with safety fix) -->
+    <script type="text/javascript" src="v1/js/lib/chartjs-plugin-crosshair.min.js?v={{ FF_VERSION }}" nonce="{{ JS_NONCE }}"></script>
     <script type="text/javascript" src="v1/js/ff/charts.defaults.js?v={{ FF_VERSION }}" nonce="{{ JS_NONCE }}"></script>
     <script type="text/javascript" src="v1/js/ff/charts.js?v={{ FF_VERSION }}" nonce="{{ JS_NONCE }}"></script>
 
@@ -474,8 +475,7 @@
                 }
             });
             
-            // Note: Crosshair plugin removed to avoid pie chart conflicts
-            // Date range picker provides zoom functionality instead
+            // Crosshair configuration is now handled in the chart creation logic
             
             // Note: Chart.js v4 zoom requires a separate plugin
             // For now, we'll use the date range picker for zoom functionality
@@ -554,6 +554,7 @@
                 $('#overview-chart').css('opacity', '1');
             });
         }
+        
     </script>
     {# required for groups.twig #}
     <script type="text/javascript" src="v1/js/ff/list/groups.js?v={{ FF_VERSION }}" nonce="{{ JS_NONCE }}"></script>
