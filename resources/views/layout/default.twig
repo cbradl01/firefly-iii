@@ -132,6 +132,14 @@
                         </a>
                     </li>
 
+                    {# Development button - temporarily showing in all environments for testing #}
+                    <li class="hidden-sm hidden-xs">
+                        <a href="#" id="dev-clear-data" title="Clear All Financial Data (Development Only)" 
+                           style="color: #ff6b6b; font-weight: bold;">
+                            <span class="fa fa-trash"></span>
+                        </a>
+                    </li>
+
                     <li>
                         <span style="color:#fff;padding: 15px;display: block;line-height: 20px;">
                             <span id="daterange"></span>
@@ -300,6 +308,63 @@
 <form id="logout-form" action="{{ route('logout') }}" method="POST" style="display: none;">
     <input type="hidden" name="_token" value="{{ csrf_token() }}"/>
 </form>
+
+{# Development JavaScript - available in all environments #}
+<script type="text/javascript" nonce="{{ JS_NONCE }}">
+    $(document).ready(function() {
+        $('#dev-clear-data').on('click', function(e) {
+            e.preventDefault();
+            
+            // Double confirmation for safety
+            if (!confirm('⚠️ WARNING: This will permanently delete ALL financial data!\n\nThis includes:\n- All transactions\n- All accounts (except system accounts)\n- All budgets, categories, tags\n- All piggy banks, bills\n\nThis action is IRREVERSIBLE!\n\nAre you absolutely sure you want to continue?')) {
+                return;
+            }
+            
+            if (!confirm('🚨 FINAL WARNING 🚨\n\nYou are about to delete ALL financial data from the database.\n\nThis cannot be undone!\n\nClick OK only if you are 100% certain.')) {
+                return;
+            }
+            
+            // Show loading state
+            var $button = $(this);
+            var originalHtml = $button.html();
+            $button.html('<span class="fa fa-spinner fa-spin"></span>');
+            $button.prop('disabled', true);
+            
+            // Make the API call
+            $.ajax({
+                url: '{{ route("dev.clear-all-data") }}',
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+                },
+                success: function(response) {
+                    if (response.success) {
+                        alert('✅ All financial data cleared successfully!\n\nDeleted records:\n' + 
+                              JSON.stringify(response.details.deleted_counts, null, 2));
+                        // Reload the page to reflect the changes
+                        window.location.reload();
+                    } else {
+                        alert('❌ Error clearing data: ' + response.message);
+                    }
+                },
+                error: function(xhr) {
+                    var errorMsg = '❌ Error clearing data';
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        errorMsg += ': ' + xhr.responseJSON.message;
+                    } else {
+                        errorMsg += ': ' + xhr.statusText;
+                    }
+                    alert(errorMsg);
+                },
+                complete: function() {
+                    // Restore button state
+                    $button.html(originalHtml);
+                    $button.prop('disabled', false);
+                }
+            });
+        });
+    });
+</script>
 
 </body>
 </html>

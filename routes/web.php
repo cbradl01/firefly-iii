@@ -1452,5 +1452,18 @@ Route::group(
     }
 );
 
+// Development routes (only available in local/development environment)
+Route::group(
+    [
+        'middleware' => 'user-full-auth',
+        'namespace' => 'FireflyIII\Http\Controllers\Dev',
+        'as' => 'dev.',
+        'prefix' => 'dev'
+    ],
+    static function (): void {
+        Route::post('clear-all-data', ['uses' => 'DataController@clearAllData', 'as' => 'clear-all-data']);
+    }
+);
+
 // PFinance Plugin Routes are loaded via ServiceProvider from plugins/PFinance/routes.php
 
