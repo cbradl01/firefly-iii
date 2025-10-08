@@ -304,6 +304,11 @@ function pieChart(URL, container) {
     var colorData = false;
     var options = $.extend(true, {}, defaultPieOptions);
     var chartType = 'pie';
+    
+    // Explicitly disable crosshair for pie charts (simple approach like PostHog)
+    // Reference: https://github.com/PostHog/posthog/commit/a85f8b4bcb9de90cdb0ceb52186c358e9107855a
+    options.plugins = options.plugins || {};
+    options.plugins.crosshair = false;
 
     drawAChart(URL, container, chartType, options, colorData);
 
@@ -320,9 +325,64 @@ function multiCurrencyPieChart(URL, container) {
     var colorData = false;
     var options = $.extend(true, {}, pieOptionsWithCurrency);
     var chartType = 'pie';
+    
+    // Debug: Check if crosshair configuration is present
+    console.log('Pie chart options:', options);
+    console.log('Pie chart crosshair config:', options.plugins && options.plugins.crosshair);
 
-    drawAChart(URL, container, chartType, options, colorData);
+    // Create pie chart directly without going through drawAChart to avoid crosshair plugin
+    $.getJSON(URL).done(function (data) {
+        if (typeof data === 'undefined' || 0 === data.length || 
+            (typeof data === 'object' && typeof data.labels === 'object' && 0 === data.labels.length)) {
+            var holder = $('#' + container).parent().parent();
+            if (holder.hasClass('box') || holder.hasClass('box-body')) {
+                var boxBody;
+                if (!holder.hasClass('box-body')) {
+                    boxBody = holder.find('.box-body');
+                } else {
+                    boxBody = holder;
+                }
+                boxBody.empty().append($('<p>').append($('<em>').text(noDataForChart)));
+            }
+            return;
+        }
 
+        if (colorData) {
+            data = colorizeData(data);
+        }
+
+        if (allCharts.hasOwnProperty(container)) {
+            allCharts[container].data.datasets = data.datasets;
+            allCharts[container].data.labels = data.labels;
+            allCharts[container].update();
+        } else {
+            var ctx = document.getElementById(container).getContext("2d");
+            var chartOpts = {
+                type: chartType,
+                data: data,
+                options: options
+            };
+            
+            // Debug: Check final chart options
+            console.log('Pie chart final options:', chartOpts.options);
+            console.log('Pie chart final crosshair config:', chartOpts.options.plugins && chartOpts.options.plugins.crosshair);
+            
+        // Explicitly disable crosshair for pie charts (simple approach like PostHog)
+        // Reference: https://github.com/PostHog/posthog/commit/a85f8b4bcb9de90cdb0ceb52186c358e9107855a
+        chartOpts.options.plugins = chartOpts.options.plugins || {};
+        chartOpts.options.plugins.crosshair = false;
+            console.log('Crosshair disabled for multi-currency pie chart:', container);
+            
+            // Destroy existing chart if it exists
+            if (allCharts[container]) {
+                allCharts[container].destroy();
+            }
+            
+            allCharts[container] = new Chart(ctx, chartOpts);
+        }
+    }).fail(function () {
+        $('#' + container).addClass('general-chart-error');
+    });
 }
 
 /**
@@ -425,7 +485,55 @@ function drawAChart(URL, container, chartType, options, colorData) {
                 allCharts[container].destroy();
             }
             
-            // Note: Crosshair plugin removed to avoid pie chart conflicts
+            // Configure plugins per chart type
+            // Reference: https://github.com/PostHog/posthog/commit/a85f8b4bcb9de90cdb0ceb52186c358e9107855a
+            // This approach disables crosshair on non-line charts using crosshair: false
+            chartOpts.plugins = chartOpts.plugins || [];
+            chartOpts.options.plugins = chartOpts.options.plugins || {};
+            
+            if (chartType === 'line') {
+                // Ensure tooltips are properly configured for line charts
+                chartOpts.options.plugins.tooltip = chartOpts.options.plugins.tooltip || {};
+                chartOpts.options.plugins.tooltip.enabled = true;
+                chartOpts.options.plugins.tooltip.mode = 'index';
+                chartOpts.options.plugins.tooltip.intersect = false;
+                
+                // Enable crosshair for line charts
+                chartOpts.options.plugins.crosshair = {
+                    enabled: true,
+                    line: {
+                        color: '#666',
+                        width: 1,
+                        dashPattern: [5, 5]
+                    },
+                    sync: {
+                        enabled: false,
+                        group: 1,
+                        suppressTooltips: false
+                    },
+                    zoom: {
+                        enabled: true,
+                        zoomboxBackgroundColor: 'rgba(66,133,244,0.2)',
+                        zoomboxBorderColor: '#48F',
+                        zoomButtonText: 'Reset Zoom',
+                        zoomButtonClass: 'reset-zoom'
+                    },
+                    snap: {
+                        enabled: false
+                    },
+                    callbacks: {
+                        beforeZoom: function(start, end) { return true; },
+                        afterZoom: function(start, end) {}
+                    }
+                };
+                console.log('Crosshair enabled for line chart:', container);
+                console.log('Crosshair configuration:', chartOpts.options.plugins.crosshair);
+                console.log('Tooltip configuration:', chartOpts.options.plugins.tooltip);
+            } else {
+                // Explicitly disable crosshair for other chart types (simple approach like PostHog)
+                chartOpts.options.plugins.crosshair = false;
+                console.log('Crosshair disabled for', chartType, 'chart:', container);
+            }
             
             allCharts[container] = new Chart(ctx, chartOpts);
         }
