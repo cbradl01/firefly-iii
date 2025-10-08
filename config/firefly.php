@@ -866,4 +866,10 @@ return [
 
     // allowed to store a piggy bank in:
     'piggy_bank_account_types'     => [AccountTypeEnum::ASSET->value, AccountTypeEnum::LOAN->value, AccountTypeEnum::DEBT->value, AccountTypeEnum::MORTGAGE->value],
+
+    // brokerage account configuration:
+    'brokerage'                    => [
+        'stock_market_account_name' => 'Stock Market',
+        'hold_transaction_description' => 'Daily Gain/Loss',
+    ],
 ];

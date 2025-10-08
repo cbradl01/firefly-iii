@@ -2937,4 +2937,10 @@ return [
     // dashboard
     'enable_auto_convert'                => 'Enable currency conversion',
     'disable_auto_convert'               => 'Disable currency conversion',
+
+    // brokerage account actions
+    'hide_hold_transactions'             => 'Hide Hold Transactions',
+    'show_hold_transactions'             => 'Show Hold Transactions',
+    'hide_hold_transactions_title'       => 'Hide daily gain/loss transactions from view',
+    'show_hold_transactions_title'       => 'Show daily gain/loss transactions in view',
 ];
