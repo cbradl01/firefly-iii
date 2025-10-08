@@ -424,6 +424,9 @@ function drawAChart(URL, container, chartType, options, colorData) {
             if (allCharts[container]) {
                 allCharts[container].destroy();
             }
+            
+            // Note: Crosshair plugin removed to avoid pie chart conflicts
+            
             allCharts[container] = new Chart(ctx, chartOpts);
         }
 

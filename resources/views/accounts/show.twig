@@ -353,8 +353,7 @@
     <link rel="stylesheet" type="text/css" href="v1/css/daterangepicker-default.css?v={{ FF_VERSION }}" />
     <script type="text/javascript" src="v1/js/lib/chartjs-plugin-annotation.min.js?v={{ FF_VERSION }}"
             nonce="{{ JS_NONCE }}"></script>
-    <!-- Chart.js Crosshair Plugin -->
-    <script type="text/javascript" src="v1/js/lib/chartjs-plugin-crosshair.min.js?v={{ FF_VERSION }}" nonce="{{ JS_NONCE }}"></script>
+    <!-- Chart.js Crosshair Plugin removed to avoid pie chart conflicts -->
     <script type="text/javascript" src="v1/js/ff/charts.defaults.js?v={{ FF_VERSION }}" nonce="{{ JS_NONCE }}"></script>
     <script type="text/javascript" src="v1/js/ff/charts.js?v={{ FF_VERSION }}" nonce="{{ JS_NONCE }}"></script>
 
@@ -475,20 +474,8 @@
                 }
             });
             
-            // Add crosshair plugin configuration
-            options.plugins.crosshair = {
-                line: {
-                    color: '#666',
-                    width: 1,
-                    dashPattern: [5, 5]
-                },
-                sync: {
-                    enabled: true
-                },
-                zoom: {
-                    enabled: true
-                }
-            };
+            // Note: Crosshair plugin removed to avoid pie chart conflicts
+            // Date range picker provides zoom functionality instead
             
             // Note: Chart.js v4 zoom requires a separate plugin
             // For now, we'll use the date range picker for zoom functionality
@@ -496,24 +483,8 @@
             // Debug: Log the final options
             console.log('Final chart options:', options);
             
-            // Register the crosshair plugin
-            try {
-                if (typeof ChartCrosshair !== 'undefined') {
-                    Chart.register(ChartCrosshair);
-                    console.log('ChartCrosshair registered successfully');
-                } else if (typeof window.ChartCrosshair !== 'undefined') {
-                    Chart.register(window.ChartCrosshair);
-                    console.log('window.ChartCrosshair registered successfully');
-                } else if (typeof Chart.plugins !== 'undefined' && Chart.plugins.crosshair) {
-                    console.log('ChartCrosshair plugin already registered');
-                } else {
-                    console.log('ChartCrosshair plugin not found');
-                    console.log('Available Chart plugins:', Object.keys(Chart.plugins || {}));
-                    console.log('Chart version:', Chart.version);
-                }
-            } catch (error) {
-                console.error('Error registering crosshair plugin:', error);
-            }
+            // Note: We don't register the crosshair plugin globally to avoid conflicts with pie charts
+            // The crosshair plugin will be applied only to the line chart via the options.plugins.crosshair configuration
             
             // Chart title is now handled by HTML above the chart
             
