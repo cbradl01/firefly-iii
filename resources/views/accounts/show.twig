@@ -545,6 +545,8 @@
             // Set beginAtZero to false for account balance charts
             options.scales.y.ticks.beginAtZero = false;
             
+            // Conditional fill colors are now handled in charts.js
+            
             // Enhanced tooltip configuration for Chart.js 4.x
             options.plugins = options.plugins || {};
             options.plugins.tooltip = $.extend(true, options.plugins.tooltip || {}, {
@@ -645,6 +647,12 @@
                 // Update the existing chart with new data
                 if (allCharts['overview-chart']) {
                     console.log('Updating existing chart...');
+                    
+                    // Apply conditional fill colors for line charts
+                    if (data.datasets && data.datasets.length > 0) {
+                        applyConditionalFillColors(data.datasets[0]);
+                    }
+                    
                     allCharts['overview-chart'].data.labels = data.labels;
                     allCharts['overview-chart'].data.datasets = data.datasets;
                     allCharts['overview-chart'].update('none'); // Use 'none' for instant update

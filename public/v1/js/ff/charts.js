@@ -75,6 +75,35 @@ function colorizeData(data) {
 }
 
 /**
+ * Apply conditional fill colors to line chart dataset based on positive/negative values
+ * @param dataset - The chart dataset to modify
+ */
+function applyConditionalFillColors(dataset) {
+    if (!dataset || !dataset.data || dataset.data.length === 0) {
+        return;
+    }
+    
+    dataset.fill = 'origin';
+    
+    var backgroundColor = [];
+    var borderColor = [];
+    
+    for (var i = 0; i < dataset.data.length; i++) {
+        var value = dataset.data[i];
+        if (value >= 0) {
+            backgroundColor.push('rgba(0, 255, 0, 0.1)'); // Green for positive
+            borderColor.push('rgba(0, 255, 0, 0.8)');
+        } else {
+            backgroundColor.push('rgba(255, 0, 0, 0.1)'); // Red for negative
+            borderColor.push('rgba(255, 0, 0, 0.8)');
+        }
+    }
+    
+    dataset.backgroundColor = backgroundColor;
+    dataset.borderColor = borderColor;
+}
+
+/**
  * Function to draw a line chart:
  * @param URL
  * @param container
@@ -440,27 +469,7 @@ function drawAChart(URL, container, chartType, options, colorData) {
         if (allCharts.hasOwnProperty(container)) {
             // Apply conditional fill colors for line charts
             if (chartType === 'line' && data.datasets && data.datasets.length > 0) {
-                var dataset = data.datasets[0];
-                dataset.fill = 'origin';
-                
-                if (dataset.data && dataset.data.length > 0) {
-                    var backgroundColor = [];
-                    var borderColor = [];
-                    
-                    for (var i = 0; i < dataset.data.length; i++) {
-                        var value = dataset.data[i];
-                        if (value >= 0) {
-                            backgroundColor.push('rgba(0, 255, 0, 0.15)'); // Green for positive
-                            borderColor.push('rgba(0, 255, 0, 0.8)');
-                        } else {
-                            backgroundColor.push('rgba(255, 0, 0, 0.15)'); // Red for negative
-                            borderColor.push('rgba(255, 0, 0, 0.8)');
-                        }
-                    }
-                    
-                    dataset.backgroundColor = backgroundColor;
-                    dataset.borderColor = borderColor;
-                }
+                applyConditionalFillColors(data.datasets[0]);
             }
             
             allCharts[container].data.datasets = data.datasets;
@@ -557,30 +566,7 @@ function drawAChart(URL, container, chartType, options, colorData) {
                 
                 // Add conditional fill colors for positive/negative values
                 if (data.datasets && data.datasets.length > 0) {
-                    var dataset = data.datasets[0];
-                    
-                    // Configure fill to zero line
-                    dataset.fill = 'origin';
-                    
-                    // Add conditional background colors based on data values
-                    if (dataset.data && dataset.data.length > 0) {
-                        var backgroundColor = [];
-                        var borderColor = [];
-                        
-                        for (var i = 0; i < dataset.data.length; i++) {
-                            var value = dataset.data[i];
-                            if (value >= 0) {
-                                backgroundColor.push('rgba(0, 255, 0, 0.15)'); // Green for positive
-                                borderColor.push('rgba(0, 255, 0, 0.8)');
-                            } else {
-                                backgroundColor.push('rgba(255, 0, 0, 0.15)'); // Red for negative
-                                borderColor.push('rgba(255, 0, 0, 0.8)');
-                            }
-                        }
-                        
-                        dataset.backgroundColor = backgroundColor;
-                        dataset.borderColor = borderColor;
-                    }
+                    applyConditionalFillColors(data.datasets[0]);
                 }
             } else {
                 // Explicitly disable crosshair for other chart types (simple approach like PostHog)
