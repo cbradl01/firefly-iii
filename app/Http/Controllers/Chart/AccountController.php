@@ -526,7 +526,7 @@ class AccountController extends Controller
         $cache->addProperty($end); # TODO: we shouldn't need to cache for each period, just cache the cumulative daily balances
         $cache->addProperty($this->convertToPrimary);
         $cache->addProperty($account->id);
-        $cache->delete();
+        // $cache->delete();
         if ($cache->has()) {
             return response()->json($cache->get());
         }
