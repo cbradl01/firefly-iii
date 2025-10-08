@@ -132,11 +132,18 @@
                         </a>
                     </li>
 
-                    {# Development button - temporarily showing in all environments for testing #}
+                    {# Development buttons - temporarily showing in all environments for testing #}
                     <li class="hidden-sm hidden-xs">
                         <a href="#" id="dev-clear-data" title="Clear All Financial Data (Development Only)" 
                            style="color: #ff6b6b; font-weight: bold;">
                             <span class="fa fa-trash"></span>
+                        </a>
+                    </li>
+                    
+                    <li class="hidden-sm hidden-xs">
+                        <a href="{{ route('accounts.import.json', 'asset') }}" title="Import Accounts from JSON" 
+                           style="color: #ffa500; font-weight: bold;">
+                            <span class="fa fa-file-code-o"></span>
                         </a>
                     </li>
 

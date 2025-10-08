@@ -40,11 +40,9 @@
                             <a href="{{ route('accounts.create', objectType) }}" class="btn btn-success"><span class="fa fa-plus fa-fw"></span> {{ ('make_new_' ~ objectType ~ '_account')|_ }}</a>
                             {% if objectType == 'asset' %}
                                 <a href="{{ route('accounts.import.csv', objectType) }}" class="btn btn-info"><span class="fa fa-file-text-o fa-fw"></span> Import from CSV</a>
-                                <a href="{{ route('accounts.import.json', objectType) }}" class="btn btn-warning"><span class="fa fa-file-code-o fa-fw"></span> Import from JSON</a>
                             {% endif %}
                             {% if objectType == 'liabilities' %}
                                 <a href="{{ route('accounts.import.csv', objectType) }}" class="btn btn-info"><span class="fa fa-file-text-o fa-fw"></span> Import from CSV</a>
-                                <a href="{{ route('accounts.import.json', objectType) }}" class="btn btn-warning"><span class="fa fa-file-code-o fa-fw"></span> Import from JSON</a>
                             {% endif %}
                         </div>
 
