@@ -51,8 +51,8 @@
                                         <td>
                                             {% if balances.balance %}
                                                 {{ formatAmountBySymbol(balances.balance, currency.symbol, currency.decimal_places, true)|raw }}
-                                            {% elseif balances.native_balance %}
-                                                {{ formatAmountBySymbol(balances.native_balance, defaultCurrency.symbol, defaultCurrency.decimal_places, true)|raw }}
+                                            {% elseif balances.pc_balance %}
+                                                {{ formatAmountBySymbol(balances.pc_balance, defaultCurrency.symbol, defaultCurrency.decimal_places, true)|raw }}
                                             {% else %}
                                                 {{ 'no_data'|_ }}
                                             {% endif %}
@@ -236,6 +236,29 @@
                         {{ 'transactions'|_ }}
                     </h3>
                     <div class="box-tools pull-right">
+                        {% if account.accountType.type == 'Brokerage account' %}
+                            {% if hideHoldTransactions %}
+                                {% if showAll %}
+                                    <a href="{{ route('accounts.show.all', [account.id]) }}" class="btn btn-warning btn-sm" title="{{ 'show_hold_transactions_title'|_ }}">
+                                        <span class="fa fa-eye"></span> {{ 'show_hold_transactions'|_ }}
+                                    </a>
+                                {% else %}
+                                    <a href="{{ route('accounts.show', [account.id, start.format('Y-m-d'), end.format('Y-m-d')]) }}" class="btn btn-warning btn-sm" title="{{ 'show_hold_transactions_title'|_ }}">
+                                        <span class="fa fa-eye"></span> {{ 'show_hold_transactions'|_ }}
+                                    </a>
+                                {% endif %}
+                            {% else %}
+                                {% if showAll %}
+                                    <a href="{{ route('accounts.show.all', [account.id]) }}?hide_hold=1" class="btn btn-info btn-sm" title="{{ 'hide_hold_transactions_title'|_ }}">
+                                        <span class="fa fa-eye-slash"></span> {{ 'hide_hold_transactions'|_ }}
+                                    </a>
+                                {% else %}
+                                    <a href="{{ route('accounts.show', [account.id, start.format('Y-m-d'), end.format('Y-m-d')]) }}?hide_hold=1" class="btn btn-info btn-sm" title="{{ 'hide_hold_transactions_title'|_ }}">
+                                        <span class="fa fa-eye-slash"></span> {{ 'hide_hold_transactions'|_ }}
+                                    </a>
+                                {% endif %}
+                            {% endif %}
+                        {% endif %}
                         <button class="btn btn-primary btn-sm" id="consolidate-transactions-btn" data-account-id="{{ account.id }}">
                             <span class="fa fa-compress"></span> Consolidate Transactions
                         </button>
@@ -396,6 +419,7 @@
     </script>
     {# required for groups.twig #}
     <script type="text/javascript" src="v1/js/ff/list/groups.js?v={{ FF_VERSION }}" nonce="{{ JS_NONCE }}"></script>
+    
     
 {% endblock %}
 
