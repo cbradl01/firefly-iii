@@ -169,6 +169,9 @@ Route::group(
 Route::group(
     ['middleware' => 'user-full-auth', 'namespace' => 'FireflyIII\Http\Controllers', 'prefix' => 'accounts', 'as' => 'accounts.'],
     static function (): void {
+        // show all accounts:
+        Route::get('all', ['uses' => 'Account\IndexController@all', 'as' => 'all']);
+        
         // show:
         Route::get('{objectType}', ['uses' => 'Account\IndexController@index', 'as' => 'index'])->where('objectType', 'revenue|asset|expense|liabilities|holding');
 

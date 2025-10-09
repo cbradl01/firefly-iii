@@ -132,18 +132,19 @@
                         </a>
                     </li>
 
-                    {# Development buttons - temporarily showing in all environments for testing #}
+                    {# Import from JSON button #}
+                    <li class="hidden-sm hidden-xs">
+                        <a href="#" id="import-json-btn" title="Import Accounts from JSON" 
+                           style="color: #fff; font-weight: bold;">
+                            <span class="fa fa-file-code-o"></span>
+                        </a>
+                    </li>
+
+                    {# Development button - temporarily showing in all environments for testing #}
                     <li class="hidden-sm hidden-xs">
                         <a href="#" id="dev-clear-data" title="Clear All Financial Data (Development Only)" 
                            style="color: #ff6b6b; font-weight: bold;">
                             <span class="fa fa-trash"></span>
-                        </a>
-                    </li>
-                    
-                    <li class="hidden-sm hidden-xs">
-                        <a href="{{ route('accounts.import.json', 'asset') }}" title="Import Accounts from JSON" 
-                           style="color: #ffa500; font-weight: bold;">
-                            <span class="fa fa-file-code-o"></span>
                         </a>
                     </li>
 
@@ -288,6 +289,58 @@
 
 {% block scripts %}{% endblock %}
 
+<script type="text/javascript" nonce="{{ JS_NONCE }}">
+$(document).ready(function() {
+    // Handle import from JSON button
+    $('#import-json-btn').on('click', function(e) {
+        e.preventDefault();
+        
+        // Create a modal to select account type
+        var modalHtml = `
+            <div class="modal fade" id="importJsonModal" tabindex="-1" role="dialog">
+                <div class="modal-dialog" role="document">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <button type="button" class="close" data-dismiss="modal">&times;</button>
+                            <h4 class="modal-title">Import Accounts from JSON</h4>
+                        </div>
+                        <div class="modal-body">
+                            <p>Select the account type to import:</p>
+                            <div class="list-group">
+                                <a href="/accounts/import/json/asset" class="list-group-item">
+                                    <i class="fa fa-university fa-fw"></i> Asset Accounts
+                                </a>
+                                <a href="/accounts/import/json/liabilities" class="list-group-item">
+                                    <i class="fa fa-credit-card fa-fw"></i> Liability Accounts
+                                </a>
+                                <a href="/accounts/import/json/expense" class="list-group-item">
+                                    <i class="fa fa-shopping-cart fa-fw"></i> Expense Accounts
+                                </a>
+                                <a href="/accounts/import/json/revenue" class="list-group-item">
+                                    <i class="fa fa-line-chart fa-fw"></i> Revenue Accounts
+                                </a>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Remove existing modal if any
+        $('#importJsonModal').remove();
+        
+        // Add modal to body
+        $('body').append(modalHtml);
+        
+        // Show modal
+        $('#importJsonModal').modal('show');
+    });
+});
+</script>
+
 {% if config('firefly.tracker_site_id') != '' and config('firefly.tracker_url') != '' %}
     <!-- This tracker tag is only here because this instance of Firefly III was purposefully configured to include it -->
     <!-- Your own installation will NOT include it, unless you explicitly configure it to have it. -->
@@ -316,7 +369,8 @@
     <input type="hidden" name="_token" value="{{ csrf_token() }}"/>
 </form>
 
-{# Development JavaScript - available in all environments #}
+{# Development JavaScript - only load in local/development environment #}
+{% if app.environment == 'local' or app.environment == 'development' %}
 <script type="text/javascript" nonce="{{ JS_NONCE }}">
     $(document).ready(function() {
         $('#dev-clear-data').on('click', function(e) {
@@ -372,6 +426,7 @@
         });
     });
 </script>
+{% endif %}
 
 </body>
 </html>

@@ -121,6 +121,12 @@
         </a>
 
         <ul class="treeview-menu">
+            <li class="{{ activeRouteStrict('accounts.all') }}">
+                <a href="{{ route('accounts.all') }}">
+                    <span class="fa fa-angle-right fa-fw"></span>
+                    <span>All Accounts</span>
+                </a>
+            </li>
             <li class="{{ activeRoutePartialObjectType('accounts', 'asset') }}">
                 <a href="{{ route('accounts.index', ['asset']) }}">
                     <span class="fa fa-angle-right fa-fw"></span>

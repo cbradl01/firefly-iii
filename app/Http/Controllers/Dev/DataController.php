@@ -32,6 +32,14 @@ class DataController extends Controller
     public function clearAllData(Request $request): JsonResponse
     {
         Log::warning('DEV: Clearing all financial data - this is irreversible!');
+        
+        // Only allow in development environment
+        if (!app()->environment('local', 'development')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This endpoint is only available in development environment'
+            ], 403);
+        }
 
         try {
             Log::warning('DEV: Clearing all financial data - this is irreversible!');

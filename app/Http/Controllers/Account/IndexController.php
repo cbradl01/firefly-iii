@@ -134,6 +134,89 @@ class IndexController extends Controller
     }
 
     /**
+     * Show all accounts grouped by type.
+     *
+     * @return Factory|View
+     *
+     * @throws FireflyException
+     */
+    public function all(Request $request)
+    {
+        app('log')->debug(sprintf('Now at %s', __METHOD__));
+        $subTitle = 'All Accounts';
+        $subTitleIcon = 'fa-credit-card';
+        
+        // Get all account types
+        $accountTypes = [
+            'asset' => [
+                'title' => 'Asset Accounts',
+                'icon' => 'fa-university',
+                'accounts' => $this->repository->getActiveAccountsByType(config('firefly.accountTypesByIdentifier.asset'))
+            ],
+            'liabilities' => [
+                'title' => 'Liability Accounts', 
+                'icon' => 'fa-credit-card',
+                'accounts' => $this->repository->getActiveAccountsByType(config('firefly.accountTypesByIdentifier.liabilities'))
+            ],
+            'expense' => [
+                'title' => 'Expense Accounts',
+                'icon' => 'fa-shopping-cart',
+                'accounts' => $this->repository->getActiveAccountsByType(config('firefly.accountTypesByIdentifier.expense'))
+            ],
+            'revenue' => [
+                'title' => 'Revenue Accounts',
+                'icon' => 'fa-line-chart',
+                'accounts' => $this->repository->getActiveAccountsByType(config('firefly.accountTypesByIdentifier.revenue'))
+            ],
+            'holding' => [
+                'title' => 'Holding Accounts',
+                'icon' => 'fa-briefcase',
+                'accounts' => $this->repository->getActiveAccountsByType(config('firefly.accountTypesByIdentifier.holding'))
+            ]
+        ];
+        
+        // Process each account type to add balance information
+        foreach ($accountTypes as $typeKey => &$typeData) {
+            $accounts = $typeData['accounts'];
+            $total = $accounts->count();
+            $page = 0 === (int) $request->get('page') ? 1 : (int) $request->get('page');
+            $pageSize = (int) app('preferences')->get('listPageSize', 50)->data;
+            $accounts = $accounts->slice(($page - 1) * $pageSize, $pageSize);
+            
+            /** @var Carbon $start */
+            $start = clone session('start', today(config('app.timezone'))->startOfMonth());
+            /** @var Carbon $end */
+            $end = clone session('end', today(config('app.timezone'))->endOfMonth());
+            $start->subSecond();
+            
+            $ids = $accounts->pluck('id')->toArray();
+            $startBalances = Steam::accountsBalancesOptimized($accounts, $start, $this->primaryCurrency, $this->convertToPrimary);
+            $endBalances = Steam::accountsBalancesOptimized($accounts, $end, $this->primaryCurrency, $this->convertToPrimary);
+            $activities = Steam::getLastActivities($ids);
+            
+            $accounts->each(
+                function (Account $account) use ($activities, $startBalances, $endBalances): void {
+                    $currency = $this->repository->getAccountCurrency($account);
+                    $account->lastActivityDate = $this->isInArrayDate($activities, $account->id);
+                    $account->startBalances = Steam::filterAccountBalance($startBalances[$account->id] ?? [], $account, $this->convertToPrimary, $currency);
+                    $account->endBalances = Steam::filterAccountBalance($endBalances[$account->id] ?? [], $account, $this->convertToPrimary, $currency);
+                    $account->differences = $this->subtract($account->startBalances, $account->endBalances);
+                    $account->interest = Steam::bcround($this->repository->getMetaValue($account, 'interest'), 4);
+                    $account->interestPeriod = (string) trans(sprintf('firefly.interest_calc_%s', $this->repository->getMetaValue($account, 'interest_period')));
+                    $account->accountTypeString = (string) trans(sprintf('firefly.account_type_%s', $account->accountType->type));
+                    $account->current_debt = '0';
+                    $account->currency = $currency ?? $this->primaryCurrency;
+                    $account->iban = implode(' ', str_split((string) $account->iban, 4));
+                }
+            );
+            
+            $typeData['accounts'] = $accounts;
+        }
+        
+        return view('accounts.all', compact('subTitle', 'subTitleIcon', 'accountTypes'));
+    }
+
+    /**
      * Show list of accounts.
      *
      * @return Factory|View

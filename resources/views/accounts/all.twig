@@ -1,0 +1,315 @@
+{% extends './layout/default' %}
+
+{% block title %}{{ subTitle }}{% endblock %}
+
+{% block content %}
+    <div class="row">
+        <div class="col-lg-12 col-md-12 col-sm-12">
+            <div class="box">
+                <div class="box-header with-border">
+                    <h3 class="box-title">
+                        <i class="fa {{ subTitleIcon }}"></i>
+                        {{ subTitle }}
+                    </h3>
+                </div>
+                <div class="box-body no-padding">
+                    <div class="panel-group" id="accountsAccordion" role="tablist" aria-multiselectable="true">
+                        {% for typeKey, typeData in accountTypes %}
+                            <div class="panel panel-default">
+                                <div class="panel-heading" role="tab" id="heading{{ typeKey|title }}">
+                                    <h4 class="panel-title">
+                                        <a role="button" data-toggle="collapse" data-parent="#accountsAccordion" 
+                                           href="#collapse{{ typeKey|title }}" aria-expanded="{% if typeKey == 'asset' %}true{% else %}false{% endif %}" 
+                                           aria-controls="collapse{{ typeKey|title }}">
+                                            <i class="fa {{ typeData.icon }}"></i>
+                                            {{ typeData.title }}
+                                            <span class="badge pull-right">{{ typeData.accounts.count() }}</span>
+                                        </a>
+                                    </h4>
+                                    <div class="panel-tools pull-right" style="margin-top: -25px;">
+                                        {% if typeKey == 'asset' or typeKey == 'liabilities' %}
+                                        <button type="button" class="btn btn-warning btn-xs sync-all-accounts-btn" 
+                                                title="Sync All {{ typeData.title }}" data-account-type="{{ typeKey }}">
+                                            <span class="fa fa-refresh"></span> Sync All
+                                        </button>
+                                        {% if typeKey == 'asset' %}
+                                        <button type="button" class="btn btn-outline-primary btn-xs match-unknown-btn" 
+                                                title="Match UNKNOWN counterparties" style="margin-left:6px;">
+                                            <span class="fa fa-link"></span> Match UNKNOWN
+                                        </button>
+                                        {% endif %}
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                <div id="collapse{{ typeKey|title }}" class="panel-collapse collapse {% if typeKey == 'asset' %}in{% endif %}" 
+                                     role="tabpanel" aria-labelledby="heading{{ typeKey|title }}">
+                                    <div class="panel-body no-padding">
+                                        {% if typeData.accounts.count() > 0 %}
+                                            <table class="table table-responsive table-hover">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>Name</th>
+                                                            <th>Type</th>
+                                                            <th>Account Number</th>
+                                                            <th>Balance</th>
+                                                            <th>Active</th>
+                                                            <th>Actions</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {% for account in typeData.accounts %}
+                                                            <tr>
+                                                                <td>
+                                                                    <a href="{{ route('accounts.show', account.id) }}">
+                                                                        {{ account.name }}
+                                                                    </a>
+                                                                </td>
+                                                                <td>
+                                                                    <span class="label label-info">
+                                                                        {{ account.accountType.type }}
+                                                                    </span>
+                                                                </td>
+                                                                <td>
+                                                                    {% if account.account_number %}
+                                                                        {{ account.account_number }}
+                                                                    {% else %}
+                                                                        <span class="text-muted">-</span>
+                                                                    {% endif %}
+                                                                </td>
+                                                                <td>
+                                                                    {% if account.current_balance is not null %}
+                                                                        {% if account.accountType.type in ['Asset account', 'Default account', 'Brokerage account', 'Holding account'] %}
+                                                                            <span class="text-success">
+                                                                                {{ formatAmountBySymbol(account.current_balance, account.currency_symbol, account.currency_decimal_places) }}
+                                                                            </span>
+                                                                        {% elseif account.accountType.type in ['Loan', 'Debt', 'Mortgage', 'Credit card'] %}
+                                                                            <span class="text-danger">
+                                                                                {{ formatAmountBySymbol(account.current_balance, account.currency_symbol, account.currency_decimal_places) }}
+                                                                            </span>
+                                                                        {% else %}
+                                                                            {{ formatAmountBySymbol(account.current_balance, account.currency_symbol, account.currency_decimal_places) }}
+                                                                        {% endif %}
+                                                                    {% else %}
+                                                                        <span class="text-muted">-</span>
+                                                                    {% endif %}
+                                                                </td>
+                                                                <td>
+                                                                    {% if account.active %}
+                                                                        <span class="label label-success">Active</span>
+                                                                    {% else %}
+                                                                        <span class="label label-default">Inactive</span>
+                                                                    {% endif %}
+                                                                </td>
+                                                                <td>
+                                                                    <div class="btn-group btn-group-xs">
+                                                                        <a href="{{ route('accounts.show', account.id) }}" class="btn btn-default btn-xs" title="View">
+                                                                            <i class="fa fa-eye"></i>
+                                                                        </a>
+                                                                        <a href="{{ route('accounts.edit', account.id) }}" class="btn btn-primary btn-xs" title="Edit">
+                                                                            <i class="fa fa-pencil"></i>
+                                                                        </a>
+                                                                        {% if account.accountType.type in ['Asset account', 'Default account', 'Brokerage account', 'Holding account', 'Credit card', 'Loan', 'Debt', 'Mortgage'] %}
+                                                                        <button type="button" class="btn btn-warning btn-xs sync-account-btn" 
+                                                                                title="Sync Account" data-account-id="{{ account.id }}" data-account-name="{{ account.name }}">
+                                                                            <i class="fa fa-refresh"></i>
+                                                                        </button>
+                                                                        {% endif %}
+                                                                        <a href="{{ route('accounts.delete', account.id) }}" class="btn btn-danger btn-xs" title="Delete">
+                                                                            <i class="fa fa-trash"></i>
+                                                                        </a>
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        {% endfor %}
+                                                    </tbody>
+                                                </table>
+                                        {% else %}
+                                            <div class="alert alert-info">
+                                                <i class="fa fa-info-circle"></i>
+                                                No {{ typeData.title|lower }} found.
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        /* Make panels inherit styling from existing Firefly III box classes */
+        .panel-group .panel {
+            margin-bottom: 10px;
+        }
+        
+        .panel-heading .badge {
+            margin-left: 10px;
+        }
+        
+        /* Inherit from .box styles */
+        .panel-default {
+            background-color: inherit;
+            border-color: red;
+        }
+        
+        .panel-default > .panel-heading {
+            background-color: inherit;
+            color: inherit;
+        }
+        
+        .panel-default > .panel-heading + .panel-collapse > .panel-body {
+            background-color: inherit;
+            border-top-color: inherit;
+        }
+        
+        /* Let Firefly III handle table styling - remove overrides that break hover */
+    </style>
+
+{% endblock %}
+
+{% block scripts %}
+    <script type="text/javascript" nonce="{{ JS_NONCE }}">
+        $(document).ready(function() {
+            // Handle sync all accounts buttons
+            $('.sync-all-accounts-btn').on('click', function() {
+                var btn = $(this);
+                var accountType = btn.data('account-type');
+                
+                btn.prop('disabled', true);
+                btn.find('span').removeClass('fa-refresh').addClass('fa-spinner fa-spin');
+                btn.find('span').after(' Syncing...');
+                
+                // Get all asset accounts for this section
+                var accountIds = [];
+                btn.closest('.panel').find('tbody tr').each(function() {
+                    var accountId = $(this).find('a[href*="/accounts/"]').attr('href');
+                    if (accountId) {
+                        accountId = accountId.match(/\/accounts\/(\d+)/);
+                        if (accountId && accountId[1]) {
+                            accountIds.push(parseInt(accountId[1]));
+                        }
+                    }
+                });
+                
+                if (accountIds.length === 0) {
+                    alert('No accounts found to sync');
+                    resetButton(btn);
+                    return;
+                }
+                
+                // Call the sync API for each account
+                var promises = accountIds.map(function(accountId) {
+                    return $.ajax({
+                        url: '/api/v1/pfinance/consolidate-and-generate-transactions-for-account',
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json',
+                            'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+                        },
+                        data: JSON.stringify({
+                            account_id: accountId.toString()
+                        })
+                    });
+                });
+                
+                Promise.all(promises).then(function(results) {
+                    var totalProcessed = results.reduce(function(sum, result) {
+                        return sum + (result.result ? result.result.processed : 0);
+                    }, 0);
+                    alert('Sync completed! Processed ' + totalProcessed + ' transactions across ' + accountIds.length + ' accounts.');
+                    window.location.reload();
+                }).catch(function(error) {
+                    console.error('Sync failed:', error);
+                    alert('Sync failed: ' + (error.responseJSON && error.responseJSON.message ? error.responseJSON.message : 'Unknown error'));
+                }).finally(function() {
+                    resetButton(btn);
+                });
+            });
+            
+            // Handle match unknown button
+            $('.match-unknown-btn').on('click', function() {
+                var btn = $(this);
+                btn.prop('disabled', true);
+                btn.find('span').removeClass('fa-link').addClass('fa-spinner fa-spin');
+                btn.find('span').after(' Matching...');
+                
+                $.ajax({
+                    url: '/api/v1/pfinance/match-transactions',
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+                    },
+                    data: JSON.stringify({
+                        window_days: 0,
+                        dry_run: false,
+                        exclude_account_ids: [2, 3]
+                    }),
+                    success: function(data) {
+                        alert('Matched: ' + (data.result && data.result.matched) + '\nUpdated: ' + (data.result && data.result.updated));
+                        window.location.reload();
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Match request failed:', xhr.responseText);
+                        alert('Match request failed: ' + (xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : error));
+                    },
+                    complete: function() {
+                        btn.prop('disabled', false);
+                        btn.find('span').removeClass('fa-spinner fa-spin').addClass('fa-link');
+                        btn.find('span').next().remove();
+                    }
+                });
+            });
+            
+            // Handle individual account sync buttons
+            $('.sync-account-btn').on('click', function() {
+                var btn = $(this);
+                var accountId = btn.data('account-id');
+                var accountName = btn.data('account-name');
+                
+                btn.prop('disabled', true);
+                btn.find('i').removeClass('fa-refresh').addClass('fa-spinner fa-spin');
+                btn.attr('title', 'Syncing...');
+                
+                $.ajax({
+                    url: '/api/v1/pfinance/consolidate-and-generate-transactions-for-account',
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+                    },
+                    data: JSON.stringify({
+                        account_id: accountId.toString()
+                    }),
+                    success: function(data) {
+                        var processed = data.result ? data.result.processed : 0;
+                        alert('Sync completed for ' + accountName + '!\nProcessed ' + processed + ' transactions.');
+                        window.location.reload();
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Sync failed for account ' + accountId + ':', xhr.responseText);
+                        alert('Sync failed for ' + accountName + ': ' + (xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Unknown error'));
+                    },
+                    complete: function() {
+                        btn.prop('disabled', false);
+                        btn.find('i').removeClass('fa-spinner fa-spin').addClass('fa-refresh');
+                        btn.attr('title', 'Sync Account');
+                    }
+                });
+            });
+            
+            function resetButton(btn) {
+                btn.prop('disabled', false);
+                btn.find('span').removeClass('fa-spinner fa-spin').addClass('fa-refresh');
+                btn.find('span').next().remove();
+            }
+        });
+    </script>
+{% endblock %}
