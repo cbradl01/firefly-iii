@@ -1,0 +1,836 @@
+{
+  "Assets": {
+    "Current Assets": {
+      "Bank Accounts": {
+        "Checking Account": {
+          "firefly_type": "Asset account",
+          "firefly_role": "defaultAsset",
+          "description": "Standard checking account for daily transactions"
+        },
+        "Savings Account": {
+          "firefly_type": "Asset account",
+          "firefly_role": "savingAsset",
+          "description": "Interest-bearing savings account"
+        },
+        "Money Market Account": {
+          "firefly_type": "Asset account",
+          "firefly_role": "savingAsset",
+          "description": "High-yield savings with limited transactions"
+        },
+        "Certificate of Deposit (CD)": {
+          "firefly_type": "Asset account",
+          "firefly_role": "savingAsset",
+          "description": "Time deposit with fixed interest rate"
+        },
+        "High-Yield Savings": {
+          "firefly_type": "Asset account",
+          "firefly_role": "savingAsset",
+          "description": "High-interest savings account"
+        },
+        "Business Checking": {
+          "firefly_type": "Asset account",
+          "firefly_role": "defaultAsset",
+          "description": "Checking account for business use"
+        }
+      },
+      "Payment Services": {
+        "Digital Wallet": {
+          "firefly_type": "Asset account",
+          "firefly_role": "defaultAsset",
+          "description": "Digital payment service (PayPal, Venmo, Apple Pay)"
+        },
+        "Payment Processor": {
+          "firefly_type": "Asset account",
+          "firefly_role": "defaultAsset",
+          "description": "Payment processing service (Stripe, Square)"
+        },
+        "Prepaid Cards": {
+          "firefly_type": "Asset account",
+          "firefly_role": "defaultAsset",
+          "description": "Prepaid debit cards"
+        },
+        "Cash Management Account": {
+          "firefly_type": "Asset account",
+          "firefly_role": "defaultAsset",
+          "description": "Combined checking and investment account"
+        }
+      },
+      "Short-term Investments": {
+        "Treasury Bills": {
+          "firefly_type": "Asset account",
+          "firefly_role": "defaultAsset",
+          "description": "Short-term government securities"
+        },
+        "Commercial Paper": {
+          "firefly_type": "Asset account",
+          "firefly_role": "defaultAsset",
+          "description": "Short-term corporate debt"
+        },
+        "Money Market Funds": {
+          "firefly_type": "Asset account",
+          "firefly_role": "defaultAsset",
+          "description": "Short-term investment funds"
+        },
+        "Short-term Bonds": {
+          "firefly_type": "Asset account",
+          "firefly_role": "defaultAsset",
+          "description": "Bonds with maturity under 1 year"
+        }
+      }
+    },
+    "Investment Assets": {
+      "Retirement Accounts": {
+        "Traditional IRA": {
+          "firefly_type": "Asset account",
+          "firefly_role": "defaultAsset",
+          "description": "Individual Retirement Account with tax-deferred contributions"
+        },
+        "Roth IRA": {
+          "firefly_type": "Asset account",
+          "firefly_role": "defaultAsset",
+          "description": "Individual Retirement Account with tax-free withdrawals"
+        },
+        "401(k) Traditional": {
+          "firefly_type": "Asset account",
+          "firefly_role": "defaultAsset",
+          "description": "Employer-sponsored retirement plan with tax-deferred contributions"
+        },
+        "401(k) Roth": {
+          "firefly_type": "Asset account",
+          "firefly_role": "defaultAsset",
+          "description": "Employer-sponsored retirement plan with tax-free withdrawals"
+        },
+        "403(b)": {
+          "firefly_type": "Asset account",
+          "firefly_role": "defaultAsset",
+          "description": "Tax-sheltered annuity for non-profit employees"
+        },
+        "457(b)": {
+          "firefly_type": "Asset account",
+          "firefly_role": "defaultAsset",
+          "description": "Deferred compensation plan for government employees"
+        },
+        "SEP-IRA": {
+          "firefly_type": "Asset account",
+          "firefly_role": "defaultAsset",
+          "description": "Simplified Employee Pension IRA"
+        },
+        "Solo 401(k)": {
+          "firefly_type": "Asset account",
+          "firefly_role": "defaultAsset",
+          "description": "401(k) plan for self-employed individuals"
+        },
+        "Simple IRA": {
+          "firefly_type": "Asset account",
+          "firefly_role": "defaultAsset",
+          "description": "Savings Incentive Match Plan for Employees"
+        },
+        "Pension Plan": {
+          "firefly_type": "Asset account",
+          "firefly_role": "defaultAsset",
+          "description": "Defined benefit retirement plan"
+        }
+      },
+      "Investment Accounts": {
+        "Individual Brokerage": {
+          "firefly_type": "Asset account",
+          "firefly_role": "brokerageAsset",
+          "description": "Individual investment account"
+        },
+        "Joint Brokerage": {
+          "firefly_type": "Asset account",
+          "firefly_role": "brokerageAsset",
+          "description": "Joint investment account"
+        },
+        "Trust Account": {
+          "firefly_type": "Asset account",
+          "firefly_role": "brokerageAsset",
+          "description": "Investment account held in trust"
+        },
+        "Custodial Account (UTMA/UGMA)": {
+          "firefly_type": "Asset account",
+          "firefly_role": "defaultAsset",
+          "description": "Custodial account for minors"
+        },
+        "Coverdell ESA": {
+          "firefly_type": "Asset account",
+          "firefly_role": "defaultAsset",
+          "description": "Education Savings Account"
+        },
+        "529 Education Savings": {
+          "firefly_type": "Asset account",
+          "firefly_role": "defaultAsset",
+          "description": "Tax-advantaged education savings plan"
+        },
+        "Health Savings Account (HSA)": {
+          "firefly_type": "Asset account",
+          "firefly_role": "defaultAsset",
+          "description": "Tax-advantaged health savings account"
+        },
+        "Flexible Spending Account (FSA)": {
+          "firefly_type": "Asset account",
+          "firefly_role": "defaultAsset",
+          "description": "Pre-tax health and dependent care account"
+        },
+        "Dependent Care FSA": {
+          "firefly_type": "Asset account",
+          "firefly_role": "defaultAsset",
+          "description": "Pre-tax dependent care expenses account"
+        }
+      },
+      "Alternative Investments": {
+        "Private Equity": {
+          "firefly_type": "Asset account",
+          "firefly_role": "defaultAsset",
+          "description": "Investment in private companies"
+        },
+        "Venture Capital": {
+          "firefly_type": "Asset account",
+          "firefly_role": "defaultAsset",
+          "description": "Investment in early-stage companies"
+        },
+        "Hedge Funds": {
+          "firefly_type": "Asset account",
+          "firefly_role": "defaultAsset",
+          "description": "Alternative investment fund"
+        },
+        "Real Estate Investment Trusts (REITs)": {
+          "firefly_type": "Asset account",
+          "firefly_role": "defaultAsset",
+          "description": "Investment in real estate securities"
+        },
+        "Commodities": {
+          "firefly_type": "Asset account",
+          "firefly_role": "defaultAsset",
+          "description": "Investment in physical commodities"
+        },
+        "Cryptocurrency": {
+          "firefly_type": "Asset account",
+          "firefly_role": "defaultAsset",
+          "description": "Digital currency investments"
+        },
+        "Precious Metals": {
+          "firefly_type": "Asset account",
+          "firefly_role": "defaultAsset",
+          "description": "Investment in gold, silver, etc."
+        },
+        "Art/Collectibles": {
+          "firefly_type": "Asset account",
+          "firefly_role": "defaultAsset",
+          "description": "Investment in art and collectible items"
+        },
+        "Promissory Notes": {
+          "firefly_type": "Asset account",
+          "firefly_role": "defaultAsset",
+          "description": "Written promise to pay a debt"
+        }
+      },
+      "Securities": {
+        "Stocks (Individual)": {
+          "firefly_type": "Asset account",
+          "firefly_role": "brokerageAsset",
+          "description": "Individual stock holdings"
+        },
+        "Bonds": {
+          "firefly_type": "Asset account",
+          "firefly_role": "defaultAsset",
+          "description": "Fixed-income securities"
+        },
+        "Mutual Funds": {
+          "firefly_type": "Asset account",
+          "firefly_role": "brokerageAsset",
+          "description": "Pooled investment funds"
+        },
+        "Exchange-Traded Funds (ETFs)": {
+          "firefly_type": "Asset account",
+          "firefly_role": "brokerageAsset",
+          "description": "Traded investment funds"
+        },
+        "Index Funds": {
+          "firefly_type": "Asset account",
+          "firefly_role": "brokerageAsset",
+          "description": "Funds tracking market indices"
+        },
+        "Options": {
+          "firefly_type": "Asset account",
+          "firefly_role": "brokerageAsset",
+          "description": "Derivative contracts"
+        },
+        "Futures": {
+          "firefly_type": "Asset account",
+          "firefly_role": "brokerageAsset",
+          "description": "Futures contracts"
+        },
+        "Foreign Exchange (Forex)": {
+          "firefly_type": "Asset account",
+          "firefly_role": "defaultAsset",
+          "description": "Foreign currency trading"
+        }
+      }
+    },
+    "Fixed Assets": {
+      "Real Estate": {
+        "Primary Residence": {
+          "firefly_type": "Asset account",
+          "firefly_role": "defaultAsset",
+          "description": "Main home residence"
+        },
+        "Investment Property": {
+          "firefly_type": "Asset account",
+          "firefly_role": "defaultAsset",
+          "description": "Real estate held for investment"
+        },
+        "Commercial Property": {
+          "firefly_type": "Asset account",
+          "firefly_role": "defaultAsset",
+          "description": "Commercial real estate"
+        },
+        "Land": {
+          "firefly_type": "Asset account",
+          "firefly_role": "defaultAsset",
+          "description": "Undeveloped land"
+        },
+        "Timeshare": {
+          "firefly_type": "Asset account",
+          "firefly_role": "defaultAsset",
+          "description": "Shared ownership of vacation property"
+        }
+      },
+      "Business Assets": {
+        "Equipment": {
+          "firefly_type": "Asset account",
+          "firefly_role": "defaultAsset",
+          "description": "Business equipment and machinery"
+        },
+        "Vehicles": {
+          "firefly_type": "Asset account",
+          "firefly_role": "defaultAsset",
+          "description": "Business vehicles"
+        },
+        "Intellectual Property": {
+          "firefly_type": "Asset account",
+          "firefly_role": "defaultAsset",
+          "description": "Patents, trademarks, copyrights"
+        },
+        "Goodwill": {
+          "firefly_type": "Asset account",
+          "firefly_role": "defaultAsset",
+          "description": "Intangible business value"
+        },
+        "Inventory": {
+          "firefly_type": "Asset account",
+          "firefly_role": "defaultAsset",
+          "description": "Business inventory"
+        }
+      },
+      "Personal Assets": {
+        "Vehicles": {
+          "firefly_type": "Asset account",
+          "firefly_role": "defaultAsset",
+          "description": "Personal vehicles"
+        },
+        "Jewelry": {
+          "firefly_type": "Asset account",
+          "firefly_role": "defaultAsset",
+          "description": "Personal jewelry and valuables"
+        },
+        "Art/Collectibles": {
+          "firefly_type": "Asset account",
+          "firefly_role": "defaultAsset",
+          "description": "Personal art and collectibles"
+        },
+        "Other Valuables": {
+          "firefly_type": "Asset account",
+          "firefly_role": "defaultAsset",
+          "description": "Other personal valuable items"
+        }
+      }
+    }
+  },
+  "Liabilities": {
+    "Current Liabilities": {
+      "Credit Accounts": {
+        "Credit Cards": {
+          "firefly_type": "Credit card",
+          "firefly_role": "ccAsset",
+          "description": "Credit card accounts"
+        },
+        "Store Cards": {
+          "firefly_type": "Credit card",
+          "firefly_role": "ccAsset",
+          "description": "Store-specific credit cards"
+        },
+        "Charge Cards": {
+          "firefly_type": "Credit card",
+          "firefly_role": "ccAsset",
+          "description": "Charge cards (must be paid in full monthly)"
+        },
+        "Personal Lines of Credit": {
+          "firefly_type": "Credit card",
+          "firefly_role": "ccAsset",
+          "description": "Personal revolving credit lines"
+        },
+        "Business Lines of Credit": {
+          "firefly_type": "Credit card",
+          "firefly_role": "ccAsset",
+          "description": "Business revolving credit lines"
+        }
+      },
+      "Short-term Loans": {
+        "Personal Loans": {
+          "firefly_type": "Loan",
+          "firefly_role": "defaultAsset",
+          "description": "Short-term personal loans"
+        },
+        "Payday Loans": {
+          "firefly_type": "Loan",
+          "firefly_role": "defaultAsset",
+          "description": "Short-term high-interest loans"
+        },
+        "Title Loans": {
+          "firefly_type": "Loan",
+          "firefly_role": "defaultAsset",
+          "description": "Loans secured by vehicle title"
+        },
+        "Bridge Loans": {
+          "firefly_type": "Loan",
+          "firefly_role": "defaultAsset",
+          "description": "Short-term loans for real estate transactions"
+        },
+        "Working Capital Loans": {
+          "firefly_type": "Loan",
+          "firefly_role": "defaultAsset",
+          "description": "Business short-term financing"
+        }
+      },
+      "Other Current Liabilities": {
+        "Accounts Payable": {
+          "firefly_type": "Expense account",
+          "firefly_role": "defaultAsset",
+          "description": "Outstanding bills and invoices"
+        },
+        "Accrued Expenses": {
+          "firefly_type": "Expense account",
+          "firefly_role": "defaultAsset",
+          "description": "Expenses incurred but not yet paid"
+        },
+        "Taxes Payable": {
+          "firefly_type": "Expense account",
+          "firefly_role": "defaultAsset",
+          "description": "Outstanding tax obligations"
+        },
+        "Insurance Premiums": {
+          "firefly_type": "Expense account",
+          "firefly_role": "defaultAsset",
+          "description": "Outstanding insurance payments"
+        },
+        "Utility Bills": {
+          "firefly_type": "Expense account",
+          "firefly_role": "defaultAsset",
+          "description": "Outstanding utility payments"
+        }
+      }
+    },
+    "Long-term Liabilities": {
+      "Real Estate Loans": {
+        "Primary Mortgage": {
+          "firefly_type": "Mortgage",
+          "firefly_role": "defaultAsset",
+          "description": "Primary residence mortgage"
+        },
+        "Investment Property Mortgage": {
+          "firefly_type": "Mortgage",
+          "firefly_role": "defaultAsset",
+          "description": "Mortgage on investment property"
+        },
+        "Home Equity Loan": {
+          "firefly_type": "Loan",
+          "firefly_role": "defaultAsset",
+          "description": "Loan secured by home equity"
+        },
+        "Home Equity Line of Credit (HELOC)": {
+          "firefly_type": "Credit card",
+          "firefly_role": "ccAsset",
+          "description": "Revolving credit secured by home equity"
+        },
+        "Reverse Mortgage": {
+          "firefly_type": "Mortgage",
+          "firefly_role": "defaultAsset",
+          "description": "Mortgage that pays homeowner"
+        }
+      },
+      "Vehicle Loans": {
+        "Auto Loan": {
+          "firefly_type": "Loan",
+          "firefly_role": "defaultAsset",
+          "description": "Automobile financing"
+        },
+        "Motorcycle Loan": {
+          "firefly_type": "Loan",
+          "firefly_role": "defaultAsset",
+          "description": "Motorcycle financing"
+        },
+        "Boat Loan": {
+          "firefly_type": "Loan",
+          "firefly_role": "defaultAsset",
+          "description": "Boat financing"
+        },
+        "RV Loan": {
+          "firefly_type": "Loan",
+          "firefly_role": "defaultAsset",
+          "description": "Recreational vehicle financing"
+        }
+      },
+      "Business Loans": {
+        "Business Term Loan": {
+          "firefly_type": "Loan",
+          "firefly_role": "defaultAsset",
+          "description": "Fixed-term business loan"
+        },
+        "SBA Loan": {
+          "firefly_type": "Loan",
+          "firefly_role": "defaultAsset",
+          "description": "Small Business Administration loan"
+        },
+        "Equipment Financing": {
+          "firefly_type": "Loan",
+          "firefly_role": "defaultAsset",
+          "description": "Loan for business equipment"
+        },
+        "Commercial Real Estate Loan": {
+          "firefly_type": "Mortgage",
+          "firefly_role": "defaultAsset",
+          "description": "Loan for commercial property"
+        },
+        "Business Line of Credit": {
+          "firefly_type": "Credit card",
+          "firefly_role": "ccAsset",
+          "description": "Revolving business credit"
+        }
+      },
+      "Student Loans": {
+        "Federal Student Loans": {
+          "firefly_type": "Loan",
+          "firefly_role": "defaultAsset",
+          "description": "Government student loans"
+        },
+        "Private Student Loans": {
+          "firefly_type": "Loan",
+          "firefly_role": "defaultAsset",
+          "description": "Private lender student loans"
+        },
+        "Parent PLUS Loans": {
+          "firefly_type": "Loan",
+          "firefly_role": "defaultAsset",
+          "description": "Federal parent loans for students"
+        },
+        "Refinanced Student Loans": {
+          "firefly_type": "Loan",
+          "firefly_role": "defaultAsset",
+          "description": "Consolidated or refinanced student debt"
+        }
+      },
+      "Other Long-term Debt": {
+        "Personal Loans": {
+          "firefly_type": "Loan",
+          "firefly_role": "defaultAsset",
+          "description": "Long-term personal loans"
+        },
+        "Consolidation Loans": {
+          "firefly_type": "Loan",
+          "firefly_role": "defaultAsset",
+          "description": "Debt consolidation loans"
+        },
+        "Medical Debt": {
+          "firefly_type": "Loan",
+          "firefly_role": "defaultAsset",
+          "description": "Outstanding medical bills"
+        },
+        "Legal Judgments": {
+          "firefly_type": "Loan",
+          "firefly_role": "defaultAsset",
+          "description": "Court-ordered debt payments"
+        }
+      }
+    }
+  },
+  "Equity": {
+    "Owner's Equity": {
+      "Owner's Capital": {
+        "firefly_type": "Asset account",
+        "firefly_role": "defaultAsset",
+        "description": "Owner's initial investment"
+      },
+      "Owner's Draws": {
+        "firefly_type": "Asset account",
+        "firefly_role": "defaultAsset",
+        "description": "Owner's withdrawals from business"
+      },
+      "Retained Earnings": {
+        "firefly_type": "Asset account",
+        "firefly_role": "defaultAsset",
+        "description": "Accumulated business profits"
+      },
+      "Additional Paid-in Capital": {
+        "firefly_type": "Asset account",
+        "firefly_role": "defaultAsset",
+        "description": "Capital beyond par value"
+      }
+    },
+    "Business Equity": {
+      "Common Stock": {
+        "firefly_type": "Asset account",
+        "firefly_role": "defaultAsset",
+        "description": "Common stock ownership"
+      },
+      "Preferred Stock": {
+        "firefly_type": "Asset account",
+        "firefly_role": "defaultAsset",
+        "description": "Preferred stock ownership"
+      },
+      "Treasury Stock": {
+        "firefly_type": "Asset account",
+        "firefly_role": "defaultAsset",
+        "description": "Company's own repurchased stock"
+      },
+      "Stock Options": {
+        "firefly_type": "Asset account",
+        "firefly_role": "defaultAsset",
+        "description": "Employee stock options"
+      }
+    }
+  },
+  "Income": {
+    "Operating Income": {
+      "Salary/Wages": {
+        "firefly_type": "Revenue account",
+        "firefly_role": "defaultAsset",
+        "description": "Employment income"
+      },
+      "Business Revenue": {
+        "firefly_type": "Revenue account",
+        "firefly_role": "defaultAsset",
+        "description": "Business sales and revenue"
+      },
+      "Freelance Income": {
+        "firefly_type": "Revenue account",
+        "firefly_role": "defaultAsset",
+        "description": "Freelance and contract work"
+      },
+      "Consulting Income": {
+        "firefly_type": "Revenue account",
+        "firefly_role": "defaultAsset",
+        "description": "Consulting services income"
+      },
+      "Royalties": {
+        "firefly_type": "Revenue account",
+        "firefly_role": "defaultAsset",
+        "description": "Royalty payments"
+      }
+    },
+    "Investment Income": {
+      "Dividend Income": {
+        "firefly_type": "Revenue account",
+        "firefly_role": "defaultAsset",
+        "description": "Stock and fund dividends"
+      },
+      "Interest Income": {
+        "firefly_type": "Revenue account",
+        "firefly_role": "defaultAsset",
+        "description": "Interest earned on investments"
+      },
+      "Capital Gains": {
+        "firefly_type": "Revenue account",
+        "firefly_role": "defaultAsset",
+        "description": "Investment sale profits"
+      },
+      "Rental Income": {
+        "firefly_type": "Revenue account",
+        "firefly_role": "defaultAsset",
+        "description": "Real estate rental income"
+      },
+      "Business Distributions": {
+        "firefly_type": "Revenue account",
+        "firefly_role": "defaultAsset",
+        "description": "Business profit distributions"
+      },
+      "Annuity Payments": {
+        "firefly_type": "Revenue account",
+        "firefly_role": "defaultAsset",
+        "description": "Annuity income payments"
+      }
+    },
+    "Other Income": {
+      "Social Security": {
+        "firefly_type": "Revenue account",
+        "firefly_role": "defaultAsset",
+        "description": "Social Security benefits"
+      },
+      "Pension Income": {
+        "firefly_type": "Revenue account",
+        "firefly_role": "defaultAsset",
+        "description": "Pension payments"
+      },
+      "Disability Benefits": {
+        "firefly_type": "Revenue account",
+        "firefly_role": "defaultAsset",
+        "description": "Disability insurance payments"
+      },
+      "Unemployment Benefits": {
+        "firefly_type": "Revenue account",
+        "firefly_role": "defaultAsset",
+        "description": "Unemployment compensation"
+      },
+      "Tax Refunds": {
+        "firefly_type": "Revenue account",
+        "firefly_role": "defaultAsset",
+        "description": "Income tax refunds"
+      },
+      "Gifts/Inheritance": {
+        "firefly_type": "Revenue account",
+        "firefly_role": "defaultAsset",
+        "description": "Gifts and inheritance received"
+      },
+      "Lottery/Gambling Winnings": {
+        "firefly_type": "Revenue account",
+        "firefly_role": "defaultAsset",
+        "description": "Gambling and lottery winnings"
+      }
+    }
+  },
+  "Expenses": {
+    "Operating Expenses": {
+      "Housing": {
+        "firefly_type": "Expense account",
+        "firefly_role": "defaultAsset",
+        "description": "Rent, mortgage, and housing costs"
+      },
+      "Utilities": {
+        "firefly_type": "Expense account",
+        "firefly_role": "defaultAsset",
+        "description": "Electric, gas, water, internet, phone"
+      },
+      "Food/Groceries": {
+        "firefly_type": "Expense account",
+        "firefly_role": "defaultAsset",
+        "description": "Food and grocery expenses"
+      },
+      "Transportation": {
+        "firefly_type": "Expense account",
+        "firefly_role": "defaultAsset",
+        "description": "Vehicle, gas, public transit, rideshare"
+      },
+      "Insurance": {
+        "firefly_type": "Expense account",
+        "firefly_role": "defaultAsset",
+        "description": "Health, auto, home, life insurance"
+      },
+      "Healthcare": {
+        "firefly_type": "Expense account",
+        "firefly_role": "defaultAsset",
+        "description": "Medical, dental, vision expenses"
+      },
+      "Education": {
+        "firefly_type": "Expense account",
+        "firefly_role": "defaultAsset",
+        "description": "Tuition, books, educational expenses"
+      },
+      "Entertainment": {
+        "firefly_type": "Expense account",
+        "firefly_role": "defaultAsset",
+        "description": "Movies, dining out, hobbies, recreation"
+      },
+      "Personal Care": {
+        "firefly_type": "Expense account",
+        "firefly_role": "defaultAsset",
+        "description": "Clothing, grooming, personal items"
+      }
+    },
+    "Business Expenses": {
+      "Office Rent": {
+        "firefly_type": "Expense account",
+        "firefly_role": "defaultAsset",
+        "description": "Business office and workspace rent"
+      },
+      "Equipment": {
+        "firefly_type": "Expense account",
+        "firefly_role": "defaultAsset",
+        "description": "Business equipment and supplies"
+      },
+      "Marketing": {
+        "firefly_type": "Expense account",
+        "firefly_role": "defaultAsset",
+        "description": "Advertising and marketing costs"
+      },
+      "Professional Services": {
+        "firefly_type": "Expense account",
+        "firefly_role": "defaultAsset",
+        "description": "Legal, accounting, consulting fees"
+      },
+      "Travel": {
+        "firefly_type": "Expense account",
+        "firefly_role": "defaultAsset",
+        "description": "Business travel expenses"
+      },
+      "Supplies": {
+        "firefly_type": "Expense account",
+        "firefly_role": "defaultAsset",
+        "description": "Office supplies and materials"
+      }
+    },
+    "Financial Expenses": {
+      "Interest Payments": {
+        "firefly_type": "Expense account",
+        "firefly_role": "defaultAsset",
+        "description": "Interest on loans and credit"
+      },
+      "Investment Fees": {
+        "firefly_type": "Expense account",
+        "firefly_role": "defaultAsset",
+        "description": "Investment management and trading fees"
+      },
+      "Banking Fees": {
+        "firefly_type": "Expense account",
+        "firefly_role": "defaultAsset",
+        "description": "Bank account and service fees"
+      },
+      "Credit Card Fees": {
+        "firefly_type": "Expense account",
+        "firefly_role": "defaultAsset",
+        "description": "Credit card annual and transaction fees"
+      },
+      "Tax Preparation": {
+        "firefly_type": "Expense account",
+        "firefly_role": "defaultAsset",
+        "description": "Tax preparation and filing costs"
+      }
+    },
+    "Other Expenses": {
+      "Charitable Donations": {
+        "firefly_type": "Expense account",
+        "firefly_role": "defaultAsset",
+        "description": "Charitable contributions and donations"
+      },
+      "Gifts": {
+        "firefly_type": "Expense account",
+        "firefly_role": "defaultAsset",
+        "description": "Gifts to family and friends"
+      },
+      "Legal Fees": {
+        "firefly_type": "Expense account",
+        "firefly_role": "defaultAsset",
+        "description": "Legal services and court costs"
+      },
+      "Medical Expenses": {
+        "firefly_type": "Expense account",
+        "firefly_role": "defaultAsset",
+        "description": "Out-of-pocket medical expenses"
+      },
+      "Emergency Fund Contributions": {
+        "firefly_type": "Expense account",
+        "firefly_role": "defaultAsset",
+        "description": "Contributions to emergency savings"
+      }
+    }
+  }
+}

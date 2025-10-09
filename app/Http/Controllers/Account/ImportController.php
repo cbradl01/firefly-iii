@@ -28,6 +28,7 @@ use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Http\Controllers\Controller;
 use FireflyIII\Models\Account;
 use FireflyIII\Repositories\Account\AccountRepositoryInterface;
+use FireflyIII\Services\AccountClassificationService;
 use FireflyIII\Support\Http\Controllers\BasicDataSupport;
 use Illuminate\Contracts\View\Factory;
 use Illuminate\Http\RedirectResponse;
@@ -46,6 +47,7 @@ class ImportController extends Controller
     use BasicDataSupport;
 
     private AccountRepositoryInterface $repository;
+    private AccountClassificationService $classificationService;
 
     /**
      * ImportController constructor.
@@ -61,6 +63,7 @@ class ImportController extends Controller
                 app('view')->share('title', (string) trans('firefly.accounts'));
 
                 $this->repository = app(AccountRepositoryInterface::class);
+                $this->classificationService = app(AccountClassificationService::class);
 
                 return $next($request);
             }
@@ -389,6 +392,32 @@ class ImportController extends Controller
                     if (isset($accountData['source_account_id']) && !empty($accountData['source_account_id'])) {
                         $sourceAccountId = $accountData['source_account_id'];
                         unset($accountData['source_account_id']); // Remove from account data
+                    }
+                    
+                    // Use account classification service to map account type to Firefly III format
+                    if (isset($accountData['account_type'])) {
+                        $mapping = $this->classificationService->getFireflyMapping($accountData['account_type']);
+                        
+                        // if ($mapping) {
+                            // Use the mapping from the classification system
+                            $accountData['account_type_name'] = $mapping['firefly_type'];
+                            $accountData['account_role'] = $mapping['firefly_role'];
+                            
+                            Log::info('Mapped account type using classification system', [
+                                'original_type' => $accountData['account_type'],
+                                'firefly_type' => $mapping['firefly_type'],
+                                'firefly_role' => $mapping['firefly_role']
+                            ]);
+                        // } else {
+                        //     // Fallback to original behavior if no mapping found
+                        //     $accountData['account_type_name'] = $accountData['account_type'];
+                            
+                        //     Log::warning('No classification mapping found for account type', [
+                        //         'account_type' => $accountData['account_type']
+                        //     ]);
+                        // }
+                        
+                        unset($accountData['account_type']);
                     }
                     
                     // Create account directly using the repository
