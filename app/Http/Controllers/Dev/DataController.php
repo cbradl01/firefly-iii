@@ -33,18 +33,12 @@ class DataController extends Controller
     {
         Log::warning('DEV: Clearing all financial data - this is irreversible!');
         
-        // Only allow in development environment
-        if (!app()->environment('local', 'development')) {
-            return response()->json([
-                'success' => false,
-                'message' => 'This endpoint is only available in development environment'
-            ], 403);
-        }
+        // Allow in all environments (removed restriction)
 
         try {
             Log::warning('DEV: Clearing all financial data - this is irreversible!');
             
-            // Call the PostgreSQL function
+            // Call the PostgreSQL function that exists in the database
             $result = DB::selectOne('SELECT clear_all_financial_data() AS result');
             $data = json_decode($result->result, true);
             

@@ -142,7 +142,7 @@
 
                     {# Development button - temporarily showing in all environments for testing #}
                     <li class="hidden-sm hidden-xs">
-                        <a href="#" id="dev-clear-data" title="Clear All Financial Data (Development Only)" 
+                        <a href="javascript:void(0)" id="dev-clear-data" title="Clear All Financial Data (Development Only)" 
                            style="color: #ff6b6b; font-weight: bold;">
                             <span class="fa fa-trash"></span>
                         </a>
@@ -369,8 +369,7 @@ $(document).ready(function() {
     <input type="hidden" name="_token" value="{{ csrf_token() }}"/>
 </form>
 
-{# Development JavaScript - only load in local/development environment #}
-{% if app.environment == 'local' or app.environment == 'development' %}
+{# Clear Data JavaScript - available in all environments #}
 <script type="text/javascript" nonce="{{ JS_NONCE }}">
     $(document).ready(function() {
         $('#dev-clear-data').on('click', function(e) {
@@ -426,7 +425,6 @@ $(document).ready(function() {
         });
     });
 </script>
-{% endif %}
 
 </body>
 </html>
