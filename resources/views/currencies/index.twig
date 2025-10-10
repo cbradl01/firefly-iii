@@ -26,7 +26,10 @@
                             <thead>
                             <tr>
                                 <th>&nbsp;</th>
-                                <th>{{ 'currency'|_ }}</th>
+                                <th>{{ 'name'|_ }}</th>
+                                <th>Code</th>
+                                <th>Symbol</th>
+                                <th>Enabled</th>
                                 <th>{{ 'number_of_decimals'|_ }}</th>
                             </tr>
                             </thead>
@@ -41,41 +44,49 @@
                                                 <a class="btn btn-danger" href="{{ route('currencies.delete',currency.id) }}"><span
                                                         class="fa fa-fw fa-trash"></span></a>
                                                 {% endif %}
-                                                {# Disable the currency. #}
-                                                {% if currency.userGroupEnabled %}
-                                                    <a class="btn btn-default disable-currency" data-code="{{ currency.code }}"
-                                                       href="#">
-                                                        <span class="fa fa-fw fa-square-o"></span>
-                                                        {{ 'disable_currency'|_ }}</a>
-                                                {% endif %}
-
-                                                {# Enable the currency. #}
-                                                {% if not currency.userGroupEnabled %}
-                                                    <a class="btn btn-default enable-currency" data-code="{{ currency.code }}"
-                                                       href="#">
-                                                        <span class="fa fa-fw fa-check-square-o"></span>
-                                                        {{ 'enable_currency'|_ }}</a>
-                                                {% endif %}
                                             </div>
                                         </td>
                                     <td>
                                         {% if currency.userGroupEnabled == false %}
                                         <span class="text-muted">
                                         {% endif %}
-                                            {{ currency.name }} ({{ currency.code }}) ({{ currency.symbol|raw }})
+                                            {{ currency.name }}
                                         {% if currency.id == primaryCurrency.id %}
                                             <span class="label label-success" id="default-currency">{{ 'primary_currency_button'|_ }}</span>
                                         {% endif %}
                                         {% if currency.userGroupEnabled == false %}
-
-                                            <span class="label label-default">{{ 'currency_is_disabled'|_ }}</span>
-                                            {% endif %}
-
+                                        </span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if currency.userGroupEnabled == false %}
+                                        <span class="text-muted">
+                                        {% endif %}
+                                            {{ currency.code }}
                                         {% if currency.userGroupEnabled == false %}
                                         </span>
                                         {% endif %}
                                     </td>
-
+                                    <td>
+                                        {% if currency.userGroupEnabled == false %}
+                                        <span class="text-muted">
+                                        {% endif %}
+                                            {{ currency.symbol|raw }}
+                                        {% if currency.userGroupEnabled == false %}
+                                        </span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if currency.userGroupEnabled %}
+                                            <a class="btn btn-sm btn-success disable-currency" data-code="{{ currency.code }}" href="#" title="{{ 'disable_currency'|_ }}">
+                                                <span class="fa fa-fw fa-check"></span>
+                                            </a>
+                                        {% else %}
+                                            <a class="btn btn-sm btn-default enable-currency" data-code="{{ currency.code }}" href="#" title="{{ 'enable_currency'|_ }}">
+                                                <span class="fa fa-fw fa-times"></span>
+                                            </a>
+                                        {% endif %}
+                                    </td>
                                     <td>{{ currency.decimal_places }}</td>
                                 </tr>
                             {% endfor %}
