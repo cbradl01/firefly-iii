@@ -97,10 +97,8 @@ trait AccountServiceTrait
      */
     public function updateMetaData(Account $account, array $data): void
     {
-        $fields  = $this->validFields;
-        if (AccountTypeEnum::ASSET->value === $account->accountType->type) {
-            $fields = $this->validAssetFields;
-        }
+        // Use the new validation service to get valid fields
+        $fields = $this->fieldValidationService->getValidFields($account->accountType, $data);
 
         // remove currency_id if necessary.
         $type    = $account->accountType->type;
@@ -125,9 +123,7 @@ trait AccountServiceTrait
             $data['account_role'] = '';
         }
 
-        if (AccountTypeEnum::ASSET->value === $account->accountType->type && 'ccAsset' === $data['account_role']) {
-            $fields = $this->validCCFields;
-        }
+        // Credit card asset logic is now handled by the validation service
 
         /** @var AccountMetaFactory $factory */
         $factory = app(AccountMetaFactory::class);

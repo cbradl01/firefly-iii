@@ -27,6 +27,7 @@ namespace FireflyIII\Factory;
 use FireflyIII\Models\Account;
 use FireflyIII\Models\AccountMeta;
 use FireflyIII\Support\Facades\Steam;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Class AccountMetaFactory
@@ -38,6 +39,7 @@ class AccountMetaFactory
      */
     public function crud(Account $account, string $field, string $value): ?AccountMeta
     {
+        
         /** @var null|AccountMeta $entry */
         $entry = $account->accountMeta()->where('name', $field)->first();
         // must not be an empty string:

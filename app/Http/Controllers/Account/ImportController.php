@@ -420,8 +420,30 @@ class ImportController extends Controller
                         unset($accountData['account_type']);
                     }
                     
+                    // Debug currency information
+                    Log::info('Currency debug', [
+                        'currency_id' => $accountData['currency_id'] ?? 'NOT_SET',
+                        'currency_code' => $accountData['currency_code'] ?? 'NOT_SET',
+                        'has_currency_id' => isset($accountData['currency_id']),
+                        'has_currency_code' => isset($accountData['currency_code'])
+                    ]);
+                    
+                    // Add default currency if not present or is 0
+                    if ((!isset($accountData['currency_id']) || $accountData['currency_id'] == 0) && !isset($accountData['currency_code'])) {
+                        $accountData['currency_id'] = 1; // Default to USD
+                        Log::info('Added default currency_id to account data', ['currency_id' => 1]);
+                    }
+                    
                     // Create account directly using the repository
                     Log::info('Creating account from JSON', ['account_data' => $accountData]);
+                    Log::info('Owner field check', [
+                        'owner' => $accountData['owner'] ?? 'NOT_SET', 
+                        'institution' => $accountData['institution'] ?? 'NOT_SET',
+                        'owner_type' => gettype($accountData['owner'] ?? null),
+                        'institution_type' => gettype($accountData['institution'] ?? null),
+                        'owner_empty' => empty($accountData['owner'] ?? null),
+                        'institution_empty' => empty($accountData['institution'] ?? null)
+                    ]);
                     
                     // Use the account factory to create the account
                     $factory = app(\FireflyIII\Factory\AccountFactory::class);

@@ -198,9 +198,7 @@ class AccountRepository implements AccountRepositoryInterface, UserGroupInterfac
     {
         $query = $this->user->accounts()->with(
             [  // @phpstan-ignore-line
-                'accountmeta' => static function (HasMany $query): void {
-                    $query->where('name', 'account_role');
-                },
+                'accountmeta',
                 'attachments',
             ]
         );

@@ -204,6 +204,7 @@ class IndexController extends Controller
                     $account->interest = Steam::bcround($this->repository->getMetaValue($account, 'interest'), 4);
                     $account->interestPeriod = (string) trans(sprintf('firefly.interest_calc_%s', $this->repository->getMetaValue($account, 'interest_period')));
                     $account->accountTypeString = (string) trans(sprintf('firefly.account_type_%s', $account->accountType->type));
+                    $account->product_name = $this->repository->getMetaValue($account, 'product_name') ?? $account->accountTypeString;
                     $account->current_debt = '0';
                     $account->currency = $currency ?? $this->primaryCurrency;
                     $account->iban = implode(' ', str_split((string) $account->iban, 4));

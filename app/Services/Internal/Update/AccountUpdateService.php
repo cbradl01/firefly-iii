@@ -31,6 +31,7 @@ use FireflyIII\Models\Account;
 use FireflyIII\Models\AccountType;
 use FireflyIII\Models\Location;
 use FireflyIII\Repositories\Account\AccountRepositoryInterface;
+use FireflyIII\Services\AccountFieldValidationService;
 use FireflyIII\Services\Internal\Support\AccountServiceTrait;
 use FireflyIII\User;
 
@@ -43,9 +44,7 @@ class AccountUpdateService
     use AccountServiceTrait;
 
     protected AccountRepositoryInterface $accountRepository;
-    protected array                      $validAssetFields;
-    protected array                      $validCCFields;
-    protected array                      $validFields;
+    protected AccountFieldValidationService $fieldValidationService;
     private array                        $canHaveOpeningBalance;
     private User                         $user;
 
@@ -55,10 +54,8 @@ class AccountUpdateService
     public function __construct()
     {
         $this->canHaveOpeningBalance = config('firefly.can_have_opening_balance');
-        $this->validAssetFields      = config('firefly.valid_asset_fields');
-        $this->validCCFields         = config('firefly.valid_cc_fields');
-        $this->validFields           = config('firefly.valid_account_fields');
         $this->accountRepository     = app(AccountRepositoryInterface::class);
+        $this->fieldValidationService = app(AccountFieldValidationService::class);
     }
 
     /**

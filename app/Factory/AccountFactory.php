@@ -28,13 +28,14 @@ use FireflyIII\Enums\AccountTypeEnum;
 use FireflyIII\Events\StoredAccount;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Models\Account;
+use Illuminate\Support\Facades\Log;
 use FireflyIII\Models\AccountType;
 use FireflyIII\Repositories\Account\AccountRepositoryInterface;
+use FireflyIII\Services\AccountFieldValidationService;
 use FireflyIII\Services\Internal\Support\AccountServiceTrait;
 use FireflyIII\Services\Internal\Support\LocationServiceTrait;
 use FireflyIII\Services\Internal\Update\AccountUpdateService;
 use FireflyIII\User;
-use Illuminate\Support\Facades\Log;
 
 /**
  * Factory to create or return accounts.
@@ -47,9 +48,7 @@ class AccountFactory
     use LocationServiceTrait;
 
     protected AccountRepositoryInterface $accountRepository;
-    protected array                      $validAssetFields;
-    protected array                      $validCCFields;
-    protected array                      $validFields;
+    protected AccountFieldValidationService $fieldValidationService;
     private array                        $canHaveOpeningBalance;
     private array                        $canHaveVirtual;
     private User                         $user;
@@ -60,11 +59,9 @@ class AccountFactory
     public function __construct()
     {
         $this->accountRepository     = app(AccountRepositoryInterface::class);
+        $this->fieldValidationService = app(AccountFieldValidationService::class);
         $this->canHaveVirtual        = config('firefly.can_have_virtual_amounts');
         $this->canHaveOpeningBalance = config('firefly.can_have_opening_balance');
-        $this->validAssetFields      = config('firefly.valid_asset_fields');
-        $this->validCCFields         = config('firefly.valid_cc_fields');
-        $this->validFields           = config('firefly.valid_account_fields');
     }
 
     /**
@@ -107,6 +104,9 @@ class AccountFactory
         app('log')->debug('Now in AccountFactory::create()');
         $type         = $this->getAccountType($data);
         $data['iban'] = $this->filterIban($data['iban'] ?? null);
+
+        // Validate required fields for this account type
+        $this->fieldValidationService->validateRequiredFields($data, $type);
 
         // account may exist already:
         $return       = $this->find($data['name'], $type->type);
@@ -258,13 +258,19 @@ class AccountFactory
 
     private function storeMetaData(Account $account, array $data): void
     {
-        $fields  = $this->validFields;
-        if (AccountTypeEnum::ASSET->value === $account->accountType->type) {
-            $fields = $this->validAssetFields;
-        }
-        if (AccountTypeEnum::ASSET->value === $account->accountType->type && 'ccAsset' === $data['account_role']) {
-            $fields = $this->validCCFields;
-        }
+        // Use the new validation service to get valid fields
+        $fields = $this->fieldValidationService->getValidFields($account->accountType, $data);
+        
+        Log::info('AccountFactory::storeMetaData - Field selection', [
+            'account_type' => $account->accountType->type,
+            'account_role' => $data['account_role'] ?? 'NOT_SET',
+            'valid_fields' => $fields,
+            'data_keys' => array_keys($data),
+            'owner_in_data' => array_key_exists('owner', $data),
+            'institution_in_data' => array_key_exists('institution', $data),
+            'owner_value' => $data['owner'] ?? 'NOT_SET'
+        ]);
+        
 
         // remove currency_id if necessary.
         $type    = $account->accountType->type;
@@ -290,7 +296,23 @@ class AccountFactory
                     $data[$field] = 1;
                 }
 
+                Log::info('Storing meta field', [
+                    'field' => $field,
+                    'value' => $data[$field],
+                    'account_id' => $account->id,
+                    'account_name' => $account->name
+                ]);
+                
                 $factory->crud($account, $field, (string) $data[$field]);
+            } else {
+                Log::info('Skipping meta field', [
+                    'field' => $field,
+                    'exists' => array_key_exists($field, $data),
+                    'value' => $data[$field] ?? 'NOT_SET',
+                    'is_null' => null === ($data[$field] ?? null),
+                    'account_id' => $account->id,
+                    'account_name' => $account->name
+                ]);
             }
         }
     }
