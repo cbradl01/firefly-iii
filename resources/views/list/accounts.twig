@@ -14,6 +14,9 @@
             <th>{{ trans('form.liability_direction') }}</th>
             <th>{{ trans('list.interest') }} ({{ trans('list.interest_period') }})</th>
         {% endif %}
+        <th class="hidden-sm hidden-xs hidden-md">Institution</th>
+        <th class="hidden-sm hidden-xs hidden-md">Owner</th>
+        <th class="hidden-sm hidden-xs hidden-md">Product Name</th>
         <th class="hidden-sm hidden-xs">{{ trans('form.account_number') }}</th>
         {% if objectType != 'liabilities' %}
             <th style="text-align: right;">{{ trans('list.currentBalance') }}</th>
@@ -62,6 +65,30 @@
             <td>{{ trans('firefly.liability_direction_'~account.liability_direction~'_short')  }}</td>
             <td>{{ account.interest }}% ({{ account.interestPeriod|lower }})</td>
             {% endif %}
+            <td class="hidden-sm hidden-xs hidden-md">
+                {% set institution = accountGetMetaField(account, 'institution') %}
+                {% if institution %}
+                    {{ institution }}
+                {% else %}
+                    <span class="text-muted">-</span>
+                {% endif %}
+            </td>
+            <td class="hidden-sm hidden-xs hidden-md">
+                {% set owner = accountGetMetaField(account, 'owner') %}
+                {% if owner %}
+                    {{ owner }}
+                {% else %}
+                    <span class="text-muted">-</span>
+                {% endif %}
+            </td>
+            <td class="hidden-sm hidden-xs hidden-md">
+                {% set productName = accountGetMetaField(account, 'product_name') %}
+                {% if productName %}
+                    {{ productName }}
+                {% else %}
+                    <span class="text-muted">-</span>
+                {% endif %}
+            </td>
             <td class="hidden-sm hidden-xs">{{ account.iban }}{% if account.iban == '' %}{{ accountGetMetaField(account, 'account_number') }}{% endif %}</td>
             {% if objectType != 'liabilities' %}
             <td style="text-align: right;">

@@ -48,8 +48,11 @@
                                             <table class="table table-responsive table-hover">
                                                     <thead>
                                                         <tr>
-                                                            <th>Name</th>
+                                                            <!-- <th>Name</th> -->
                                                             <th>Type</th>
+                                                            <th>Institution</th>
+                                                            <th>Owner</th>
+                                                            <th>Product Name</th>
                                                             <th>Account Number</th>
                                                             <th>Balance</th>
                                                             <th>Active</th>
@@ -59,15 +62,39 @@
                                                     <tbody>
                                                         {% for account in typeData.accounts %}
                                                             <tr>
-                                                                <td>
+                                                                <!-- <td>
                                                                     <a href="{{ route('accounts.show', account.id) }}">
                                                                         {{ account.name }}
                                                                     </a>
-                                                                </td>
+                                                                </td> -->
                                                                 <td>
                                                                     <span class="label label-info">
                                                                         {{ account.accountType.type }}
                                                                     </span>
+                                                                </td>
+                                                                <td>
+                                                                    {% set institution = accountGetMetaField(account, 'institution') %}
+                                                                    {% if institution %}
+                                                                        {{ institution }}
+                                                                    {% else %}
+                                                                        <span class="text-muted">-</span>
+                                                                    {% endif %}
+                                                                </td>
+                                                                <td>
+                                                                    {% set owner = accountGetMetaField(account, 'owner') %}
+                                                                    {% if owner %}
+                                                                        {{ owner }}
+                                                                    {% else %}
+                                                                        <span class="text-muted">-</span>
+                                                                    {% endif %}
+                                                                </td>
+                                                                <td>
+                                                                    {% set productName = accountGetMetaField(account, 'product_name') %}
+                                                                    {% if productName %}
+                                                                        {{ productName }}
+                                                                    {% else %}
+                                                                        <span class="text-muted">-</span>
+                                                                    {% endif %}
                                                                 </td>
                                                                 <td>
                                                                     {% if account.account_number %}
