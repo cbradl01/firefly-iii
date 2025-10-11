@@ -39,6 +39,8 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Psr\Container\ContainerExceptionInterface;
+use Psr\Container\NotFoundExceptionInterface;
 use ValueError;
 
 use function Safe\parse_url;
@@ -496,18 +498,6 @@ class Steam
         return $number;
     }
 
-    public function filterAccountBalances(array $total, Account $account, bool $convertToPrimary, ?TransactionCurrency $currency = null): array
-    {
-        Log::debug(sprintf('filterAccountBalances(#%d)', $account->id));
-        $return = [];
-        foreach ($total as $key => $value) {
-            $return[$key] = $this->filterAccountBalance($value, $account, $convertToPrimary, $currency);
-        }
-        Log::debug(sprintf('end of filterAccountBalances(#%d)', $account->id));
-
-        return $return;
-    }
-
     public function filterAccountBalance(array $set, Account $account, bool $convertToPrimary, ?TransactionCurrency $currency = null): array
     {
         Log::debug(sprintf('filterAccountBalance(#%d)', $account->id), $set);
@@ -557,6 +547,18 @@ class Steam
         Log::debug(sprintf('Return #%d', $account->id), $set);
 
         return $set;
+    }
+
+    public function filterAccountBalances(array $total, Account $account, bool $convertToPrimary, ?TransactionCurrency $currency = null): array
+    {
+        Log::debug(sprintf('filterAccountBalances(#%d)', $account->id));
+        $return = [];
+        foreach ($total as $key => $value) {
+            $return[$key] = $this->filterAccountBalance($value, $account, $convertToPrimary, $currency);
+        }
+        Log::debug(sprintf('end of filterAccountBalances(#%d)', $account->id));
+
+        return $return;
     }
 
     public function filterSpaces(string $string): string
@@ -1019,48 +1021,6 @@ class Steam
         return Amount::getTransactionCurrencyById((int)$result->data);
     }
 
-    private function groupAndSumTransactions(array $array, string $group, string $field): array
-    {
-        $return = [];
-
-        foreach ($array as $item) {
-            $groupKey          = $item[$group] ?? 'unknown';
-            $return[$groupKey] = bcadd($return[$groupKey] ?? '0', (string)$item[$field]);
-        }
-
-        return $return;
-    }
-
-    private function convertAllBalances(array $others, TransactionCurrency $primary, Carbon $date): string
-    {
-        $total     = '0';
-        $converter = new ExchangeRateConverter();
-        $singleton = PreferencesSingleton::getInstance();
-        foreach ($others as $key => $amount) {
-            $preference = $singleton->getPreference($key);
-
-            try {
-                $currency = $preference ?? Amount::getTransactionCurrencyByCode($key);
-            } catch (FireflyException) {
-                continue;
-            }
-            if (null === $preference) {
-                $singleton->setPreference($key, $currency);
-            }
-            $current    = $amount;
-            if ($currency->id !== $primary->id) {
-                $current = $converter->convert($currency, $primary, $date, $amount);
-                Log::debug(sprintf('Convert %s %s to %s %s', $currency->code, $amount, $primary->code, $current));
-            }
-            $total      = bcadd($current, $total);
-        }
-
-        return $total;
-    }
-
-    /**
-     * @throws FireflyException
-     */
     public function getHostName(string $ipAddress): string
     {
         $host = '';
@@ -1077,6 +1037,23 @@ class Steam
         }
 
         return (string)$host;
+    }
+
+    /**
+     * Get user's language.
+     *
+     * @throws FireflyException
+     * @throws ContainerExceptionInterface
+     * @throws NotFoundExceptionInterface
+     */
+    public function getLanguage(): string // get preference
+    {
+        $preference = app('preferences')->get('language', config('firefly.default_language', 'en_US'))->data;
+        if (!is_string($preference)) {
+            throw new FireflyException(sprintf('Preference "language" must be a string, but is unexpectedly a "%s".', gettype($preference)));
+        }
+
+        return str_replace('-', '_', $preference);
     }
 
     public function getLastActivities(array $accounts): array
@@ -1104,19 +1081,25 @@ class Steam
      */
     public function getLocale(): string // get preference
     {
-        $locale = app('preferences')->get('locale', config('firefly.default_locale', 'equal'))->data;
+        $singleton = PreferencesSingleton::getInstance();
+        $cached    = $singleton->getPreference('locale');
+        if (null !== $cached) {
+            return $cached;
+        }
+        $locale    = app('preferences')->get('locale', config('firefly.default_locale', 'equal'))->data;
         if (is_array($locale)) {
             $locale = 'equal';
         }
         if ('equal' === $locale) {
             $locale = $this->getLanguage();
         }
-        $locale = (string)$locale;
+        $locale    = (string)$locale;
 
         // Check for Windows to replace the locale correctly.
         if ('WIN' === strtoupper(substr(PHP_OS, 0, 3))) {
-            return str_replace('_', '-', $locale);
+            $locale = str_replace('_', '-', $locale);
         }
+        $singleton->setPreference('locale', $locale);
 
         return $locale;
     }
@@ -1229,36 +1212,6 @@ class Steam
         return $amount;
     }
 
-    /**
-     * https://framework.zend.com/downloads/archives
-     *
-     * Convert a scientific notation to float
-     * Additionally fixed a problem with PHP <= 5.2.x with big integers
-     */
-    public function floatalize(string $value): string
-    {
-        $value  = strtoupper($value);
-        if (!str_contains($value, 'E')) {
-            return $value;
-        }
-        Log::debug(sprintf('Floatalizing %s', $value));
-
-        $number = substr($value, 0, (int)strpos($value, 'E'));
-        if (str_contains($number, '.')) {
-            $post   = strlen(substr($number, (int)strpos($number, '.') + 1));
-            $mantis = substr($value, (int)strpos($value, 'E') + 1);
-            if ($mantis < 0) {
-                $post += abs((int)$mantis);
-            }
-
-            // TODO careless float could break financial math.
-            return number_format((float)$value, $post, '.', '');
-        }
-
-        // TODO careless float could break financial math.
-        return number_format((float)$value, 0, '.', '');
-    }
-
     public function opposite(?string $amount = null): ?string
     {
         if (null === $amount) {
@@ -1316,6 +1269,33 @@ class Steam
         return $amount;
     }
 
+    private function convertAllBalances(array $others, TransactionCurrency $primary, Carbon $date): string
+    {
+        $total     = '0';
+        $converter = new ExchangeRateConverter();
+        $singleton = PreferencesSingleton::getInstance();
+        foreach ($others as $key => $amount) {
+            $preference = $singleton->getPreference($key);
+
+            try {
+                $currency = $preference ?? Amount::getTransactionCurrencyByCode($key);
+            } catch (FireflyException) {
+                continue;
+            }
+            if (null === $preference) {
+                $singleton->setPreference($key, $currency);
+            }
+            $current    = $amount;
+            if ($currency->id !== $primary->id) {
+                $current = $converter->convert($currency, $primary, $date, $amount);
+                Log::debug(sprintf('Convert %s %s to %s %s', $currency->code, $amount, $primary->code, $current));
+            }
+            $total      = bcadd((string) $current, $total);
+        }
+
+        return $total;
+    }
+
     private function getCurrencies(Collection $accounts): array
     {
         $currencies               = [];
@@ -1358,5 +1338,17 @@ class Steam
         }
 
         return $accountCurrencies;
+    }
+
+    private function groupAndSumTransactions(array $array, string $group, string $field): array
+    {
+        $return = [];
+
+        foreach ($array as $item) {
+            $groupKey          = $item[$group] ?? 'unknown';
+            $return[$groupKey] = bcadd($return[$groupKey] ?? '0', (string)$item[$field]);
+        }
+
+        return $return;
     }
 }

@@ -49,6 +49,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Cache;
 use Override;
+use Safe\Exceptions\JsonException;
 
 use function Safe\json_decode;
 
@@ -912,6 +913,7 @@ class GroupCollector implements GroupCollectorInterface
 
     /**
      * @throws FireflyException
+     * @throws JsonException
      */
     private function parseAugmentedJournal(TransactionJournal $augumentedJournal): array
     {

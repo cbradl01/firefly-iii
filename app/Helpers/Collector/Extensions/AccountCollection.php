@@ -45,7 +45,6 @@ trait AccountCollection
         Log::warning(sprintf('GroupCollector will be SLOW: accountBalanceIs: "%s" "%s" "%s"', $direction, $operator, $value));
 
         /**
-         * @param int   $index
          * @param array $object
          *
          * @return bool
