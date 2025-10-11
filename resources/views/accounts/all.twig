@@ -69,7 +69,12 @@
                                                                 </td> -->
                                                                 <td>
                                                                     <span class="label label-info">
-                                                                        {{ account.accountType.type }}
+                                                                        {% set accountType = accountGetMetaField(account, 'account_type') %}
+                                                                        {% if accountType %}
+                                                                            {{ accountType }}
+                                                                        {% else %}
+                                                                            {{ account.accountType.type }}
+                                                                        {% endif %}
                                                                     </span>
                                                                 </td>
                                                                 <td>

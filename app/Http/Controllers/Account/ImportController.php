@@ -398,26 +398,29 @@ class ImportController extends Controller
                     if (isset($accountData['account_type'])) {
                         $mapping = $this->classificationService->getFireflyMapping($accountData['account_type']);
                         
-                        // if ($mapping) {
-                            // Use the mapping from the classification system
+                        if ($mapping) {
+                            // Use the mapping from the classification system for Firefly III internal processing
                             $accountData['account_type_name'] = $mapping['firefly_type'];
                             $accountData['account_role'] = $mapping['firefly_role'];
                             
+                            // Keep the descriptive account type as metadata for display
+                            // Don't unset it - let it be stored as metadata
+                            
                             Log::info('Mapped account type using classification system', [
-                                'original_type' => $accountData['account_type'],
+                                'descriptive_type' => $accountData['account_type'],
                                 'firefly_type' => $mapping['firefly_type'],
                                 'firefly_role' => $mapping['firefly_role']
                             ]);
-                        // } else {
-                        //     // Fallback to original behavior if no mapping found
-                        //     $accountData['account_type_name'] = $accountData['account_type'];
+                        } else {
+                            // Fallback to original behavior if no mapping found
+                            $accountData['account_type_name'] = $accountData['account_type'];
                             
-                        //     Log::warning('No classification mapping found for account type', [
-                        //         'account_type' => $accountData['account_type']
-                        //     ]);
-                        // }
+                            Log::warning('No classification mapping found for account type', [
+                                'account_type' => $accountData['account_type']
+                            ]);
+                        }
                         
-                        unset($accountData['account_type']);
+                        // Don't unset account_type - let it be stored as metadata for display
                     }
                     
                     // Debug currency information
@@ -430,8 +433,13 @@ class ImportController extends Controller
                     
                     // Add default currency if not present or is 0
                     if ((!isset($accountData['currency_id']) || $accountData['currency_id'] == 0) && !isset($accountData['currency_code'])) {
-                        $accountData['currency_id'] = 1; // Default to USD
-                        Log::info('Added default currency_id to account data', ['currency_id' => 1]);
+                        // Get the user's primary currency
+                        $primaryCurrency = app('amount')->getPrimaryCurrencyByUserGroup(auth()->user()->userGroup);
+                        $accountData['currency_id'] = $primaryCurrency->id;
+                        Log::info('Added default currency_id to account data', [
+                            'currency_id' => $primaryCurrency->id,
+                            'currency_code' => $primaryCurrency->code
+                        ]);
                     }
                     
                     // Create account directly using the repository

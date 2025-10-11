@@ -846,8 +846,8 @@ return [
     'account_field_requirements' => [
         // Fields shared across ALL account types
         'shared' => [
-            'required' => ['name', 'active', 'currency_id'],
-            'optional' => ['account_number', 'BIC', 'include_net_worth', 'institution', 'owner', 'product_name', 'notes', 'iban']
+            'required' => ['name', 'active', 'currency_id', 'institution', 'owner', 'product_name', 'account_type'],
+            'optional' => ['account_number', 'BIC', 'include_net_worth', 'notes', 'iban']
         ],
         
         // Asset account types (checking, savings, brokerage, etc.)

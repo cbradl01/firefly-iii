@@ -113,6 +113,7 @@ class ShowController extends Controller
         $pageSize         = (int) app('preferences')->get('listPageSize', 50)->data;
         $accountCurrency  = $this->repository->getAccountCurrency($account);
         $currency         = $accountCurrency ?? $this->primaryCurrency;
+        $defaultCurrency  = $this->primaryCurrency;
         
         // Handle sorting parameters
         $sortField        = $request->get('sort', 'date');
@@ -227,6 +228,7 @@ class ShowController extends Controller
                 'showAll',
                 'objectType',
                 'currency',
+                'defaultCurrency',
                 'today',
                 'periods',
                 'subTitleIcon',
@@ -269,6 +271,7 @@ class ShowController extends Controller
         $page            = (int) $request->get('page');
         $pageSize        = (int) app('preferences')->get('listPageSize', 50)->data;
         $currency        = $this->repository->getAccountCurrency($account) ?? $this->primaryCurrency;
+        $defaultCurrency = $this->primaryCurrency;
         
         // Handle sorting parameters
         $sortField       = $request->get('sort', 'date');
@@ -350,6 +353,7 @@ class ShowController extends Controller
                 'isLiability',
                 'attachments',
                 'currency',
+                'defaultCurrency',
                 'today',
                 'chartUrl',
                 'periods',

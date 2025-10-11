@@ -41,6 +41,7 @@ use NumberFormatter;
  */
 class Amount
 {
+    use CachedMethod;
     /**
      * This method will properly format the given number, in color or "black and white",
      * as a currency, given two things: the currency required and the current locale.
@@ -201,23 +202,16 @@ class Amount
 
     public function getPrimaryCurrencyByUserGroup(UserGroup $userGroup): TransactionCurrency
     {
-        $cache   = new CacheProperties();
-        $cache->addProperty('getPrimaryCurrencyByGroup');
-        $cache->addProperty($userGroup->id);
-        if ($cache->has()) {
-            return $cache->get();
-        }
-
-        /** @var null|TransactionCurrency $primary */
-        $primary = $userGroup->currencies()->where('group_default', true)->first();
-        if (null === $primary) {
-            $primary = $this->getSystemCurrency();
-            // could be the user group has no default right now.
-            $userGroup->currencies()->sync([$primary->id => ['group_default' => true]]);
-        }
-        $cache->store($primary);
-
-        return $primary;
+        return $this->cachedMethod('getPrimaryCurrencyByGroup', [$userGroup->id], function() use ($userGroup) {
+            /** @var null|TransactionCurrency $primary */
+            $primary = $userGroup->currencies()->where('group_default', true)->first();
+            if (null === $primary) {
+                $primary = $this->getSystemCurrency();
+                // could be the user group has no default right now.
+                $userGroup->currencies()->sync([$primary->id => ['group_default' => true]]);
+            }
+            return $primary;
+        });
     }
 
     public function getSystemCurrency(): TransactionCurrency

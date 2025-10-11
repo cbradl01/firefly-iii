@@ -49,22 +49,58 @@
                                     <tr>
                                         <td style="width:40%;">{{ trans('list.current_balance') }}</td>
                                         <td>
-                                            {% if balances.balance %}
+                                            {% if balances.balance is defined and balances.balance is not empty and balances.balance != "0" %}
                                                 {{ formatAmountBySymbol(balances.balance, currency.symbol, currency.decimal_places, true)|raw }}
-                                            {% elseif balances.pc_balance %}
+                                            {% elseif balances.pc_balance is defined and balances.pc_balance is not empty and balances.pc_balance != "0" %}
                                                 {{ formatAmountBySymbol(balances.pc_balance, defaultCurrency.symbol, defaultCurrency.decimal_places, true)|raw }}
                                             {% else %}
-                                                {{ 'no_data'|_ }}
+                                                <span class="text-muted">N/A</span>
                                             {% endif %}
                                         </td>
                                     </tr>
                                     <tr>
-                                        <td style="width:40%;">{{ trans('list.name') }}</td>
-                                        <td>{{ account.name|escape }}</td>
+                                        <td>Owner</td>
+                                        <td>
+                                            {% set owner = accountGetMetaField(account, 'owner') %}
+                                            {% if owner %}
+                                                {{ owner }}
+                                            {% else %}
+                                                <span class="text-muted">-</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td>Institution</td>
+                                        <td>
+                                            {% set institution = accountGetMetaField(account, 'institution') %}
+                                            {% if institution %}
+                                                {{ institution }}
+                                            {% else %}
+                                                <span class="text-muted">-</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td>Product Name</td>
+                                        <td>
+                                            {% set productName = accountGetMetaField(account, 'product_name') %}
+                                            {% if productName %}
+                                                {{ productName }}
+                                            {% else %}
+                                                <span class="text-muted">-</span>
+                                            {% endif %}
+                                        </td>
                                     </tr>
                                     <tr>
                                         <td>{{ trans('list.account_type') }}</td>
-                                        <td>{{ account.accountType.type|_ }}</td>
+                                        <td>
+                                            {% set accountType = accountGetMetaField(account, 'account_type') %}
+                                            {% if accountType %}
+                                                {{ accountType }}
+                                            {% else %}
+                                                {{ account.accountType.type|_ }}
+                                            {% endif %}
+                                        </td>
                                     </tr>
                                     {% if account.iban %}
                                     <tr>
