@@ -157,7 +157,7 @@ class UniqueIban implements ValidationRule
                         ->accounts()
                         ->leftJoin('account_types', 'account_types.id', '=', 'accounts.account_type_id')
                         ->where('accounts.iban', $iban)
-                        ->whereIn('account_types.type', $typesArray)
+                        ->whereIn('account_types.name', $typesArray)
         ;
 
         if ($this->account instanceof Account) {

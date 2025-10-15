@@ -43,8 +43,7 @@ class AccountList implements BinderInterface
             if ('allAssetAccounts' === $value) {
                 /** @var Collection $collection */
                 $collection = auth()->user()->accounts()
-                    ->leftJoin('account_types', 'account_types.id', '=', 'accounts.account_type_id')
-                    ->whereIn('account_types.type', [AccountTypeEnum::ASSET->value, AccountTypeEnum::LOAN->value, AccountTypeEnum::DEBT->value, AccountTypeEnum::MORTGAGE->value])
+                    ->accountTypeIn([AccountTypeEnum::ASSET->value, AccountTypeEnum::LOAN->value, AccountTypeEnum::DEBT->value, AccountTypeEnum::MORTGAGE->value])
                     ->orderBy('accounts.name', 'ASC')
                     ->get(['accounts.*'])
                 ;
@@ -55,7 +54,6 @@ class AccountList implements BinderInterface
 
                 /** @var Collection $collection */
                 $collection = auth()->user()->accounts()
-                    ->leftJoin('account_types', 'account_types.id', '=', 'accounts.account_type_id')
                     ->whereIn('accounts.id', $list)
                     ->orderBy('accounts.name', 'ASC')
                     ->get(['accounts.*'])

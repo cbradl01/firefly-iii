@@ -527,6 +527,16 @@ class User extends Authenticatable
         return $this->hasMany(Webhook::class);
     }
 
+    /**
+     * Get all financial entities this user has permissions for
+     */
+    public function financialEntities(): BelongsToMany
+    {
+        return $this->belongsToMany(\FireflyIII\Models\FinancialEntity::class, 'user_entity_permissions', 'user_id', 'entity_id')
+            ->withPivot(['permission_level', 'permission_metadata', 'is_active'])
+            ->withTimestamps();
+    }
+
     protected function casts(): array
     {
         return [
