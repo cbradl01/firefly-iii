@@ -29,6 +29,7 @@ use FireflyIII\Models\Account;
 use FireflyIII\Support\Facades\Steam;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Override;
 
@@ -299,22 +300,26 @@ trait AccountCollection
         if (false === $this->hasAccountInfo) {
             // join source account table
             $this->query->leftJoin('accounts as source_account', 'source_account.id', '=', 'source.account_id');
-            // join source account type table
+            // join source account type, category and behavior tables
             $this->query->leftJoin('account_types as source_account_type', 'source_account_type.id', '=', 'source_account.account_type_id');
+            $this->query->leftJoin('account_categories as source_account_category', 'source_account_category.id', '=', 'source_account_type.category_id');
+            $this->query->leftJoin('account_behaviors as source_account_behavior', 'source_account_behavior.id', '=', 'source_account_type.behavior_id');
 
             // add source account fields:
             $this->fields[]       = 'source_account.name as source_account_name';
             $this->fields[]       = 'source_account.iban as source_account_iban';
-            $this->fields[]       = 'source_account_type.type as source_account_type';
+            $this->fields[]       = DB::raw('(source_account_category.name || \' \' || source_account_behavior.name) as source_account_type');
 
             // same for dest
             $this->query->leftJoin('accounts as dest_account', 'dest_account.id', '=', 'destination.account_id');
             $this->query->leftJoin('account_types as dest_account_type', 'dest_account_type.id', '=', 'dest_account.account_type_id');
+            $this->query->leftJoin('account_categories as dest_account_category', 'dest_account_category.id', '=', 'dest_account_type.category_id');
+            $this->query->leftJoin('account_behaviors as dest_account_behavior', 'dest_account_behavior.id', '=', 'dest_account_type.behavior_id');
 
             // and add fields:
             $this->fields[]       = 'dest_account.name as destination_account_name';
             $this->fields[]       = 'dest_account.iban as destination_account_iban';
-            $this->fields[]       = 'dest_account_type.type as destination_account_type';
+            $this->fields[]       = DB::raw('(dest_account_category.name || \' \' || dest_account_behavior.name) as destination_account_type');
             $this->hasAccountInfo = true;
         }
 
