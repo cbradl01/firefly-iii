@@ -354,7 +354,10 @@ class ImportController extends Controller
     {
         $subTitle = 'Import ' . ucfirst($objectType) . ' accounts from JSON';
         
-        return view('accounts.import-json', compact('objectType', 'subTitle'));
+        // Get available entities for mapping reference
+        $entityMapping = $this->getEntityMapping();
+        
+        return view('accounts.import-json', compact('objectType', 'subTitle', 'entityMapping'));
     }
 
     /**
@@ -379,6 +382,14 @@ class ImportController extends Controller
             
             if (!is_array($accounts)) {
                 return redirect()->back()->withErrors(['json_file' => 'JSON file must contain an array of accounts']);
+            }
+            
+            // Get entity mapping for owner field
+            $entityMapping = $this->getEntityMapping();
+            
+            // Check if any entities are available for mapping
+            if (empty($entityMapping)) {
+                return redirect()->back()->withErrors(['json_file' => 'No financial entities are available for owner mapping. Please create some entities first before importing accounts.']);
             }
             
             $createdCount = 0;
@@ -442,16 +453,54 @@ class ImportController extends Controller
                         ]);
                     }
                     
+                    // Map owner to entity ID - this is required for import
+                    if (isset($accountData['owner']) && !empty($accountData['owner'])) {
+                        $ownerDisplayName = $accountData['owner'];
+                        if (isset($entityMapping[$ownerDisplayName])) {
+                            $accountData['entity_id'] = $entityMapping[$ownerDisplayName];
+                            Log::info('Mapped owner to entity', [
+                                'owner' => $ownerDisplayName,
+                                'entity_id' => $accountData['entity_id']
+                            ]);
+                        } else {
+                            // Skip this account if owner doesn't match any entity
+                            $skippedCount++;
+                            $skippedReasons[] = "Account " . ($index + 1) . " ('{$accountData['name']}'): Owner '{$ownerDisplayName}' does not match any existing financial entity. Available entities: " . implode(', ', array_keys($entityMapping));
+                            Log::warning('Skipping account - owner not found in entity mapping', [
+                                'account_name' => $accountData['name'],
+                                'owner' => $ownerDisplayName,
+                                'available_entities' => array_keys($entityMapping)
+                            ]);
+                            continue; // Skip to next account
+                        }
+                    } else {
+                        // Skip accounts without owner
+                        $skippedCount++;
+                        $skippedReasons[] = "Account " . ($index + 1) . " ('{$accountData['name']}'): No owner specified. All accounts must have an owner that matches an existing financial entity.";
+                        Log::warning('Skipping account - no owner specified', [
+                            'account_name' => $accountData['name']
+                        ]);
+                        continue; // Skip to next account
+                    }
+                    
                     // Create account directly using the repository
                     Log::info('Creating account from JSON', ['account_data' => $accountData]);
                     Log::info('Owner field check', [
                         'owner' => $accountData['owner'] ?? 'NOT_SET', 
+                        'entity_id' => $accountData['entity_id'] ?? 'NOT_SET',
                         'institution' => $accountData['institution'] ?? 'NOT_SET',
                         'owner_type' => gettype($accountData['owner'] ?? null),
                         'institution_type' => gettype($accountData['institution'] ?? null),
                         'owner_empty' => empty($accountData['owner'] ?? null),
                         'institution_empty' => empty($accountData['institution'] ?? null)
                     ]);
+                    
+                    // Extract beneficiaries data before creating account
+                    $beneficiariesData = null;
+                    if (isset($accountData['beneficiaries'])) {
+                        $beneficiariesData = $accountData['beneficiaries'];
+                        unset($accountData['beneficiaries']); // Remove from account data
+                    }
                     
                     // Use the account factory to create the account
                     $factory = app(\FireflyIII\Factory\AccountFactory::class);
@@ -460,6 +509,11 @@ class ImportController extends Controller
                     
                     if (!$account) {
                         throw new \Exception('Failed to create account');
+                    }
+                    
+                    // Create beneficiaries if provided
+                    if ($beneficiariesData && $account) {
+                        $this->createBeneficiaries($account, $beneficiariesData);
                     }
                     
                     // Update the opening balance transaction to use the real source account
@@ -486,9 +540,16 @@ class ImportController extends Controller
                 }
             }
             
-            $message = "Import completed successfully! Created {$createdCount} accounts.";
-            if ($skippedCount > 0) {
-                $message .= " Skipped {$skippedCount} accounts.";
+            if ($createdCount > 0) {
+                $message = "Import completed successfully! Created {$createdCount} accounts.";
+                if ($skippedCount > 0) {
+                    $message .= " Skipped {$skippedCount} accounts due to owner mapping issues.";
+                }
+            } else {
+                $message = "Import failed! No accounts were created.";
+                if ($skippedCount > 0) {
+                    $message .= " All {$skippedCount} accounts were skipped due to owner mapping issues.";
+                }
             }
             
             if (!empty($skippedReasons)) {
@@ -509,6 +570,34 @@ class ImportController extends Controller
             
             return redirect()->back()->withErrors(['json_file' => 'Error processing JSON file: ' . $e->getMessage()]);
         }
+    }
+
+    /**
+     * Get entity mapping for owner field mapping
+     * Maps owner display names to entity IDs
+     */
+    private function getEntityMapping(): array
+    {
+        $user = Auth::user();
+        
+        // Get all entities that the user has permission to see
+        $entities = \FireflyIII\Models\FinancialEntity::whereHas('users', function ($query) use ($user) {
+            $query->where('user_id', $user->id);
+        })->where('is_active', true)->get();
+        
+        $mapping = [];
+        foreach ($entities as $entity) {
+            // Use display_name if available, otherwise use name
+            $displayName = $entity->display_name ?: $entity->name;
+            $mapping[$displayName] = $entity->id;
+        }
+        
+        Log::info('Entity mapping created', [
+            'mapping' => $mapping,
+            'total_entities' => count($mapping)
+        ]);
+        
+        return $mapping;
     }
     
     /**
@@ -558,6 +647,81 @@ class ImportController extends Controller
             Log::error('Failed to update opening balance source account', [
                 'account_id' => $account->id,
                 'source_account_id' => $sourceAccountId,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * Create beneficiaries for an account from JSON data
+     */
+    private function createBeneficiaries(Account $account, array $beneficiariesData): void
+    {
+        try {
+            // Handle both old format (with primary/contingency) and new format (direct array)
+            $beneficiariesToCreate = [];
+            
+            if (isset($beneficiariesData['primary']) && is_array($beneficiariesData['primary'])) {
+                // Old format: { "primary": [...], "contingency": [...] }
+                foreach ($beneficiariesData['primary'] as $beneficiary) {
+                    $beneficiariesToCreate[] = array_merge($beneficiary, ['priority' => 'primary']);
+                }
+                
+                if (isset($beneficiariesData['contingency']) && is_array($beneficiariesData['contingency'])) {
+                    foreach ($beneficiariesData['contingency'] as $beneficiary) {
+                        $beneficiariesToCreate[] = array_merge($beneficiary, ['priority' => 'secondary']);
+                    }
+                }
+            } elseif (is_array($beneficiariesData)) {
+                // New format: direct array of beneficiaries
+                $beneficiariesToCreate = $beneficiariesData;
+            }
+            
+            foreach ($beneficiariesToCreate as $beneficiaryData) {
+                // Ensure required fields
+                if (!isset($beneficiaryData['name']) || empty($beneficiaryData['name'])) {
+                    continue;
+                }
+                
+                // Set default priority if not specified
+                if (!isset($beneficiaryData['priority'])) {
+                    $beneficiaryData['priority'] = 'primary';
+                }
+                
+                // Validate priority
+                $validPriorities = ['primary', 'secondary', 'tertiary', 'quaternary'];
+                if (!in_array($beneficiaryData['priority'], $validPriorities)) {
+                    $beneficiaryData['priority'] = 'primary';
+                }
+                
+                // Create the beneficiary
+                $beneficiary = new \FireflyIII\Models\Beneficiary([
+                    'account_id' => $account->id,
+                    'name' => $beneficiaryData['name'],
+                    'relationship' => $beneficiaryData['relationship'] ?? null,
+                    'priority' => $beneficiaryData['priority'],
+                    'percentage' => $beneficiaryData['percentage'] ?? null,
+                    'email' => $beneficiaryData['email'] ?? null,
+                    'phone' => $beneficiaryData['phone'] ?? null,
+                    'notes' => $beneficiaryData['notes'] ?? null,
+                ]);
+                
+                $beneficiary->save();
+                
+                Log::info('Created beneficiary for account', [
+                    'account_id' => $account->id,
+                    'account_name' => $account->name,
+                    'beneficiary_name' => $beneficiary->name,
+                    'beneficiary_priority' => $beneficiary->priority,
+                    'beneficiary_percentage' => $beneficiary->percentage,
+                ]);
+            }
+            
+        } catch (\Exception $e) {
+            Log::error('Failed to create beneficiaries for account', [
+                'account_id' => $account->id,
+                'account_name' => $account->name,
+                'beneficiaries_data' => $beneficiariesData,
                 'error' => $e->getMessage()
             ]);
         }

@@ -41,8 +41,31 @@
                                     <li><strong>opening_balance_date</strong> - Opening balance date (YYYY-MM-DD)</li>
                                     <li><strong>account_number</strong> - Account number</li>
                                     <li><strong>notes</strong> - Account notes</li>
+                                    <li><strong>beneficiaries</strong> - Array of beneficiaries with name, relationship, priority, percentage, email, phone, notes</li>
+                                    <li><strong>owner</strong> - Account owner (string, required) - Must match an existing financial entity display name</li>
                                 </ul>
                             </div>
+
+                            {% if entityMapping is not empty %}
+                            <div class="alert alert-warning">
+                                <h4>Available Entities for Owner Mapping</h4>
+                                <p>The following entities are available for mapping the "owner" field in your JSON file:</p>
+                                <ul>
+                                    {% for displayName, entityId in entityMapping %}
+                                        <li><strong>{{ displayName }}</strong> (ID: {{ entityId }})</li>
+                                    {% endfor %}
+                                </ul>
+                                <p><em><strong>Important:</strong> The "owner" field is required for all accounts and must exactly match one of the entity display names listed above. Accounts with missing or unmatched owners will be skipped during import.</em></p>
+                            </div>
+                            {% else %}
+                            <div class="alert alert-warning">
+                                <h4>No Entities Available</h4>
+                                <p>No financial entities are available for owner mapping. Please create some entities first before importing accounts.</p>
+                                <a href="{{ route('financial-entities.index') }}" class="btn btn-primary btn-sm">
+                                    <i class="fa fa-plus"></i> Create Financial Entities
+                                </a>
+                            </div>
+                            {% endif %}
 
                             <div class="alert alert-success">
                                 <h4>Example JSON</h4>
@@ -60,14 +83,40 @@
     "include_net_worth": true
   },
   {
-    "name": "Checking Account",
+    "name": "Roth IRA - USAA",
     "type": "asset",
-    "account_role": "defaultAsset",
+    "account_role": "savingAsset",
     "account_number": "123456",
-    "opening_balance": "5000",
+    "opening_balance": "50000",
     "opening_balance_date": "2023-01-01",
     "active": true,
-    "include_net_worth": true
+    "include_net_worth": true,
+    "beneficiaries": [
+      {
+        "name": "Katie Bradley",
+        "relationship": "spouse",
+        "priority": "primary",
+        "percentage": 60
+      },
+      {
+        "name": "Child 1",
+        "relationship": "child",
+        "priority": "primary",
+        "percentage": 40
+      },
+      {
+        "name": "Child 2",
+        "relationship": "child",
+        "priority": "secondary",
+        "percentage": 50
+      },
+      {
+        "name": "Child 3",
+        "relationship": "child",
+        "priority": "secondary",
+        "percentage": 50
+      }
+    ]
   }
 ]</code></pre>
                             </div>

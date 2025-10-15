@@ -28,6 +28,7 @@ use FireflyIII\Enums\AccountTypeEnum;
 use FireflyIII\Events\StoredAccount;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Models\Account;
+use FireflyIII\Models\AccountTemplate;
 use Illuminate\Support\Facades\Log;
 use FireflyIII\Models\AccountType;
 use FireflyIII\Repositories\Account\AccountRepositoryInterface;
@@ -131,39 +132,89 @@ class AccountFactory
     {
         $accountTypeId   = array_key_exists('account_type_id', $data) ? (int) $data['account_type_id'] : 0;
         $accountTypeName = array_key_exists('account_type_name', $data) ? $data['account_type_name'] : null;
+        $templateName    = array_key_exists('template', $data) ? $data['template'] : null;
+        $category        = array_key_exists('category', $data) ? $data['category'] : null;
+        $behavior        = array_key_exists('behavior', $data) ? $data['behavior'] : null;
         $result          = null;
-        // find by name or ID
-        if ($accountTypeId > 0) {
-            $result = AccountType::find($accountTypeId);
-        }
-        if (null === $result && null !== $accountTypeName) {
-            $result = $this->accountRepository->getAccountTypeByType($accountTypeName);
-        }
-
-        // try with type:
-        if (null === $result) {
-            $types = config(sprintf('firefly.accountTypeByIdentifier.%s', $accountTypeName)) ?? [];
-            if (0 !== count($types)) {
-                $result = AccountType::whereIn('type', $types)->first();
+        
+        // Debug: Log the incoming data
+        Log::debug('AccountFactory::getAccountType - Incoming data:', [
+            'account_type_id' => $accountTypeId,
+            'account_type_name' => $accountTypeName,
+            'template' => $templateName,
+            'category' => $category,
+            'behavior' => $behavior,
+            'all_data_keys' => array_keys($data)
+        ]);
+        
+        // 1. Try to find by template name first (highest priority)
+        if (null !== $templateName) {
+            Log::debug(sprintf('Looking for template with name: "%s"', $templateName));
+            $template = AccountTemplate::where('name', $templateName)->where('active', true)->first();
+            if ($template) {
+                $result = $template->accountType;
+                Log::debug(sprintf('Found account type via template "%s": "%s"', $templateName, $result->name));
+            } else {
+                Log::debug(sprintf('No template found with name: "%s"', $templateName));
+                // Let's also check what templates exist
+                $allTemplates = AccountTemplate::where('active', true)->pluck('name')->toArray();
+                Log::debug('Available templates:', $allTemplates);
             }
         }
+        
+        // 2. Try to find by account_type_id (direct lookup in new system)
+        if (null === $result && $accountTypeId > 0) {
+            $result = AccountType::find($accountTypeId);
+        }
+        
+        // 3. Try to find by account_type_name
+        if (null === $result && null !== $accountTypeName) {
+            $result = AccountType::where('name', $accountTypeName)->where('active', true)->first();
+        }
+        
+        // 4. Try to find by category and behavior combination
+        if (null === $result && null !== $category && null !== $behavior) {
+            $result = $this->findAccountTypeByCategoryAndBehavior($category, $behavior);
+        }
+
         if (null === $result) {
-            Log::warning(sprintf('Found NO account type based on %d and "%s"', $accountTypeId, $accountTypeName));
+            Log::warning(sprintf('Found NO account type based on %d and "%s" (template: %s, category: %s, behavior: %s)', $accountTypeId, $accountTypeName, $templateName, $category, $behavior));
 
             throw new FireflyException(sprintf('AccountFactory::create() was unable to find account type #%d ("%s").', $accountTypeId, $accountTypeName));
         }
-        Log::debug(sprintf('Found account type based on %d and "%s": "%s"', $accountTypeId, $accountTypeName, $result->type));
+        
+        Log::debug(sprintf('Found account type based on %d and "%s" (template: %s, category: %s, behavior: %s): "%s"', $accountTypeId, $accountTypeName, $templateName, $category, $behavior, $result->name));
 
         return $result;
+    }
+
+    /**
+     * Find account type by category and behavior
+     */
+    private function findAccountTypeByCategoryAndBehavior(string $category, string $behavior): ?AccountType
+    {
+        // Get category and behavior IDs
+        $categoryModel = $this->accountRepository->getAccountCategoryByName($category);
+        $behaviorModel = $this->accountRepository->getAccountBehaviorByName($behavior);
+        
+        if (!$categoryModel || !$behaviorModel) {
+            return null;
+        }
+
+        // Find account type by category and behavior
+        return AccountType::where('category_id', $categoryModel->id)
+            ->where('behavior_id', $behaviorModel->id)
+            ->where('active', true)
+            ->first();
     }
 
     public function find(string $accountName, string $accountType): ?Account
     {
         Log::debug(sprintf('Now in AccountFactory::find("%s", "%s")', $accountName, $accountType));
-        $type = AccountType::whereType($accountType)->first();
+        $type = $this->accountRepository->getAccountTypeByType($accountType);
 
         /** @var null|Account */
-        return $this->user->accounts()->where('account_type_id', $type->id)->where('name', $accountName)->first();
+        return $this->user->accounts()->where('name', $accountName)->first();
     }
 
     /**
@@ -176,10 +227,20 @@ class AccountFactory
         // create it:
         $virtualBalance = array_key_exists('virtual_balance', $data) ? $data['virtual_balance'] : null;
         $active         = array_key_exists('active', $data) ? $data['active'] : true;
+        $templateName   = array_key_exists('template', $data) ? $data['template'] : null;
+        
+        // Find template if specified
+        $template = null;
+        if ($templateName) {
+            $template = AccountTemplate::where('name', $templateName)->where('active', true)->first();
+        }
+        
         $databaseData   = [
             'user_id'         => $this->user->id,
             'user_group_id'   => $this->user->user_group_id,
             'account_type_id' => $type->id,
+            'template_id'     => $template?->id,
+            'entity_id'       => $data['entity_id'] ?? null,
             'name'            => $data['name'],
             'order'           => 25000,
             'virtual_balance' => $virtualBalance,
