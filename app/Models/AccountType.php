@@ -26,6 +26,7 @@ namespace FireflyIII\Models;
 use Deprecated;
 use FireflyIII\Support\Models\ReturnsIntegerIdTrait;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class AccountType extends Model
@@ -88,23 +89,81 @@ class AccountType extends Model
     /** @deprecated */
     public const string REVENUE          = 'Revenue account';
 
-    protected $casts
-                                         = [
-            'created_at' => 'datetime',
-            'updated_at' => 'datetime',
-        ];
+    protected $fillable = [
+        'name',
+        'category_id',
+        'behavior_id',
+        'description',
+        'firefly_mapping',
+        'active',
+    ];
 
-    protected $fillable                  = ['type'];
+    protected $casts = [
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
+        'active' => 'boolean',
+    ];
 
     public function accounts(): HasMany
     {
         return $this->hasMany(Account::class);
     }
 
-    protected function casts(): array
+    public function category(): BelongsTo
     {
-        return [
-            // 'type' => AccountTypeEnum::class,
-        ];
+        return $this->belongsTo(AccountCategory::class);
+    }
+
+    public function behavior(): BelongsTo
+    {
+        return $this->belongsTo(AccountBehavior::class);
+    }
+
+    /**
+     * Get the legacy 'type' attribute for backward compatibility
+     */
+    public function getTypeAttribute(): string
+    {
+        return $this->name;
+    }
+
+    /**
+     * Calculate account balance using the behavior's calculation method
+     */
+    public function calculateBalance(Account $account): float
+    {
+        return $this->behavior->calculateBalance($account);
+    }
+
+    /**
+     * Check if this account type is a container type
+     */
+    public function isContainer(): bool
+    {
+        return $this->behavior->calculation_method === 'sum_contained';
+    }
+
+    /**
+     * Check if this account type is a security type
+     */
+    public function isSecurity(): bool
+    {
+        return $this->behavior->calculation_method === 'shares_times_price';
+    }
+
+    /**
+     * Check if this account type is a simple type
+     */
+    public function isSimple(): bool
+    {
+        return $this->behavior->calculation_method === 'direct_balance';
+    }
+
+    /**
+     * Scope to find account type by name (for backward compatibility with whereType)
+     */
+    public function scopeWhereType($query, string $type)
+    {
+        return $query->where('name', $type);
     }
 }
