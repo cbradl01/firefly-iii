@@ -99,6 +99,24 @@ And to organise everything:
 
 Many more features are listed in the [documentation](https://docs.firefly-iii.org/explanation/firefly-iii/about/introduction/).
 
+### Enhanced Features (Latest Updates)
+
+This version includes significant enhancements for complex financial management:
+
+* **Financial Entities System**: Comprehensive entity management for individuals, trusts, businesses, advisors, and custodians with relationship tracking and trustee assignments.
+* **Account Templates**: Predefined account configurations for streamlined account creation and standardized account structures.
+* **Advanced Account Classification**: Flexible account categorization with behaviors, metadata support, and hierarchical relationships.
+* **Beneficiaries Management**: Track account beneficiaries for inheritance planning and estate management.
+* **Entity-Based Account Import**: Import accounts with automatic mapping to existing financial entities using display names.
+* **Modal-Based UI**: Modern interface with unified create/edit modals and improved user experience.
+* **Enhanced Validation**: Strict validation for entity relationships and account ownership requirements.
+
+For detailed implementation information, see:
+- [Financial Entities Implementation](FINANCIAL_ENTITIES_IMPLEMENTATION.md)
+- [Technical Decisions](TECHNICAL_DECISIONS.md)
+- [UI/UX Improvements](UI_UX_IMPROVEMENTS.md)
+- [Development Summary](DEVELOPMENT_SUMMARY.md)
+
 ## Who's it for?
 <img src="https://raw.githubusercontent.com/firefly-iii/firefly-iii/develop/.github/assets/img/iphone-complete.png" alt="Firefly III on iPhone" align="left" width="250">
 
