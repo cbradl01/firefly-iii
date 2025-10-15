@@ -91,24 +91,17 @@ class AccountFieldValidationService
             );
         }
 
-        // Add type-specific fields
-        $typeKey = $this->getAccountTypeKey($accountType);
-        if (isset($requirements[$typeKey])) {
+        // Add type-specific fields from metadata schema
+        if (isset($requirements['type_specific'])) {
             $validFields = array_merge(
                 $validFields,
-                $requirements[$typeKey]['required'],
-                $requirements[$typeKey]['optional']
+                $requirements['type_specific']['required'] ?? [],
+                $requirements['type_specific']['optional'] ?? []
             );
         }
 
-        // Add credit card asset specific fields (with safety check)
-        if ($this->isCreditCardAsset($accountType, $data) && isset($requirements['credit_card_asset'])) {
-            $validFields = array_merge(
-                $validFields,
-                $requirements['credit_card_asset']['required'] ?? [],
-                $requirements['credit_card_asset']['optional'] ?? []
-            );
-        }
+        // All field requirements now come from metadata_schema
+        // No fallback to old config-based approach needed
 
         return array_unique($validFields);
     }
@@ -121,16 +114,36 @@ class AccountFieldValidationService
      */
     public function getFieldRequirements(AccountType $accountType): array
     {
-        $requirements = config('firefly.account_field_requirements', []);
+        // Get requirements from the account type's metadata schema
+        $metadataSchema = $accountType->metadata_schema;
+        if ($metadataSchema) {
+            $schema = is_string($metadataSchema) ? json_decode($metadataSchema, true) : $metadataSchema;
+            
+            if ($schema && isset($schema['required_fields']) && isset($schema['optional_fields'])) {
+                return [
+                    'shared' => [
+                        'required' => ['name', 'active', 'currency_id', 'institution', 'owner', 'product_name'],
+                        'optional' => ['account_number', 'BIC', 'include_net_worth', 'notes', 'iban', 'category', 'behavior', 'account_type']
+                    ],
+                    'type_specific' => [
+                        'required' => $schema['required_fields'] ?? [],
+                        'optional' => $schema['optional_fields'] ?? []
+                    ]
+                ];
+            }
+        }
         
-        // Add debugging to help identify configuration issues
-        Log::error('AccountFieldValidationService::getFieldRequirements', [
-            'requirements_keys' => array_keys($requirements),
-            'has_shared' => isset($requirements['shared']),
-            'requirements' => $requirements
-        ]);
-        
-        return $requirements;
+        // No fallback - all requirements should come from metadata_schema
+        return [
+            'shared' => [
+                'required' => ['name', 'active', 'currency_id', 'institution', 'owner', 'product_name'],
+                'optional' => ['account_number', 'BIC', 'include_net_worth', 'notes', 'iban', 'category', 'behavior', 'account_type']
+            ],
+            'type_specific' => [
+                'required' => [],
+                'optional' => []
+            ]
+        ];
     }
 
     /**
@@ -150,15 +163,9 @@ class AccountFieldValidationService
             $requiredFields = array_merge($requiredFields, $requirements['shared']['required'] ?? []);
         }
 
-        // Add type-specific required fields
-        $typeKey = $this->getAccountTypeKey($accountType);
-        if (isset($requirements[$typeKey]['required'])) {
-            $requiredFields = array_merge($requiredFields, $requirements[$typeKey]['required']);
-        }
-
-        // Add credit card asset specific required fields (with safety check)
-        if ($this->isCreditCardAsset($accountType, $data) && isset($requirements['credit_card_asset'])) {
-            $requiredFields = array_merge($requiredFields, $requirements['credit_card_asset']['required'] ?? []);
+        // Add type-specific required fields from metadata_schema
+        if (isset($requirements['type_specific'])) {
+            $requiredFields = array_merge($requiredFields, $requirements['type_specific']['required'] ?? []);
         }
 
         return array_unique($requiredFields);
@@ -181,15 +188,9 @@ class AccountFieldValidationService
             $optionalFields = array_merge($optionalFields, $requirements['shared']['optional'] ?? []);
         }
 
-        // Add type-specific optional fields
-        $typeKey = $this->getAccountTypeKey($accountType);
-        if (isset($requirements[$typeKey]['optional'])) {
-            $optionalFields = array_merge($optionalFields, $requirements[$typeKey]['optional']);
-        }
-
-        // Add credit card asset specific optional fields (with safety check)
-        if ($this->isCreditCardAsset($accountType, $data) && isset($requirements['credit_card_asset'])) {
-            $optionalFields = array_merge($optionalFields, $requirements['credit_card_asset']['optional'] ?? []);
+        // Add type-specific optional fields from metadata_schema
+        if (isset($requirements['type_specific'])) {
+            $optionalFields = array_merge($optionalFields, $requirements['type_specific']['optional'] ?? []);
         }
 
         return array_unique($optionalFields);
@@ -218,45 +219,6 @@ class AccountFieldValidationService
         return true;
     }
 
-    /**
-     * Get the account type key for field requirements lookup
-     *
-     * @param AccountType $accountType
-     * @return string
-     */
-    private function getAccountTypeKey(AccountType $accountType): string
-    {
-        // Map Firefly III account types to our field requirement keys
-        switch ($accountType->type) {
-            case AccountTypeEnum::ASSET->value:
-            case AccountTypeEnum::DEFAULT->value:
-            case AccountTypeEnum::BROKERAGE->value:
-            case AccountTypeEnum::CASH->value:
-                return 'asset';
-                
-            case AccountTypeEnum::LOAN->value:
-            case AccountTypeEnum::DEBT->value:
-            case AccountTypeEnum::MORTGAGE->value:
-            case AccountTypeEnum::CREDITCARD->value:
-                return 'liability';
-                
-            case AccountTypeEnum::EXPENSE->value:
-            case AccountTypeEnum::BENEFICIARY->value:
-                return 'expense';
-                
-            case AccountTypeEnum::REVENUE->value:
-                return 'revenue';
-                
-            case AccountTypeEnum::IMPORT->value:
-                return 'import';
-                
-            case AccountTypeEnum::HOLDING->value:
-                return 'holding';
-                
-            default:
-                return 'asset'; // Default fallback
-        }
-    }
 
     /**
      * Get field requirements summary for an account type (useful for UI/documentation)

@@ -63,9 +63,8 @@ class AccountSearch implements GenericSearchInterface
     public function search(): Collection
     {
         $searchQuery   = $this->user->accounts()
-            ->leftJoin('account_types', 'accounts.account_type_id', '=', 'account_types.id')
             ->leftJoin('account_meta', 'accounts.id', '=', 'account_meta.account_id')
-            ->whereIn('account_types.type', $this->types)
+            ->accountTypeIn($this->types)
         ;
         $like          = sprintf('%%%s%%', $this->query);
         $originalQuery = $this->query;

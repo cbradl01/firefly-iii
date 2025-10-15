@@ -29,6 +29,8 @@ use FireflyIII\Enums\TransactionTypeEnum;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Factory\AccountFactory;
 use FireflyIII\Models\Account;
+use FireflyIII\Models\AccountBehavior;
+use FireflyIII\Models\AccountCategory;
 use FireflyIII\Models\AccountMeta;
 use FireflyIII\Models\AccountType;
 use FireflyIII\Models\Attachment;
@@ -121,8 +123,7 @@ class AccountRepository implements AccountRepositoryInterface, UserGroupInterfac
         ;
 
         if (0 !== count($types)) {
-            $dbQuery->leftJoin('account_types', 'accounts.account_type_id', '=', 'account_types.id');
-            $dbQuery->whereIn('account_types.type', $types);
+            $dbQuery->accountTypeIn($types);
         }
 
         /** @var null|Account */
@@ -135,8 +136,7 @@ class AccountRepository implements AccountRepositoryInterface, UserGroupInterfac
         $query = $this->user->accounts()->where('iban', '!=', '')->whereNotNull('iban');
 
         if (0 !== count($types)) {
-            $query->leftJoin('account_types', 'accounts.account_type_id', '=', 'account_types.id');
-            $query->whereIn('account_types.type', $types);
+            $query->accountTypeIn($types);
         }
 
         /** @var null|Account */
@@ -148,8 +148,7 @@ class AccountRepository implements AccountRepositoryInterface, UserGroupInterfac
         $query   = $this->user->accounts();
 
         if (0 !== count($types)) {
-            $query->leftJoin('account_types', 'accounts.account_type_id', '=', 'account_types.id');
-            $query->whereIn('account_types.type', $types);
+            $query->accountTypeIn($types);
         }
         Log::debug(sprintf('Searching for account named "%s" (of user #%d) of the following type(s)', $name, $this->user->id), ['types' => $types]);
 
@@ -178,7 +177,27 @@ class AccountRepository implements AccountRepositoryInterface, UserGroupInterfac
      */
     public function getAccountTypeByType(string $type): ?AccountType
     {
-        return AccountType::whereType(ucfirst($type))->first();
+        // Find the account type by name in the account_types table
+        return AccountType::where('name', ucfirst($type))
+            ->where('active', true)
+            ->first();
+    }
+    
+
+    /**
+     * Get account category by name
+     */
+    public function getAccountCategoryByName(string $name): ?AccountCategory
+    {
+        return AccountCategory::where('name', $name)->first();
+    }
+
+    /**
+     * Get account behavior by name
+     */
+    public function getAccountBehaviorByName(string $name): ?AccountBehavior
+    {
+        return AccountBehavior::where('name', $name)->first();
     }
 
     public function getAccountsById(array $accountIds): Collection
@@ -206,8 +225,7 @@ class AccountRepository implements AccountRepositoryInterface, UserGroupInterfac
         if (0 !== count($types)) {
             $query->accountTypeIn($types);
         }
-        $query->where('active', true);
-        $query->orderBy('accounts.account_type_id', 'ASC');
+        $query->where('accounts.active', true);
         $query->orderBy('accounts.order', 'ASC');
         $query->orderBy('accounts.name', 'ASC');
 
@@ -270,8 +288,7 @@ class AccountRepository implements AccountRepositoryInterface, UserGroupInterfac
         if (0 !== count($types)) {
             $query->accountTypeIn($types);
         }
-        $query->where('active', 0);
-        $query->orderBy('accounts.account_type_id', 'ASC');
+        $query->where('accounts.active', 0);
         $query->orderBy('accounts.order', 'ASC');
         $query->orderBy('accounts.name', 'ASC');
 
@@ -502,7 +519,6 @@ class AccountRepository implements AccountRepositoryInterface, UserGroupInterfac
             }
             $query->orderBy('accounts.active', 'DESC');
             $query->orderBy('accounts.name', 'ASC');
-            $query->orderBy('accounts.account_type_id', 'ASC');
             $query->orderBy('accounts.id', 'ASC');
         }
 
@@ -584,11 +600,8 @@ class AccountRepository implements AccountRepositoryInterface, UserGroupInterfac
     public function resetAccountOrder(): void
     {
         $sets = [
-            [AccountTypeEnum::DEFAULT->value, AccountTypeEnum::ASSET->value],
-            // [AccountTypeEnum::EXPENSE->value, AccountTypeEnum::BENEFICIARY->value],
-            // [AccountTypeEnum::REVENUE->value],
-            [AccountTypeEnum::LOAN->value, AccountTypeEnum::DEBT->value, AccountTypeEnum::CREDITCARD->value, AccountTypeEnum::MORTGAGE->value],
-            // [AccountTypeEnum::CASH->value, AccountTypeEnum::INITIAL_BALANCE->value, AccountTypeEnum::IMPORT->value, AccountTypeEnum::RECONCILIATION->value],
+            ['Default account', 'Asset account', 'Checking Account', 'Savings Account', 'Cash account', 'Brokerage account', 'Individual Brokerage', 'Joint Brokerage', 'Roth IRA', 'Traditional IRA', '401(k)', 'Solo 401(k)', 'Health Savings Account (HSA)', 'Cryptocurrency', 'Digital Wallet', 'Private Equity', 'Bonds', 'Beneficiary account', 'Import account', 'Initial balance account', 'Reconciliation account', 'Custodial Account (UTMA/UGMA)', 'Coverdell ESA', 'Business Checking', 'Payment Processor'],
+            ['Credit card', 'Debt', 'Loan', 'Auto Loan', 'Mortgage', 'Personal Loans'],
         ];
         foreach ($sets as $set) {
             $list  = $this->getAccountsByType($set);
@@ -608,11 +621,17 @@ class AccountRepository implements AccountRepositoryInterface, UserGroupInterfac
             }
         }
         // reset the rest to zero.
-        $all  = [AccountTypeEnum::DEFAULT->value, AccountTypeEnum::ASSET->value, AccountTypeEnum::LOAN->value, AccountTypeEnum::DEBT->value, AccountTypeEnum::CREDITCARD->value, AccountTypeEnum::MORTGAGE->value];
-        $this->user->accounts()->leftJoin('account_types', 'account_types.id', '=', 'accounts.account_type_id')
-            ->whereNotIn('account_types.type', $all)
-            ->update(['order' => 0])
-        ;
+        $all  = ['Default account', 'Asset account', 'Checking Account', 'Savings Account', 'Cash account', 'Brokerage account', 'Individual Brokerage', 'Joint Brokerage', 'Roth IRA', 'Traditional IRA', '401(k)', 'Solo 401(k)', 'Health Savings Account (HSA)', 'Cryptocurrency', 'Digital Wallet', 'Private Equity', 'Bonds', 'Beneficiary account', 'Import account', 'Initial balance account', 'Reconciliation account', 'Custodial Account (UTMA/UGMA)', 'Coverdell ESA', 'Business Checking', 'Payment Processor', 'Credit card', 'Debt', 'Loan', 'Auto Loan', 'Mortgage', 'Personal Loans'];
+        
+        // Get account type IDs for the specified types
+        $accountTypeIds = AccountType::whereIn('name', $all)
+            ->where('active', true)
+            ->pluck('id')
+            ->toArray();
+        
+        $this->user->accounts()
+            ->whereNotIn('accounts.account_type_id', $accountTypeIds)
+            ->update(['order' => 0]);
     }
 
     /**
@@ -629,9 +648,8 @@ class AccountRepository implements AccountRepositoryInterface, UserGroupInterfac
     public function searchAccount(string $query, array $types, int $limit): Collection
     {
         $dbQuery = $this->user->accounts()
-            ->where('active', true)
+            ->where('accounts.active', true)
             ->orderBy('accounts.order', 'ASC')
-            ->orderBy('accounts.account_type_id', 'ASC')
             ->orderBy('accounts.name', 'ASC')
             ->with(['accountType'])
         ;
@@ -644,8 +662,7 @@ class AccountRepository implements AccountRepositoryInterface, UserGroupInterfac
             }
         }
         if (0 !== count($types)) {
-            $dbQuery->leftJoin('account_types', 'accounts.account_type_id', '=', 'account_types.id');
-            $dbQuery->whereIn('account_types.type', $types);
+            $dbQuery->accountTypeIn($types);
         }
 
         return $dbQuery->take($limit)->get(['accounts.*']);
@@ -657,7 +674,6 @@ class AccountRepository implements AccountRepositoryInterface, UserGroupInterfac
             ->leftJoin('account_meta', 'accounts.id', '=', 'account_meta.account_id')
             ->where('accounts.active', true)
             ->orderBy('accounts.order', 'ASC')
-            ->orderBy('accounts.account_type_id', 'ASC')
             ->orderBy('accounts.name', 'ASC')
             ->with(['accountType', 'accountMeta'])
         ;
@@ -680,8 +696,7 @@ class AccountRepository implements AccountRepositoryInterface, UserGroupInterfac
             }
         }
         if (0 !== count($types)) {
-            $dbQuery->leftJoin('account_types', 'accounts.account_type_id', '=', 'account_types.id');
-            $dbQuery->whereIn('account_types.type', $types);
+            $dbQuery->accountTypeIn($types);
         }
 
         return $dbQuery->take($limit)->get(['accounts.*']);

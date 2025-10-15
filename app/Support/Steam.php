@@ -1104,20 +1104,6 @@ class Steam
         return $locale;
     }
 
-    /**
-     * Get user's language.
-     *
-     * @throws FireflyException
-     */
-    public function getLanguage(): string // get preference
-    {
-        $preference = app('preferences')->get('language', config('firefly.default_language', 'en_US'))->data;
-        if (!is_string($preference)) {
-            throw new FireflyException(sprintf('Preference "language" must be a string, but is unexpectedly a "%s".', gettype($preference)));
-        }
-
-        return str_replace('-', '_', $preference);
-    }
 
     /**
      * Get user's date format preference.

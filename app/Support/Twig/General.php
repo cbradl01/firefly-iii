@@ -68,6 +68,7 @@ class General extends AbstractExtension
             $this->menuOpenRoutePartial(),
             $this->formatDate(),
             $this->getMetaField(),
+            $this->getBeneficiaries(),
             $this->hasRole(),
             $this->getRootSearchOperator(),
             $this->carbonize(),
@@ -255,6 +256,45 @@ class General extends AbstractExtension
                 }
 
                 return $result;
+            }
+        );
+    }
+
+    protected function getBeneficiaries(): TwigFunction
+    {
+        return new TwigFunction(
+            'accountGetBeneficiaries',
+            static function (Account $account): array {
+                // Get beneficiaries from the new beneficiaries table
+                $beneficiaries = $account->beneficiaries()->orderedByPriority()->get();
+                
+                if ($beneficiaries->isEmpty()) {
+                    return [];
+                }
+                
+                // Group by priority
+                $grouped = [
+                    'primary' => [],
+                    'secondary' => [],
+                    'tertiary' => [],
+                    'quaternary' => []
+                ];
+                
+                foreach ($beneficiaries as $beneficiary) {
+                    $grouped[$beneficiary->priority][] = [
+                        'name' => $beneficiary->name,
+                        'relationship' => $beneficiary->relationship,
+                        'percentage' => $beneficiary->percentage,
+                        'email' => $beneficiary->email,
+                        'phone' => $beneficiary->phone,
+                        'notes' => $beneficiary->notes,
+                    ];
+                }
+                
+                // Remove empty groups
+                return array_filter($grouped, function($group) {
+                    return !empty($group);
+                });
             }
         );
     }
