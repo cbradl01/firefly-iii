@@ -94,4 +94,9 @@ return [
     'exchange_rates_index'   => 'Exchange rates',
     'exchange_rates_rates'   => 'Exchange rates between :from and :to (and the other way around)',
 
+    // financial entities
+    'financial_entities'     => 'Financial Entities',
+    'create_financial_entity' => 'Create Financial Entity',
+    'edit_financial_entity'  => 'Edit Financial Entity',
+
 ];

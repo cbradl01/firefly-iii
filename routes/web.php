@@ -169,6 +169,10 @@ Route::group(
 Route::group(
     ['middleware' => 'user-full-auth', 'namespace' => 'FireflyIII\Http\Controllers', 'prefix' => 'accounts', 'as' => 'accounts.'],
     static function (): void {
+        // modal edit (most specific routes first to avoid conflicts)
+        Route::get('edit/{account}/modal', ['uses' => 'Account\EditController@editModal', 'as' => 'edit.modal']);
+        Route::put('update/{account}/modal', ['uses' => 'Account\EditController@updateModal', 'as' => 'update.modal']);
+        
         // show all accounts:
         Route::get('all', ['uses' => 'Account\IndexController@all', 'as' => 'all']);
         
@@ -181,7 +185,7 @@ Route::group(
             'revenue|asset|expense|liabilities'
         );
         Route::post('store', ['uses' => 'Account\CreateController@store', 'as' => 'store']);
-
+        
         // edit
         Route::get('edit/{account}', ['uses' => 'Account\EditController@edit', 'as' => 'edit']);
         Route::post('update/{account}', ['uses' => 'Account\EditController@update', 'as' => 'update']);
@@ -205,6 +209,11 @@ Route::group(
         Route::get('import/json/{objectType}', ['uses' => 'Account\ImportController@importJson', 'as' => 'import.json'])->where('objectType', 'revenue|asset|expense|liabilities');
         Route::post('import/json/{objectType}', ['uses' => 'Account\ImportController@importFromJson', 'as' => 'import.json.process'])->where('objectType', 'revenue|asset|expense|liabilities');
 
+        // template routes
+        Route::get('templates', ['uses' => 'Account\TemplateController@index', 'as' => 'templates.index']);
+        Route::get('templates/create/{templateName}', ['uses' => 'Account\TemplateController@create', 'as' => 'templates.create']);
+        Route::post('templates/store', ['uses' => 'Account\TemplateController@store', 'as' => 'templates.store']);
+
         // reconcile routes:
         Route::get('reconcile/{account}/index/{start_date?}/{end_date?}', ['uses' => 'Account\ReconcileController@reconcile', 'as' => 'reconcile'])
             ->where(['start_date' => DATEFORMAT])
@@ -227,6 +236,32 @@ Route::group(
             ->where(['start_date' => DATEFORMAT])
             ->where(['end_date' => DATEFORMAT])
         ;
+    }
+);
+
+// Financial Entities Controller.
+Route::group(
+    ['middleware' => 'user-full-auth', 'namespace' => 'FireflyIII\Http\Controllers', 'prefix' => 'financial-entities', 'as' => 'financial-entities.'],
+    static function (): void {
+        Route::get('', ['uses' => 'FinancialEntityController@index', 'as' => 'index']);
+        Route::get('create', ['uses' => 'FinancialEntityController@create', 'as' => 'create']);
+        Route::post('store', ['uses' => 'FinancialEntityController@store', 'as' => 'store']);
+        Route::get('create/modal', ['uses' => 'FinancialEntityController@createModal', 'as' => 'create.modal']);
+        Route::post('store/modal', ['uses' => 'FinancialEntityController@storeModal', 'as' => 'store.modal']);
+        Route::get('show/{id}', ['uses' => 'FinancialEntityController@show', 'as' => 'show']);
+        Route::get('edit/{id}', ['uses' => 'FinancialEntityController@edit', 'as' => 'edit']);
+        Route::put('update/{id}', ['uses' => 'FinancialEntityController@update', 'as' => 'update']);
+        Route::get('edit/{id}/modal', ['uses' => 'FinancialEntityController@editModal', 'as' => 'edit.modal']);
+        Route::put('update/{id}/modal', ['uses' => 'FinancialEntityController@updateModal', 'as' => 'update.modal']);
+        
+        // API routes - put these before the wildcard routes
+        Route::get('autocomplete', ['uses' => 'FinancialEntityController@autocomplete', 'as' => 'autocomplete']);
+        
+        // Wildcard routes - these must come last to avoid conflicts
+        Route::get('{financialEntity}/relationships', ['uses' => 'FinancialEntityController@relationships', 'as' => 'relationships']);
+        Route::get('{financialEntity}/accounts', ['uses' => 'FinancialEntityController@accounts', 'as' => 'accounts']);
+        Route::get('{financialEntity}/statistics', ['uses' => 'FinancialEntityController@statistics', 'as' => 'statistics']);
+        Route::delete('destroy/{financialEntity}', ['uses' => 'FinancialEntityController@destroy', 'as' => 'destroy']);
     }
 );
 

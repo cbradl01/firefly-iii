@@ -30,6 +30,7 @@ use FireflyIII\Models\Bill;
 use FireflyIII\Models\Budget;
 use FireflyIII\Models\BudgetLimit;
 use FireflyIII\Models\Category;
+use FireflyIII\Models\FinancialEntity;
 use FireflyIII\Models\LinkType;
 use FireflyIII\Models\ObjectGroup;
 use FireflyIII\Models\PiggyBank;
@@ -104,7 +105,9 @@ Breadcrumbs::for(
 Breadcrumbs::for(
     'accounts.show',
     static function (Generator $breadcrumbs, Account $account, ?Carbon $start = null, ?Carbon $end = null): void {
-        $what = config('firefly.shortNamesByFullName.'.$account->accountType->type);
+        // Get the category name from the new account classification system
+        $categoryName = $account->accountType->category->name;
+        $what = strtolower($categoryName);
 
         $breadcrumbs->parent('accounts.index', $what);
         $breadcrumbs->push(limitStringLength($account->name), route('accounts.show.all', [$account->id]));
@@ -124,7 +127,9 @@ Breadcrumbs::for(
 Breadcrumbs::for(
     'accounts.show.all',
     static function (Generator $breadcrumbs, Account $account): void {
-        $what = config('firefly.shortNamesByFullName.'.$account->accountType->type);
+        // Get the category name from the new account classification system
+        $categoryName = $account->accountType->category->name;
+        $what = strtolower($categoryName);
 
         $breadcrumbs->parent('accounts.index', $what);
         $breadcrumbs->push(limitStringLength($account->name), route('accounts.show', [$account->id]));
@@ -1369,5 +1374,44 @@ Breadcrumbs::for(
     static function (Generator $breadcrumbs, UserGroup $userGroup): void {
         $breadcrumbs->parent('administrations.index');
         $breadcrumbs->push(trans('firefly.edit_administration_breadcrumb', ['title' => limitStringLength($userGroup->title)]), route('administrations.edit', [$userGroup->id]));
+    }
+);
+
+// FINANCIAL ENTITIES
+Breadcrumbs::for(
+    'financial-entities.index',
+    static function (Generator $breadcrumbs): void {
+        $breadcrumbs->parent('home');
+        $breadcrumbs->push(trans('firefly.financial_entities'), route('financial-entities.index'));
+    }
+);
+
+Breadcrumbs::for(
+    'financial-entities.create',
+    static function (Generator $breadcrumbs): void {
+        $breadcrumbs->parent('financial-entities.index');
+        $breadcrumbs->push(trans('firefly.create_financial_entity'), route('financial-entities.create'));
+    }
+);
+
+Breadcrumbs::for(
+    'financial-entities.show',
+    static function (Generator $breadcrumbs, $id): void {
+        $breadcrumbs->parent('financial-entities.index');
+        // Get the entity from the database to display its name
+        $entity = \FireflyIII\Models\FinancialEntity::find($id);
+        if ($entity) {
+            $breadcrumbs->push(limitStringLength($entity->display_name ?: $entity->name), route('financial-entities.show', [$id]));
+        } else {
+            $breadcrumbs->push(trans('firefly.financial_entity'), route('financial-entities.show', [$id]));
+        }
+    }
+);
+
+Breadcrumbs::for(
+    'financial-entities.edit',
+    static function (Generator $breadcrumbs, $id): void {
+        $breadcrumbs->parent('financial-entities.show', $id);
+        $breadcrumbs->push(trans('firefly.edit_financial_entity'), route('financial-entities.edit', [$id]));
     }
 );
