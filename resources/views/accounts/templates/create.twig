@@ -1,0 +1,250 @@
+{% extends './layout/default' %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-12 col-md-12 col-sm-12">
+        <div class="box">
+            <div class="box-header with-border">
+                <h3 class="box-title">
+                    <span class="fa fa-plus-circle"></span>
+                    Create account from template: {{ template.name }}
+                </h3>
+                <div class="box-tools pull-right">
+                    <a href="{{ route('accounts.templates.index') }}" class="btn btn-default btn-sm">
+                        <span class="fa fa-arrow-left"></span>
+                        {{ ('back_to_templates')|_ }}
+                    </a>
+                </div>
+            </div>
+            <div class="box-body">
+                <div class="row">
+                    <div class="col-md-8">
+                        <form method="POST" action="{{ route('accounts.templates.store') }}" id="account-form">
+                            {{ csrf_field() }}
+                            <input type="hidden" name="template" value="{{ template.name }}">
+                            <input type="hidden" name="account_type_id" value="{{ template.account_type_id }}">
+
+                            <!-- Basic Information -->
+                            <div class="box">
+                                <div class="box-header with-border">
+                                        <h4 class="box-title">
+                                            <span class="fa fa-info-circle"></span>
+                                            Basic Information
+                                        </h4>
+                                </div>
+                                <div class="box-body">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="form-group">
+                                                <label for="name">
+                                                    Account Name <span class="text-danger">*</span>
+                                                </label>
+                                                <input type="text" class="form-control" id="name" name="name" required value="{{ old('name') }}">
+                                                {% if errors.has('name') %}
+                                                    <span class="text-danger">{{ errors.first('name') }}</span>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="form-group">
+                                                <label for="currency_id">
+                                                    Currency <span class="text-danger">*</span>
+                                                </label>
+                                                <select class="form-control" id="currency_id" name="currency_id" required>
+                                                    <option value="">Select Currency</option>
+                                                    {% for currency in allCurrencies %}
+                                                        <option value="{{ currency.id }}" 
+                                                                {{ (old('currency_id') == currency.id) or (not old('currency_id') and defaultCurrency.id == currency.id) ? 'selected' : '' }}>
+                                                            {{ currency.code }} - {{ currency.name }}
+                                                        </option>
+                                                    {% endfor %}
+                                                </select>
+                                                {% if errors.has('currency_id') %}
+                                                    <span class="text-danger">{{ errors.first('currency_id') }}</span>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="form-group">
+                                                <label for="institution">
+                                                    Institution <span class="text-danger">*</span>
+                                                </label>
+                                                <input type="text" class="form-control" id="institution" name="institution" required value="{{ old('institution') }}" placeholder="Enter institution name">
+                                                {% if errors.has('institution') %}
+                                                    <span class="text-danger">{{ errors.first('institution') }}</span>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="form-group">
+                                                <label for="owner">
+                                                    Owner <span class="text-danger">*</span>
+                                                </label>
+                                                <input type="text" class="form-control" id="owner" name="owner" required value="{{ old('owner', userName) }}">
+                                                {% if errors.has('owner') %}
+                                                    <span class="text-danger">{{ errors.first('owner') }}</span>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="form-group">
+                                                <label for="product_name">
+                                                    Product Name <span class="text-danger">*</span>
+                                                </label>
+                                                <input type="text" class="form-control" id="product_name" name="product_name" required value="{{ old('product_name') }}">
+                                                {% if errors.has('product_name') %}
+                                                    <span class="text-danger">{{ errors.first('product_name') }}</span>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="form-group">
+                                                <label for="iban">
+                                                    IBAN
+                                                </label>
+                                                <input type="text" class="form-control" id="iban" name="iban">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Template-Specific Fields -->
+                            {% if suggestedFields|length > 0 %}
+                                <div class="box">
+                                    <div class="box-header with-border">
+                                        <h4 class="box-title">
+                                            <span class="fa fa-cog"></span>
+                                            Template-Specific Fields
+                                        </h4>
+                                    </div>
+                                    <div class="box-body">
+                                        {% for field in suggestedFields %}
+                                            {% if field != 'institution' %}
+                                            <div class="form-group">
+                                                <label for="{{ field }}">
+                                                    {% set fieldDef = fieldDefinitions[field] %}
+                                                    {% if fieldDef %}
+                                                        {{ (fieldDef.label)|_ }}
+                                                    {% else %}
+                                                        {{ field|title|replace({'_': ' '}) }}
+                                                    {% endif %}
+                                                    {% if field in requiredFields %}
+                                                        <span class="text-danger">*</span>
+                                                    {% endif %}
+                                                </label>
+                                                {% set fieldDef = fieldDefinitions[field] %}
+                                                {% if fieldDef and fieldDef.type == 'select' %}
+                                                    <select class="form-control" id="{{ field }}" name="{{ field }}" 
+                                                            {% if field in requiredFields %} required {% endif %}>
+                                                        <option value="">{{ ('select_option')|_ }}</option>
+                                                        {% if fieldDef.options %}
+                                                            {% for option in fieldDef.options %}
+                                                                <option value="{{ option }}">{{ option|title|replace({'_': ' '}) }}</option>
+                                                            {% endfor %}
+                                                        {% endif %}
+                                                    </select>
+                                                {% else %}
+                                                    <input type="{{ fieldDef and fieldDef.type ? fieldDef.type : 'text' }}" 
+                                                           class="form-control" 
+                                                           id="{{ field }}" 
+                                                           name="{{ field }}"
+                                                           {% if field in requiredFields %} required {% endif %}>
+                                                {% endif %}
+                                            </div>
+                                            {% endif %}
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            {% endif %}
+
+                            <!-- Additional Options -->
+                            <div class="box">
+                                <div class="box-header with-border">
+                                        <h4 class="box-title">
+                                            <span class="fa fa-sliders"></span>
+                                            Additional Options
+                                        </h4>
+                                </div>
+                                <div class="box-body">
+                                    <div class="checkbox">
+                                        <label>
+                                            <input type="checkbox" id="active" name="active" value="1" checked>
+                                            Account Active
+                                        </label>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="virtual_balance">
+                                            Virtual Balance
+                                        </label>
+                                        <input type="number" class="form-control" id="virtual_balance" name="virtual_balance" step="0.01">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <a href="{{ route('accounts.templates.index') }}" class="btn btn-default">
+                                    <span class="fa fa-arrow-left"></span>
+                                    Cancel
+                                </a>
+                                <button type="submit" class="btn btn-primary">
+                                    <span class="fa fa-save"></span>
+                                    Create Account
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="box">
+                            <div class="box-header with-border">
+                                <h4 class="box-title">
+                                    <span class="fa fa-info-circle"></span>
+                                    Template Information
+                                </h4>
+                            </div>
+                            <div class="box-body">
+                                <h5>{{ template.name }}</h5>
+                                <p class="text-muted">{{ template.description }}</p>
+                                
+                                <hr>
+                                
+                                <h6>Account Type</h6>
+                                <p class="text-muted">{{ template.accountType.name }}</p>
+                                
+                                <h6>Category</h6>
+                                <p class="text-muted">{{ template.accountType.category.name }}</p>
+                                
+                                <h6>Behavior</h6>
+                                <p class="text-muted">{{ template.accountType.behavior.name }}</p>
+                                
+                                {% if suggestedFields|length > 0 %}
+                                    <hr>
+                                    <h6>Suggested Fields</h6>
+                                    <ul class="list-unstyled">
+                                        {% for field in suggestedFields %}
+                                            {% if field != 'institution' %}
+                                            <li><span class="fa fa-check text-success"></span> 
+                                                {% set fieldDef = fieldDefinitions[field] %}
+                                                {% if fieldDef %}
+                                                    {{ (fieldDef.label)|_ }}
+                                                {% else %}
+                                                    {{ field|title|replace({'_': ' '}) }}
+                                                {% endif %}
+                                            </li>
+                                            {% endif %}
+                                        {% endfor %}
+                                    </ul>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,276 @@
+{% extends './layout/default' %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-12 col-md-12 col-sm-12">
+        <div class="box">
+            <div class="box-header with-border">
+                <h3 class="box-title">
+                    <span class="fa fa-plus-circle"></span>
+                    {{ ('create_new_account')|_ }}
+                </h3>
+                <div class="box-tools pull-right">
+                    <a href="{{ route('accounts.all') }}" class="btn btn-default btn-sm">
+                        <span class="fa fa-arrow-left"></span>
+                        {{ ('back_to_accounts')|_ }}
+                    </a>
+                </div>
+            </div>
+            <div class="box-body">
+                <p class="text-muted">
+                    {{ ('choose_account_template_description')|_ }}
+                </p>
+
+                <!-- Search and Filter Controls -->
+                <div class="row" style="margin-bottom: 20px;">
+                    <div class="col-md-4">
+                        <div class="form-group">
+                            <label for="search">{{ ('search_templates')|_ }}</label>
+                            <input type="text" class="form-control" id="search" name="search" 
+                                   placeholder="{{ ('search_by_name_or_description')|_ }}" 
+                                   value="{{ search }}">
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="category">{{ ('filter_by_category')|_ }}</label>
+                            <select class="form-control" id="category" name="category">
+                                <option value="">{{ ('all_categories')|_ }}</option>
+                                {% for cat in categories %}
+                                    <option value="{{ cat.name }}" {{ category == cat.name ? 'selected' : '' }}>
+                                        {{ cat.name }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="account_type">{{ ('filter_by_type')|_ }}</label>
+                            <select class="form-control" id="account_type" name="account_type">
+                                <option value="">{{ ('all_types')|_ }}</option>
+                                {% for type in accountTypes %}
+                                    <option value="{{ type }}" {{ accountType == type ? 'selected' : '' }}>
+                                        {{ type }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="form-group">
+                            <label for="sort">{{ ('sort_by')|_ }}</label>
+                            <select class="form-control" id="sort" name="sort">
+                                <option value="name" {{ sort == 'name' ? 'selected' : '' }}>{{ ('name')|_ }}</option>
+                                <option value="category" {{ sort == 'category' ? 'selected' : '' }}>{{ ('category')|_ }}</option>
+                                <option value="type" {{ sort == 'type' ? 'selected' : '' }}>{{ ('type')|_ }}</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Results Summary -->
+                {% if search or category or accountType %}
+                    <div class="alert alert-info">
+                        <span class="fa fa-info-circle"></span>
+                        {{ ('showing_results_for')|_ }}: 
+                        {% if search %}<strong>{{ search }}</strong>{% endif %}
+                        {% if category %}{{ ('in_category')|_ }} <strong>{{ category }}</strong>{% endif %}
+                        {% if accountType %}{{ ('of_type')|_ }} <strong>{{ accountType }}</strong>{% endif %}
+                        ({{ templates|length }} {{ ('templates_found')|_ }})
+                    </div>
+                {% endif %}
+
+                {% if templatesByCategory|length == 0 %}
+                    <div class="alert alert-warning text-center">
+                        <span class="fa fa-search"></span>
+                        {{ ('no_templates_found')|_ }}
+                        {% if search or category or accountType %}
+                            <br><small>{{ ('try_adjusting_your_filters')|_ }}</small>
+                        {% endif %}
+                    </div>
+                {% else %}
+                    {% for categoryName, templates in templatesByCategory %}
+                    <div class="row" style="margin-bottom: 30px;">
+                        <div class="col-lg-12">
+                            <h4 class="text-primary">
+                                <span class="fa fa-{{ categoryName == 'Asset' ? 'money' : (categoryName == 'Liability' ? 'landmark' : 'chart-line') }}"></span>
+                                {{ categoryName }} {{ ('accounts')|_ }}
+                            </h4>
+                            
+                            <div class="row">
+                                {% for template in templates %}
+                                    <div class="col-md-6 col-lg-4" style="margin-bottom: 15px;">
+                                        <div class="box template-card" style="cursor: pointer; min-height: 200px;" data-template-name="{{ template.name }}">
+                                            <div class="box-body">
+                                                <h5>
+                                                    <span class="fa fa-{{ template.accountType.category.name == 'Asset' ? 'money' : (template.accountType.category.name == 'Liability' ? 'landmark' : 'chart-line') }}"></span>
+                                                    {{ template.name }}
+                                                </h5>
+                                                <p class="text-muted small">
+                                                    {{ template.description }}
+                                                </p>
+                                                {% if template.suggested_fields and template.suggested_fields|length > 0 %}
+                                                    <div style="margin-top: 10px;">
+                                                        <small class="text-info">
+                                                            <span class="fa fa-info-circle"></span>
+                                                            {{ ('suggested_fields')|_ }}: {{ template.suggested_fields|slice(0, 3)|join(', ') }}
+                                                            {% if template.suggested_fields|length > 3 %}
+                                                                +{{ template.suggested_fields|length - 3 }} {{ ('more')|_ }}
+                                                            {% endif %}
+                                                        </small>
+                                                    </div>
+                                                {% endif %}
+                                            </div>
+                                            <div class="box-footer">
+                                                <button class="btn btn-primary btn-sm btn-block" data-template-name="{{ template.name }}">
+                                                    <span class="fa fa-plus"></span>
+                                                    {{ ('create_account')|_ }}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% endif %}
+
+                <!-- Custom Account Option -->
+                <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd;">
+                    <h4 class="text-muted">
+                        <span class="fa fa-cog"></span>
+                        {{ ('custom_options')|_ }}
+                    </h4>
+                    <div class="row">
+                        <div class="col-md-6 col-lg-4" style="margin-bottom: 15px;">
+                            <div class="box text-center" style="min-height: 150px;">
+                                <div class="box-body">
+                                    <h5>
+                                        <span class="fa fa-plus-circle"></span>
+                                        {{ ('custom_asset_account')|_ }}
+                                    </h5>
+                                    <p class="text-muted">
+                                        {{ ('create_custom_asset_description')|_ }}
+                                    </p>
+                                </div>
+                                <div class="box-footer">
+                                    <a href="{{ route('accounts.create', 'asset') }}" class="btn btn-default btn-sm btn-block">
+                                        <span class="fa fa-plus"></span>
+                                        {{ ('create_custom')|_ }}
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6 col-lg-4" style="margin-bottom: 15px;">
+                            <div class="box text-center" style="min-height: 150px;">
+                                <div class="box-body">
+                                    <h5>
+                                        <span class="fa fa-landmark"></span>
+                                        {{ ('custom_liability_account')|_ }}
+                                    </h5>
+                                    <p class="text-muted">
+                                        {{ ('create_custom_liability_description')|_ }}
+                                    </p>
+                                </div>
+                                <div class="box-footer">
+                                    <a href="{{ route('accounts.create', 'liabilities') }}" class="btn btn-default btn-sm btn-block">
+                                        <span class="fa fa-plus"></span>
+                                        {{ ('create_custom')|_ }}
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script type="text/javascript" nonce="{{ JS_NONCE }}">
+document.addEventListener('DOMContentLoaded', function() {
+    // Add click handlers to template cards
+    document.querySelectorAll('.template-card').forEach(function(card) {
+        card.addEventListener('click', function() {
+            var templateName = this.getAttribute('data-template-name');
+            var baseUrl = "/accounts/templates/create/" + encodeURIComponent(templateName);
+            window.location.href = baseUrl;
+        });
+    });
+    
+    // Add click handlers to buttons (prevent event bubbling)
+    document.querySelectorAll('.template-card button').forEach(function(button) {
+        button.addEventListener('click', function(e) {
+            e.stopPropagation(); // Prevent card click
+            var templateName = this.getAttribute('data-template-name');
+            var baseUrl = "/accounts/templates/create/" + encodeURIComponent(templateName);
+            window.location.href = baseUrl;
+        });
+    });
+    
+    // Search and filter functionality
+    var searchInput = document.getElementById('search');
+    var categorySelect = document.getElementById('category');
+    var accountTypeSelect = document.getElementById('account_type');
+    var sortSelect = document.getElementById('sort');
+    
+    function updateFilters() {
+        var params = new URLSearchParams();
+        
+        if (searchInput.value) {
+            params.set('search', searchInput.value);
+        }
+        if (categorySelect.value) {
+            params.set('category', categorySelect.value);
+        }
+        if (accountTypeSelect.value) {
+            params.set('account_type', accountTypeSelect.value);
+        }
+        if (sortSelect.value) {
+            params.set('sort', sortSelect.value);
+        }
+        
+        var newUrl = window.location.pathname;
+        if (params.toString()) {
+            newUrl += '?' + params.toString();
+        }
+        
+        window.location.href = newUrl;
+    }
+    
+    // Add event listeners for real-time filtering
+    searchInput.addEventListener('input', function() {
+        clearTimeout(this.searchTimeout);
+        this.searchTimeout = setTimeout(updateFilters, 500); // Debounce search
+    });
+    
+    categorySelect.addEventListener('change', updateFilters);
+    accountTypeSelect.addEventListener('change', updateFilters);
+    sortSelect.addEventListener('change', updateFilters);
+    
+    // Clear filters button
+    var clearButton = document.createElement('button');
+    clearButton.type = 'button';
+    clearButton.className = 'btn btn-default btn-sm';
+    clearButton.innerHTML = '<span class="fa fa-times"></span> Clear Filters';
+    clearButton.style.marginTop = '25px';
+    clearButton.addEventListener('click', function() {
+        window.location.href = window.location.pathname;
+    });
+    
+    document.querySelector('.col-md-2 .form-group').appendChild(clearButton);
+});
+</script>
+
+<style>
+.template-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    transition: all 0.2s ease;
+}
+</style>
+{% endblock %}
