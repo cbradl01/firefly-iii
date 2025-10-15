@@ -25,6 +25,8 @@ namespace FireflyIII\Models;
 
 use FireflyIII\Enums\AccountTypeEnum;
 use FireflyIII\Handlers\Observer\AccountObserver;
+use FireflyIII\Models\AccountCategory;
+use FireflyIII\Models\AccountBehavior;
 use FireflyIII\Support\Models\ReturnsIntegerIdTrait;
 use FireflyIII\Support\Models\ReturnsIntegerUserIdTrait;
 use FireflyIII\User;
@@ -50,7 +52,7 @@ class Account extends Model
     use ReturnsIntegerUserIdTrait;
     use SoftDeletes;
 
-    protected $fillable              = ['user_id', 'user_group_id', 'account_type_id', 'name', 'active', 'virtual_balance', 'iban', 'native_virtual_balance'];
+    protected $fillable              = ['user_id', 'user_group_id', 'account_type_id', 'template_id', 'entity_id', 'name', 'active', 'virtual_balance', 'iban', 'native_virtual_balance'];
 
     protected $hidden                = ['encrypted'];
     private bool $joinedAccountTypes = false;
@@ -69,7 +71,7 @@ class Account extends Model
             $user      = auth()->user();
 
             /** @var null|Account $account */
-            $account   = $user->accounts()->with(['accountType'])->find($accountId);
+            $account   = $user->accounts()->with(['accountType.category', 'accountType.behavior'])->find($accountId);
             if (null !== $account) {
                 return $account;
             }
@@ -92,6 +94,94 @@ class Account extends Model
     {
         return $this->belongsTo(AccountType::class);
     }
+
+    public function template(): BelongsTo
+    {
+        return $this->belongsTo(AccountTemplate::class);
+    }
+
+    /**
+     * Get the financial entity that owns this account
+     */
+    public function entity(): BelongsTo
+    {
+        return $this->belongsTo(FinancialEntity::class, 'entity_id');
+    }
+
+    /**
+     * Get all entity roles for this account
+     */
+    public function entityRoles(): HasMany
+    {
+        return $this->hasMany(AccountEntityRole::class);
+    }
+
+    /**
+     * Get all owners of this account
+     */
+    public function owners()
+    {
+        return $this->entityRoles()
+            ->where('role_type', AccountEntityRole::ROLE_OWNER)
+            ->with('entity');
+    }
+
+    /**
+     * Get all beneficiaries of this account (entity roles)
+     */
+    public function beneficiaryEntities()
+    {
+        return $this->entityRoles()
+            ->where('role_type', AccountEntityRole::ROLE_BENEFICIARY)
+            ->with('entity');
+    }
+
+    /**
+     * Get all trustees of this account
+     */
+    public function trustees()
+    {
+        return $this->entityRoles()
+            ->where('role_type', AccountEntityRole::ROLE_TRUSTEE)
+            ->with('entity');
+    }
+
+    /**
+     * Get all custodians of this account
+     */
+    public function custodians()
+    {
+        return $this->entityRoles()
+            ->where('role_type', AccountEntityRole::ROLE_CUSTODIAN)
+            ->with('entity');
+    }
+
+    /**
+     * Get all advisors for this account
+     */
+    public function advisors()
+    {
+        return $this->entityRoles()
+            ->where('role_type', AccountEntityRole::ROLE_ADVISOR)
+            ->with('entity');
+    }
+
+    /**
+     * Get category through account type (computed property)
+     */
+    public function getCategoryAttribute()
+    {
+        return $this->accountType?->category;
+    }
+
+    /**
+     * Get behavior through account type (computed property)
+     */
+    public function getBehaviorAttribute()
+    {
+        return $this->accountType?->behavior;
+    }
+
 
     public function attachments(): MorphMany
     {
@@ -171,15 +261,74 @@ class Account extends Model
         return $this->hasMany(AccountMeta::class);
     }
 
-    /**
-     * Get the user ID
-     */
-    protected function accountTypeId(): Attribute
+    public function accountMetadata(): HasMany
     {
-        return Attribute::make(
-            get: static fn ($value) => (int)$value,
-        );
+        return $this->hasMany(AccountMeta::class);
     }
+
+    public function beneficiaries(): HasMany
+    {
+        return $this->hasMany(Beneficiary::class);
+    }
+
+    // New account classification system relationships
+    public function securityPosition(): HasMany
+    {
+        return $this->hasMany(SecurityPosition::class);
+    }
+
+    public function positionAllocations(): HasMany
+    {
+        return $this->hasMany(PositionAllocation::class, 'container_account_id');
+    }
+
+    public function parentRelationships(): HasMany
+    {
+        return $this->hasMany(AccountRelationship::class, 'parent_account_id');
+    }
+
+    public function childRelationships(): HasMany
+    {
+        return $this->hasMany(AccountRelationship::class, 'child_account_id');
+    }
+
+    public function containedAccounts()
+    {
+        return $this->belongsToMany(Account::class, 'account_relationships', 'parent_account_id', 'child_account_id')
+            ->withPivot(['relationship_type_id', 'metadata'])
+            ->withTimestamps();
+    }
+
+    public function containerAccounts()
+    {
+        return $this->belongsToMany(Account::class, 'account_relationships', 'child_account_id', 'parent_account_id')
+            ->withPivot(['relationship_type_id', 'metadata'])
+            ->withTimestamps();
+    }
+
+    public function cashComponent()
+    {
+        return $this->hasOne(Account::class, 'id')
+            ->whereHas('childRelationships', function ($query) {
+                $query->whereHas('relationshipType', function ($q) {
+                    $q->where('name', 'contains');
+                })->where('metadata->component_type', 'cash');
+            });
+    }
+
+    /**
+     * Get the account type name for backward compatibility
+     */
+    public function getAccountTypeNameAttribute(): string
+    {
+        if ($this->category && $this->behavior) {
+            // Create a virtual account type name based on category and behavior
+            return $this->category->name . ' (' . $this->behavior->name . ')';
+        }
+        
+        return 'Unknown';
+    }
+
 
     #[Scope]
     protected function accountTypeIn(EloquentBuilder $query, array $types): void
@@ -188,8 +337,18 @@ class Account extends Model
             $query->leftJoin('account_types', 'account_types.id', '=', 'accounts.account_type_id');
             $this->joinedAccountTypes = true;
         }
-        $query->whereIn('account_types.type', $types);
+        
+        // Find account type IDs for the given type names
+        $accountTypeIds = AccountType::whereIn('name', $types)
+            ->where('active', true)
+            ->pluck('id')
+            ->toArray();
+        
+        if (!empty($accountTypeIds)) {
+            $query->whereIn('accounts.account_type_id', $accountTypeIds);
+        }
     }
+
 
     protected function casts(): array
     {
@@ -247,5 +406,57 @@ class Account extends Model
 
         return $this->morphMany(PeriodStatistic::class, 'primary_statable');
 
+    }
+
+    /**
+     * Calculate balance using the account type's behavior
+     */
+    public function calculateBalance(): float
+    {
+        return $this->accountType->calculateBalance($this);
+    }
+
+    /**
+     * Check if this account is a container account
+     */
+    public function isContainer(): bool
+    {
+        return $this->accountType->isContainer();
+    }
+
+    /**
+     * Check if this account is a security account
+     */
+    public function isSecurity(): bool
+    {
+        return $this->accountType->isSecurity();
+    }
+
+    /**
+     * Check if this account is a simple account
+     */
+    public function isSimple(): bool
+    {
+        return $this->accountType->isSimple();
+    }
+
+    /**
+     * Get metadata value by key
+     */
+    public function getMetadataValue(string $key, mixed $default = null): mixed
+    {
+        $metadata = $this->accountMetadata()->where('name', $key)->first();
+        return $metadata ? $metadata->parsed_value : $default;
+    }
+
+    /**
+     * Set metadata value
+     */
+    public function setMetadataValue(string $key, mixed $value): void
+    {
+        $this->accountMetadata()->updateOrCreate(
+            ['name' => $key],
+            ['data' => is_array($value) || is_object($value) ? json_encode($value) : (string) $value]
+        );
     }
 }
