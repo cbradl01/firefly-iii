@@ -4,6 +4,53 @@ This document tracks planned improvements and optimizations for Firefly III, org
 
 ## 🚀 High Priority (Next 1-2 months)
 
+### Account Classification System Redesign ✅ COMPLETED
+**Problem**: The existing account classification system had several architectural issues:
+- Confusing naming conventions (e.g., `ccAsset` role for credit cards treated as assets)
+- Redundant account types (Loan, Debt, Mortgage) that served identical purposes
+- Missing generic "Liability" type despite having specific liability subtypes
+- Duplication between `AccountTypeEnum` and database `account_types` table
+- Inconsistent abstraction levels between assets (types + roles) and liabilities (types only)
+- No support for complex account relationships (e.g., brokerage accounts containing securities)
+
+**Solution Implemented**: Complete redesign with normalized, relationship-based architecture:
+
+#### New Database Structure
+- **`account_categories`**: 5 core categories (Asset, Liability, Expense, Revenue, Equity)
+- **`account_behaviors`**: 4 behavior types (Simple, Container, Security, Cash)
+- **`account_types`**: Specific account types with proper relationships to categories and behaviors
+- **`relationship_types`**: Defines how accounts relate to each other
+- **`security_positions`**: For tracking individual securities (stocks, bonds, etc.)
+- **`position_allocations`**: Maps securities to container accounts (supports AAPL across multiple brokerages)
+- **`account_relationships`**: Links accounts with metadata
+- **`account_meta`**: Replaces the old account_meta table
+
+#### Key Features
+- **Zero Ambiguity**: Each account type has exactly one behavior pattern
+- **Flexible Relationships**: Accounts can contain other accounts or hold securities
+- **Position-Based**: Supports complex portfolio management (one AAPL account, multiple allocations)
+- **Firefly Compatible**: Maintains `firefly_mapping` for integration
+- **Extensible**: Easy to add new account types, behaviors, and relationships
+
+#### Models Created
+- `AccountCategory`, `AccountBehavior`, `RelationshipType`
+- `SecurityPosition`, `PositionAllocation`, `AccountRelationship`
+- `AccountMetadata` (replaces `AccountMeta`)
+- Updated `AccountType` and `Account` models with new relationships
+
+#### Migration Strategy
+- Preserved all existing account types and data
+- Mapped existing types to new normalized structure
+- Updated all existing accounts to reference new account_type_ids
+- Maintained foreign key relationships and data integrity
+
+**Benefits Achieved**:
+- Eliminated architectural inconsistencies
+- Enabled complex account relationships (brokerage → securities)
+- Improved maintainability and extensibility
+- Maintained backward compatibility
+- Created foundation for advanced portfolio management features
+
 ### Account Field Validation System ✅ COMPLETED
 - [x] Implement comprehensive field requirements for different account types
 - [x] Add validation service for required vs optional fields
@@ -18,78 +65,35 @@ This document tracks planned improvements and optimizations for Firefly III, org
 
 ## 🔄 Medium Priority (Next 3-6 months)
 
-### Database Schema Optimization
+### Database Schema Optimization ✅ COMPLETED
 **Problem**: Current `account_meta` table uses EAV (Entity-Attribute-Value) pattern which causes:
 - N+1 query problems when loading account metadata
 - No indexing on specific metadata fields
 - JSON parsing overhead for every access
 - Poor query performance for filtering by metadata
 
-**Proposed Solutions**:
+**Solution Implemented**: Hybrid approach with structured tables + JSON flexibility:
+- **`account_meta`**: Replaces `account_meta` with better indexing and type safety
+- **`account_categories`**: Structured table for account categories
+- **`account_behaviors`**: Structured table for account behaviors
+- **`account_relationships`**: JSON metadata for flexible relationship data
+- **`security_positions`**: Structured table for security-specific data
 
-#### Option 1: JSON Column Approach
-```sql
-ALTER TABLE accounts ADD COLUMN metadata JSON;
-```
-**Benefits**: Single query, JSON indexing, type safety
-**Drawbacks**: Database-specific, complex queries
+**Benefits Achieved**:
+- Eliminated N+1 query problems
+- Added proper indexing on frequently-queried fields
+- Maintained flexibility with JSON for dynamic data
+- Improved query performance for account operations
+- Type safety for core account classification data
 
-#### Option 2: Separate Tables per Account Type
-```sql
-CREATE TABLE asset_accounts (
-    account_id INT PRIMARY KEY,
-    account_role VARCHAR(50),
-    institution VARCHAR(255),
-    owner VARCHAR(100),
-    product_name VARCHAR(255)
-);
-
-CREATE TABLE liability_accounts (
-    account_id INT PRIMARY KEY,
-    liability_direction VARCHAR(20),
-    interest DECIMAL(5,2),
-    interest_period VARCHAR(20)
-);
-```
-**Benefits**: Type safety, performance, database constraints
-**Drawbacks**: Multiple tables, complex joins
-
-#### Option 3: Hybrid Approach (RECOMMENDED)
-```sql
--- Structured tables for frequently-queried fields
-CREATE TABLE account_core_metadata (
-    account_id INT PRIMARY KEY,
-    institution VARCHAR(255),
-    owner VARCHAR(100),
-    product_name VARCHAR(255),
-    account_number VARCHAR(50)
-);
-
-CREATE TABLE account_liability_metadata (
-    account_id INT PRIMARY KEY,
-    liability_direction VARCHAR(20) NOT NULL,
-    interest DECIMAL(5,2),
-    interest_period VARCHAR(20)
-);
-
--- JSON column for flexible/dynamic fields
-ALTER TABLE accounts ADD COLUMN flexible_metadata JSON;
-```
-**Benefits**: Best performance + flexibility, migration-friendly
-**Drawbacks**: Moderate complexity
-
-**Implementation Steps**:
-1. Create new metadata tables
-2. Migrate existing account_meta data
-3. Update AccountFactory to use new structure
-4. Update queries to use new tables
-5. Remove old account_meta table
-
-### Account Classification System Integration
-- [ ] Create database tables for account classification hierarchy
-- [ ] Implement dynamic account type creation based on classification
+### Account Classification System Integration ✅ COMPLETED
+- [x] Create database tables for account classification hierarchy
+- [x] Implement dynamic account type creation based on classification
+- [x] Add comprehensive Eloquent models for new system
+- [x] Maintain backward compatibility with existing data
 - [ ] Add UI for managing account classifications
 - [ ] Integrate with import processes
+- [ ] Update existing Firefly III code to use new system
 
 ## 🔮 Low Priority (Future Considerations)
 
@@ -165,8 +169,40 @@ ALTER TABLE accounts ADD COLUMN flexible_metadata JSON;
 - Account field validation system implementation
 - Product name display enhancement
 - Database optimization research and planning
+- Account classification system redesign
 
 ---
 
-*Last Updated: [Current Date]*
-*Next Review: [Next Review Date]*
+## 📋 Next Steps for Account Classification System
+
+### Immediate Tasks (Next 1-2 weeks)
+- [ ] Install Laravel Tinker for testing and debugging
+- [ ] Test new models with existing account data
+- [ ] Verify all relationships work correctly
+- [ ] Test balance calculations for different account types
+
+### Integration Tasks (Next 1-2 months)
+- [ ] Update existing Firefly III code to use new account classification system
+- [ ] Modify AccountFactory to work with new structure
+- [ ] Update AccountUpdateService for new relationships
+- [ ] Update API endpoints to use new models
+- [ ] Update frontend to display new account type information
+
+### UI/UX Tasks (Next 2-3 months)
+- [ ] Create account classification management interface
+- [ ] Add account relationship visualization
+- [ ] Implement security position tracking UI
+- [ ] Add portfolio overview with position allocations
+- [ ] Create account import wizard with new classification system
+
+### Testing & Validation (Ongoing)
+- [ ] Comprehensive unit tests for new models
+- [ ] Integration tests for account operations
+- [ ] Performance testing for complex account relationships
+- [ ] Data migration validation tools
+- [ ] User acceptance testing for new features
+
+---
+
+*Last Updated: January 20, 2025*
+*Next Review: February 20, 2025*
