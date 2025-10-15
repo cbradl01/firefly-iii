@@ -1,0 +1,160 @@
+{% extends './layout/default' %}
+
+{% set shownDemo = true %}
+
+{% block title %}
+    Edit Financial Entity
+{% endblock %}
+
+{% block breadcrumbs %}
+    {{ Breadcrumbs.render(Route.getCurrentRoute().getName(), financialEntity.id) }}
+{% endblock %}
+
+{% block content %}
+    <div class="row">
+        <div class="col-lg-12 col-md-12 col-sm-12">
+            <div class="box" id="financial-entities-edit">
+                <div class="box-header with-border">
+                    <h3 class="box-title">
+                        <i class="fa fa-edit"></i>
+                        Edit Financial Entity
+                    </h3>
+                </div>
+                <div class="box-body">
+                    <form method="POST" action="{{ route('financial-entities.update', financialEntity) }}">
+                        {{ csrf_field() }}
+                        {{ method_field('PUT') }}
+                        
+                        <div class="form-group">
+                            <label for="name">{{ 'entity_name'|_ }} <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="name" name="name" value="{{ old('name', financialEntity.name) }}" required>
+                            {% if errors.has('name') %}
+                                <div class="text-danger">{{ errors.first('name') }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="form-group">
+                            <label for="entity_type">{{ 'entity_type'|_ }} <span class="text-danger">*</span></label>
+                            <select class="form-control" id="entity_type" name="entity_type" required>
+                                <option value="">{{ 'select_entity_type'|_ }}</option>
+                                {% for key, label in entityTypes %}
+                                    <option value="{{ key }}" {{ old('entity_type', financialEntity.entity_type) == key ? 'selected' : '' }}>{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                            {% if errors.has('entity_type') %}
+                                <div class="text-danger">{{ errors.first('entity_type') }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="form-group" id="trustee-selection" style="display: none;">
+                            <label for="trustee_id">{{ 'trustee'|_ }} <span class="text-danger">*</span></label>
+                            <select class="form-control" id="trustee_id" name="trustee_id">
+                                <option value="">{{ 'select_trustee'|_ }}</option>
+                                {% for trustee in trusteeOptions %}
+                                    <option value="{{ trustee.id }}" {{ (old('trustee_id', currentTrustee ? currentTrustee.id : '') == trustee.id) ? 'selected' : '' }}>
+                                        {{ trustee.display_name ?: trustee.name }} ({{ trustee.entity_type|title }})
+                                    </option>
+                                {% endfor %}
+                            </select>
+                            <small class="form-text text-muted">{{ 'trustee_help'|_ }}</small>
+                            {% if errors.has('trustee_id') %}
+                                <div class="text-danger">{{ errors.first('trustee_id') }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="form-group">
+                            <label for="display_name">{{ 'display_name'|_ }}</label>
+                            <input type="text" class="form-control" id="display_name" name="display_name" value="{{ old('display_name', financialEntity.display_name) }}">
+                            <small class="form-text text-muted">{{ 'display_name_help'|_ }}</small>
+                            {% if errors.has('display_name') %}
+                                <div class="text-danger">{{ errors.first('display_name') }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="form-group">
+                            <label for="description">{{ 'description'|_ }}</label>
+                            <textarea class="form-control" id="description" name="description" rows="3">{{ old('description', financialEntity.description) }}</textarea>
+                            {% if errors.has('description') %}
+                                <div class="text-danger">{{ errors.first('description') }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="form-group">
+                            <label for="email">{{ 'email'|_ }}</label>
+                            <input type="email" class="form-control" id="email" name="contact_info[email]" value="{{ old('contact_info.email', financialEntity.contact_info.email ?? '') }}">
+                            {% if errors.has('contact_info.email') %}
+                                <div class="text-danger">{{ errors.first('contact_info.email') }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="form-group">
+                            <label for="phone">{{ 'phone'|_ }}</label>
+                            <input type="tel" class="form-control" id="phone" name="contact_info[phone]" value="{{ old('contact_info.phone', financialEntity.contact_info.phone ?? '') }}">
+                            {% if errors.has('contact_info.phone') %}
+                                <div class="text-danger">{{ errors.first('contact_info.phone') }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="form-group">
+                            <label for="address">{{ 'address'|_ }}</label>
+                            <textarea class="form-control" id="address" name="contact_info[address]" rows="2">{{ old('contact_info.address', financialEntity.contact_info.address ?? '') }}</textarea>
+                            {% if errors.has('contact_info.address') %}
+                                <div class="text-danger">{{ errors.first('contact_info.address') }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="form-group">
+                            <label for="website">{{ 'website'|_ }}</label>
+                            <input type="url" class="form-control" id="website" name="contact_info[website]" value="{{ old('contact_info.website', financialEntity.contact_info.website ?? '') }}">
+                            {% if errors.has('contact_info.website') %}
+                                <div class="text-danger">{{ errors.first('contact_info.website') }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fa fa-save"></i>
+                                {{ 'update_entity'|_ }}
+                            </button>
+                            <a href="{{ route('financial-entities.show', financialEntity) }}" class="btn btn-secondary">
+                                <i class="fa fa-eye"></i>
+                                {{ 'view_entity'|_ }}
+                            </a>
+                            <a href="{{ route('financial-entities.index') }}" class="btn btn-default">
+                                <i class="fa fa-times"></i>
+                                {{ 'cancel'|_ }}
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="text/javascript" nonce="{{ JS_NONCE }}">
+        document.addEventListener('DOMContentLoaded', function() {
+            const entityTypeSelect = document.getElementById('entity_type');
+            const trusteeSelection = document.getElementById('trustee-selection');
+            const trusteeSelect = document.getElementById('trustee_id');
+
+            // Show/hide trustee selection based on entity type
+            function toggleTrusteeSelection() {
+                const type = entityTypeSelect.value;
+                if (type === 'trust') {
+                    trusteeSelection.style.display = 'block';
+                    trusteeSelect.required = true;
+                } else {
+                    trusteeSelection.style.display = 'none';
+                    trusteeSelect.required = false;
+                    trusteeSelect.value = '';
+                }
+            }
+
+            // Initial check - make sure to run after DOM is fully loaded
+            setTimeout(toggleTrusteeSelection, 100);
+
+            // Listen for changes
+            entityTypeSelect.addEventListener('change', toggleTrusteeSelection);
+        });
+    </script>
+{% endblock %}

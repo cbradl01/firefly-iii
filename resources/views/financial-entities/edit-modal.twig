@@ -1,0 +1,89 @@
+{# Define macros for form components #}
+{% macro formGroup(label, name, type, value, required, help, errorId, options) %}
+    <div class="form-group">
+        <label for="{{ name }}">{{ label|_ }}{% if required %} <span class="text-danger">*</span>{% endif %}</label>
+        {% if type == 'textarea' %}
+            <textarea class="form-control" id="{{ name }}" name="{{ name }}" rows="{{ options.rows|default(3) }}">{{ value }}</textarea>
+        {% elseif type == 'select' %}
+            <select class="form-control" id="{{ name }}" name="{{ name }}"{% if required %} required{% endif %}>
+                {% if options.placeholder %}
+                    <option value="">{{ options.placeholder|_ }}</option>
+                {% endif %}
+                {% for key, optionLabel in options.choices %}
+                    <option value="{{ key }}"{{ value == key ? ' selected' : '' }}>{{ optionLabel }}</option>
+                {% endfor %}
+            </select>
+        {% else %}
+            <input type="{{ type }}" class="form-control" id="{{ name }}" name="{{ name }}" value="{{ value }}"{% if required %} required{% endif %}>
+        {% endif %}
+        {% if help %}
+            <small class="form-text text-muted">{{ help|_ }}</small>
+        {% endif %}
+        <div class="text-danger" id="{{ errorId }}" style="display: none;"></div>
+    </div>
+{% endmacro %}
+
+<div class="modal fade" id="editEntityModal" tabindex="-1" role="dialog" aria-labelledby="editEntityModalLabel">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="editEntityModalLabel">
+                    <i class="fa fa-{{ isCreate ? 'plus' : 'edit' }}"></i>
+                    {{ isCreate ? 'Create Financial Entity' : 'Edit Financial Entity' }}
+                </h4>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form id="editEntityForm" method="POST">
+                <div class="modal-body">
+                    <input type="hidden" name="_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="_method" value="{{ isCreate ? 'POST' : 'PUT' }}">
+                    <input type="hidden" name="entity_id" value="{{ isCreate ? '' : financialEntity.id }}">
+                    
+                    {{ _self.formGroup('entity_type', 'entity_type', 'select', old('entity_type', isCreate ? '' : financialEntity.entity_type), true, null, 'entity_type_error', {
+                        'placeholder': 'select_entity_type',
+                        'choices': entityTypes
+                    }) }}
+
+                    {{ _self.formGroup('entity_name', 'name', 'text', old('name', isCreate ? '' : financialEntity.name), true, null, 'name_error') }}
+
+                    <div id="trustee-selection" style="display: none;">
+                        {{ _self.formGroup('trustee', 'trustee_id', 'select', old('trustee_id', isCreate ? '' : (currentTrustee ? currentTrustee.id : '')), false, 'trustee_help', 'trustee_id_error', {
+                            'placeholder': 'select_trustee',
+                            'choices': trusteeOptions|map(trustee => trustee.id, trustee => (trustee.display_name ?: trustee.name) ~ ' (' ~ trustee.entity_type|title ~ ')')
+                        }) }}
+                    </div>
+
+                    {{ _self.formGroup('display_name', 'display_name', 'text', old('display_name', isCreate ? '' : financialEntity.display_name), false, 'display_name_help', 'display_name_error') }}
+
+                    {{ _self.formGroup('description', 'description', 'textarea', old('description', isCreate ? '' : financialEntity.description), false, null, 'description_error', {'rows': 3}) }}
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            {{ _self.formGroup('email', 'contact_info[email]', 'email', old('contact_info.email', isCreate ? '' : (financialEntity.contact_info.email ?? '')), false, null, 'contact_info.email_error') }}
+                        </div>
+                        <div class="col-md-6">
+                            {{ _self.formGroup('phone', 'contact_info[phone]', 'tel', old('contact_info.phone', isCreate ? '' : (financialEntity.contact_info.phone ?? '')), false, null, 'contact_info.phone_error') }}
+                        </div>
+                    </div>
+
+                    {{ _self.formGroup('address', 'contact_info[address]', 'textarea', old('contact_info.address', isCreate ? '' : (financialEntity.contact_info.address ?? '')), false, null, 'contact_info.address_error', {'rows': 2}) }}
+
+                    {{ _self.formGroup('website', 'contact_info[website]', 'url', old('contact_info.website', isCreate ? '' : (financialEntity.contact_info.website ?? '')), false, null, 'contact_info.website_error') }}
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-default" data-dismiss="modal">
+                        <i class="fa fa-times"></i>
+                        {{ 'cancel'|_ }}
+                    </button>
+                    <button type="submit" class="btn btn-primary" id="saveEntityBtn">
+                        <i class="fa fa-save"></i>
+                        {{ isCreate ? 'create_entity'|_ : 'save_changes'|_ }}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+

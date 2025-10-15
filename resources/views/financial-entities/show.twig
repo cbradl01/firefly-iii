@@ -1,0 +1,470 @@
+{% extends './layout/default' %}
+
+{% set shownDemo = true %}
+
+{% block title %}
+    {{ financialEntity.display_name }}
+{% endblock %}
+
+{% block breadcrumbs %}
+    {# Breadcrumbs are now handled in the navbar #}
+{% endblock %}
+
+{% block content %}
+    <div class="row">
+        <div class="col-lg-8 col-md-8 col-sm-12">
+            <div class="box" id="financial-entities-show">
+                <div class="box-header with-border">
+                    <h3 class="box-title">
+                        <i class="fa fa-user"></i>
+                        {{ financialEntity.display_name }}
+                    </h3>
+                    <div class="box-tools pull-right">
+                        <button class="btn btn-warning btn-sm edit-entity-btn" data-entity-id="{{ financialEntity.id }}">
+                            <i class="fa fa-edit"></i>
+                            {{ 'edit'|_ }}
+                        </button>
+                    </div>
+                </div>
+                <div class="box-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <table class="table table-borderless">
+                                <tr>
+                                    <td><strong>{{ 'entity_type'|_ }}:</strong></td>
+                                    <td>
+                                        <span class="badge badge-{{ financialEntity.entity_type == 'individual' ? 'primary' : (financialEntity.entity_type == 'trust' ? 'success' : (financialEntity.entity_type == 'business' ? 'warning' : 'info')) }}">
+                                            {{ financialEntity.entity_type|title }}
+                                        </span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><strong>{{ 'entity_name'|_ }}:</strong></td>
+                                    <td>{{ financialEntity.name }}</td>
+                                </tr>
+                                {% if financialEntity.display_name != financialEntity.name %}
+                                <tr>
+                                    <td><strong>{{ 'display_name'|_ }}:</strong></td>
+                                    <td>{{ financialEntity.display_name }}</td>
+                                </tr>
+                                {% endif %}
+                                {% if financialEntity.description %}
+                                <tr>
+                                    <td><strong>{{ 'description'|_ }}:</strong></td>
+                                    <td>{{ financialEntity.description }}</td>
+                                </tr>
+                                {% endif %}
+                                {% if financialEntity.entity_type == 'trust' %}
+                                <tr>
+                                    <td><strong>{{ 'trustee'|_ }}:</strong></td>
+                                    <td>
+                                        {% set trustee = financialEntity.trustees().first() %}
+                                        {% if trustee and trustee.relatedEntity %}
+                                            <a href="{{ route('financial-entities.show', trustee.relatedEntity.id) }}">
+                                                {{ trustee.relatedEntity.display_name ?: trustee.relatedEntity.name }}
+                                            </a>
+                                            <span class="badge badge-info">{{ trustee.relatedEntity.entity_type|title }}</span>
+                                        {% else %}
+                                            <span class="text-muted">{{ 'no_trustee_assigned'|_ }}</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endif %}
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <h5>{{ 'contact_info'|_ }}</h5>
+                            <table class="table table-borderless">
+                                {% if financialEntity.contact_info.email %}
+                                <tr>
+                                    <td><strong>{{ 'email'|_ }}:</strong></td>
+                                    <td><a href="mailto:{{ financialEntity.contact_info.email }}">{{ financialEntity.contact_info.email }}</a></td>
+                                </tr>
+                                {% endif %}
+                                {% if financialEntity.contact_info.phone %}
+                                <tr>
+                                    <td><strong>{{ 'phone'|_ }}:</strong></td>
+                                    <td><a href="tel:{{ financialEntity.contact_info.phone }}">{{ financialEntity.contact_info.phone }}</a></td>
+                                </tr>
+                                {% endif %}
+                                {% if financialEntity.contact_info.address %}
+                                <tr>
+                                    <td><strong>{{ 'address'|_ }}:</strong></td>
+                                    <td>{{ financialEntity.contact_info.address|nl2br }}</td>
+                                </tr>
+                                {% endif %}
+                                {% if financialEntity.contact_info.website %}
+                                <tr>
+                                    <td><strong>{{ 'website'|_ }}:</strong></td>
+                                    <td><a href="{{ financialEntity.contact_info.website }}" target="_blank">{{ financialEntity.contact_info.website }}</a></td>
+                                </tr>
+                                {% endif %}
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Relationships -->
+            {% if relationships|length > 0 %}
+            <div class="box">
+                <div class="box-header with-border">
+                    <h3 class="box-title">
+                        <i class="fa fa-sitemap"></i>
+                        {{ 'relationships'|_ }}
+                    </h3>
+                </div>
+                <div class="box-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>{{ 'relationship_type'|_ }}</th>
+                                    <th>{{ 'related_entity'|_ }}</th>
+                                    <th>{{ 'details'|_ }}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for relationship in relationships %}
+                                <tr>
+                                    <td>
+                                        <span class="badge badge-secondary">{{ relationship.relationship_type|title }}</span>
+                                    </td>
+                                    <td>
+                                        <a href="{{ route('financial-entities.show', relationship.relatedEntity) }}">
+                                            {{ relationship.relatedEntity.display_name }}
+                                        </a>
+                                    </td>
+                                    <td>
+                                        {% if relationship.relationship_metadata %}
+                                            {% for key, value in relationship.relationship_metadata %}
+                                                <small class="text-muted">{{ key|title }}: {{ value }}</small><br>
+                                            {% endfor %}
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="col-lg-4 col-md-4 col-sm-12">
+            <!-- Statistics -->
+            <div class="box">
+                <div class="box-header with-border">
+                    <h3 class="box-title">
+                        <i class="fa fa-bar-chart"></i>
+                        {{ 'statistics'|_ }}
+                    </h3>
+                </div>
+                <div class="box-body">
+                    <div class="row">
+                        <div class="col-6">
+                            <div class="info-box">
+                                <span class="info-box-icon bg-primary"><i class="fa fa-credit-card"></i></span>
+                                <div class="info-box-content">
+                                    <span class="info-box-text">{{ 'owned_accounts'|_ }}</span>
+                                    <span class="info-box-number">{{ statistics.owned_accounts_count }}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="info-box">
+                                <span class="info-box-icon bg-success"><i class="fa fa-dollar"></i></span>
+                                <div class="info-box-content">
+                                    <span class="info-box-text">{{ 'total_balance'|_ }}</span>
+                                    <span class="info-box-number">${{ statistics.owned_accounts_balance|number_format(2) }}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {% if statistics.beneficiary_accounts_count > 0 %}
+                    <div class="row">
+                        <div class="col-6">
+                            <div class="info-box">
+                                <span class="info-box-icon bg-warning"><i class="fa fa-gift"></i></span>
+                                <div class="info-box-content">
+                                    <span class="info-box-text">{{ 'beneficiary_accounts'|_ }}</span>
+                                    <span class="info-box-number">{{ statistics.beneficiary_accounts_count }}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="info-box">
+                                <span class="info-box-icon bg-info"><i class="fa fa-dollar"></i></span>
+                                <div class="info-box-content">
+                                    <span class="info-box-text">{{ 'beneficiary_balance'|_ }}</span>
+                                    <span class="info-box-number">${{ statistics.beneficiary_accounts_balance|number_format(2) }}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Accounts -->
+            {% if accounts|length > 0 %}
+            <div class="box">
+                <div class="box-header with-border">
+                    <h3 class="box-title">
+                        <i class="fa fa-credit-card"></i>
+                        {{ 'accounts'|_ }}
+                    </h3>
+                </div>
+                <div class="box-body">
+                    <div class="list-group">
+                        {% for account in accounts %}
+                        <a href="{{ route('accounts.show', account) }}" class="list-group-item list-group-item-action">
+                            <div class="d-flex w-100 justify-content-between">
+                                <h5 class="mb-1">{{ account.name }}</h5>
+                                <small class="text-muted">${{ account.virtual_balance|number_format(2) }}</small>
+                            </div>
+                            <p class="mb-1">
+                                <span class="badge badge-{{ account.category.name == 'Asset' ? 'success' : (account.category.name == 'Liability' ? 'danger' : 'info') }}">
+                                    {{ account.category.name }}
+                                </span>
+                                <span class="badge badge-secondary">{{ account.accountType.name }}</span>
+                            </p>
+                        </a>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Edit Modal -->
+    <div id="editModalContainer"></div>
+{% endblock %}
+
+{% block scripts %}
+    <script type="text/javascript" nonce="{{ JS_NONCE }}">
+        $(document).ready(function() {
+            // Handle edit button click
+            $(document).on('click', '.edit-entity-btn', function(e) {
+                e.preventDefault();
+                var entityId = $(this).data('entity-id');
+                loadEditModal(entityId);
+            });
+
+            // Load create modal content
+            function loadCreateModal() {
+                $.get('{{ route("financial-entities.create.modal") }}')
+                    .done(function(data) {
+                        $('#editModalContainer').html(data);
+                        $('#editEntityModal').modal('show');
+                        
+                        // Initialize trustee selection after modal is loaded
+                        initializeTrusteeSelection();
+                    })
+                    .fail(function() {
+                        alert('Error loading create form. Please try again.');
+                    });
+            }
+
+            // Load edit modal content
+            function loadEditModal(entityId) {
+                $.get('{{ route("financial-entities.edit.modal", ":id") }}'.replace(':id', entityId))
+                    .done(function(data) {
+                        $('#editModalContainer').html(data);
+                        $('#editEntityModal').modal('show');
+                        
+                        // Initialize trustee selection after modal is loaded
+                        initializeTrusteeSelection();
+                    })
+                    .fail(function() {
+                        alert('Error loading edit form. Please try again.');
+                    });
+            }
+            
+            // Initialize trustee selection functionality
+            function initializeTrusteeSelection() {
+                const entityTypeSelect = document.getElementById('entity_type');
+                const trusteeSelection = document.getElementById('trustee-selection');
+                const trusteeSelect = document.getElementById('trustee_id');
+
+                if (!entityTypeSelect || !trusteeSelection || !trusteeSelect) {
+                    return; // Elements not found, skip initialization
+                }
+
+                // Show/hide trustee selection based on entity type
+                function toggleTrusteeSelection() {
+                    const type = entityTypeSelect.value;
+                    if (type === 'trust') {
+                        trusteeSelection.style.display = 'block';
+                        trusteeSelect.required = true;
+                    } else {
+                        trusteeSelection.style.display = 'none';
+                        trusteeSelect.required = false;
+                        trusteeSelect.value = '';
+                    }
+                }
+
+                // Initial check
+                toggleTrusteeSelection();
+
+                // Listen for changes
+                entityTypeSelect.addEventListener('change', toggleTrusteeSelection);
+            }
+
+            // Handle form submission
+            $(document).on('submit', '#editEntityForm', function(e) {
+                e.preventDefault();
+                
+                var form = $(this);
+                var entityId = form.find('input[name="entity_id"]').val();
+                var formData = form.serialize();
+                
+                // Disable submit button
+                $('#saveEntityBtn').prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Saving...');
+                
+                // Determine if this is create or update
+                var isCreate = !entityId || entityId === '';
+                var url = isCreate ? '{{ route("financial-entities.store.modal") }}' : '{{ route("financial-entities.update.modal", ":id") }}'.replace(':id', entityId);
+                var method = isCreate ? 'POST' : 'PUT';
+                
+                $.ajax({
+                    url: url,
+                    type: method,
+                    data: formData
+                })
+                    .done(function(response) {
+                        if (response.success) {
+                            if (isCreate) {
+                                // For create, redirect to the new entity's show page
+                                window.location.href = '{{ route("financial-entities.show", ":id") }}'.replace(':id', response.entity.id);
+                            } else {
+                                // For update, update the page content with new data
+                                updateEntityDisplay(response.entity);
+                            }
+                            
+                            // Close modal
+                            $('#editEntityModal').modal('hide');
+                            
+                            // Show success message
+                            showAlert('success', response.message);
+                        } else {
+                            showAlert('error', response.message || 'An error occurred while saving.');
+                        }
+                    })
+                    .fail(function(xhr) {
+                        var response = xhr.responseJSON;
+                        if (response && response.errors) {
+                            // Display validation errors
+                            displayValidationErrors(response.errors);
+                        } else {
+                            showAlert('error', 'An error occurred while saving. Please try again.');
+                        }
+                    })
+                    .always(function() {
+                        // Re-enable submit button
+                        $('#saveEntityBtn').prop('disabled', false).html('<i class="fa fa-save"></i> {{ "save_changes"|_ }}');
+                    });
+            });
+
+            // Update entity display with new data
+            function updateEntityDisplay(entity) {
+                // Update entity name in header
+                $('.box-title').html('<i class="fa fa-user"></i> ' + entity.display_name);
+                
+                // Update entity type badge
+                var badgeClass = getBadgeClass(entity.entity_type);
+                $('td:contains("{{ "entity_type"|_ }}:")').next('td').html(
+                    '<span class="badge badge-' + badgeClass + '">' + 
+                    entity.entity_type.charAt(0).toUpperCase() + entity.entity_type.slice(1) + 
+                    '</span>'
+                );
+                
+                // Update entity name
+                $('td:contains("{{ "entity_name"|_ }}:")').next('td').text(entity.name);
+                
+                // Update display name if different
+                if (entity.display_name !== entity.name) {
+                    $('td:contains("{{ "display_name"|_ }}:")').next('td').text(entity.display_name);
+                }
+                
+                // Update description
+                if (entity.description) {
+                    $('td:contains("{{ "description"|_ }}:")').next('td').text(entity.description);
+                }
+                
+                // Update contact info
+                if (entity.contact_info && entity.contact_info.email) {
+                    $('td:contains("{{ "email"|_ }}:")').next('td').html(
+                        '<a href="mailto:' + entity.contact_info.email + '">' + entity.contact_info.email + '</a>'
+                    );
+                }
+                
+                if (entity.contact_info && entity.contact_info.phone) {
+                    $('td:contains("{{ "phone"|_ }}:")').next('td').html(
+                        '<a href="tel:' + entity.contact_info.phone + '">' + entity.contact_info.phone + '</a>'
+                    );
+                }
+                
+                if (entity.contact_info && entity.contact_info.address) {
+                    $('td:contains("{{ "address"|_ }}:")').next('td').html(entity.contact_info.address.replace(/\n/g, '<br>'));
+                }
+                
+                if (entity.contact_info && entity.contact_info.website) {
+                    $('td:contains("{{ "website"|_ }}:")').next('td').html(
+                        '<a href="' + entity.contact_info.website + '" target="_blank">' + entity.contact_info.website + '</a>'
+                    );
+                }
+            }
+
+            // Get badge class based on entity type
+            function getBadgeClass(entityType) {
+                switch(entityType) {
+                    case 'individual': return 'primary';
+                    case 'trust': return 'success';
+                    case 'business': return 'warning';
+                    case 'advisor': return 'info';
+                    case 'custodian': return 'secondary';
+                    default: return 'secondary';
+                }
+            }
+
+            // Display validation errors
+            function displayValidationErrors(errors) {
+                // Clear previous errors
+                $('.text-danger').hide().text('');
+                
+                // Display new errors
+                $.each(errors, function(field, messages) {
+                    var errorElement = $('#' + field.replace('.', '_') + '_error');
+                    if (errorElement.length) {
+                        errorElement.text(messages[0]).show();
+                    }
+                });
+            }
+
+            // Show alert message
+            function showAlert(type, message) {
+                var alertClass = type === 'success' ? 'alert-success' : 'alert-danger';
+                var alertHtml = '<div class="alert ' + alertClass + ' alert-dismissible" style="margin-top: 20px;">' +
+                               '<button type="button" class="close" data-dismiss="alert">&times;</button>' +
+                               message +
+                               '</div>';
+                
+                $('.box-body').prepend(alertHtml);
+                
+                // Auto-dismiss after 5 seconds
+                setTimeout(function() {
+                    $('.alert').fadeOut();
+                }, 5000);
+            }
+
+            // Clear modal when hidden
+            $(document).on('hidden.bs.modal', '#editEntityModal', function() {
+                $('#editModalContainer').empty();
+            });
+        });
+    </script>
+{% endblock %}
