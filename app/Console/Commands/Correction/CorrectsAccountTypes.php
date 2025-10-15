@@ -88,8 +88,8 @@ class CorrectsAccountTypes extends Command
                     foreach ($destinations as $destination) {
                         $q->whereNot(static function (Builder $q1) use ($transactionType, $source, $destination): void {
                             $q1->where('transaction_types.type', $transactionType);
-                            $q1->where('source_account_type.type', $source);
-                            $q1->where('destination_account_type.type', $destination);
+                            $q1->where('source_account_type.name', $source);
+                            $q1->where('destination_account_type.name', $destination);
                         });
                     }
                 }
@@ -104,11 +104,11 @@ class CorrectsAccountTypes extends Command
                 // 'source.id as source_transaction_id',
                 // 'source_account.id as source_account_id',
                 // 'source_account_type.id as source_account_type_id',
-                'source_account_type.type as source_account_type',
+                'source_account_type.name as source_account_type',
                 // 'destination.id as destination_transaction_id',
                 // 'destination_account.id as destination_account_id',
                 // 'destination_account_type.id as destination_account_type_id',
-                'destination_account_type.type as destination_account_type',
+                'destination_account_type.name as destination_account_type',
             ]
         );
         if ($resultSet->count() > 0) {

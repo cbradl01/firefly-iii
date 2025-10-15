@@ -46,7 +46,7 @@ class TriggersCreditCalculation extends Command
     private function processAccounts(): void
     {
         $accounts = Account::leftJoin('account_types', 'accounts.account_type_id', 'account_types.id')
-            ->whereIn('account_types.type', config('firefly.valid_liabilities'))
+            ->whereIn('account_types.name', config('firefly.valid_liabilities'))
             ->get(['accounts.*'])
         ;
         foreach ($accounts as $account) {

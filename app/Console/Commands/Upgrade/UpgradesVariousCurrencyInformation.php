@@ -195,7 +195,7 @@ class UpgradesVariousCurrencyInformation extends Command
                     'accounts.account_type_id',
                     '=',
                     'account_types.id'
-                )->where('account_types.type', '!=', AccountTypeEnum::INITIAL_BALANCE->value)->first(['transactions.*']);
+                )->where('account_types.name', '!=', AccountTypeEnum::INITIAL_BALANCE->value)->first(['transactions.*']);
 
                 break;
 
@@ -206,7 +206,7 @@ class UpgradesVariousCurrencyInformation extends Command
                     'accounts.account_type_id',
                     '=',
                     'account_types.id'
-                )->where('account_types.type', '!=', AccountTypeEnum::RECONCILIATION->value)->first(['transactions.*']);
+                )->where('account_types.name', '!=', AccountTypeEnum::RECONCILIATION->value)->first(['transactions.*']);
 
                 break;
         }

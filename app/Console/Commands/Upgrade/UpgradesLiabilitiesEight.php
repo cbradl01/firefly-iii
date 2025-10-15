@@ -83,7 +83,7 @@ class UpgradesLiabilitiesEight extends Command
     {
         $accounts = $user->accounts()
             ->leftJoin('account_types', 'account_types.id', '=', 'accounts.account_type_id')
-            ->whereIn('account_types.type', config('firefly.valid_liabilities'))
+            ->whereIn('account_types.name', config('firefly.valid_liabilities'))
             ->get(['accounts.*'])
         ;
 

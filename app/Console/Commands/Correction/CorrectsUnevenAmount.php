@@ -359,7 +359,7 @@ class CorrectsUnevenAmount extends Command
             ->whereNot('transaction_types.type', TransactionTypeEnum::TRANSFER->value)
             ->whereNotNull('foreign_currency_id')
             ->whereNotNull('foreign_amount')
-            ->whereIn('account_types.type', [AccountTypeEnum::ASSET->value, AccountTypeEnum::DEBT->value, AccountTypeEnum::MORTGAGE->value, AccountTypeEnum::LOAN->value])
+            ->whereIn('account_types.name', [AccountTypeEnum::ASSET->value, AccountTypeEnum::DEBT->value, AccountTypeEnum::MORTGAGE->value, AccountTypeEnum::LOAN->value])
             ->get(['transactions.transaction_journal_id'])
         ;
 
