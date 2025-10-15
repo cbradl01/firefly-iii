@@ -1,0 +1,255 @@
+<div class="modal fade" id="editAccountModal" tabindex="-1" role="dialog" aria-labelledby="editAccountModalLabel">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                <h4 class="modal-title" id="editAccountModalLabel">
+                    <i class="fa fa-edit"></i>
+                    Edit Account
+                </h4>
+            </div>
+            <form method="post" action="{{ route('accounts.update.modal', account.id) }}" class="form-horizontal" accept-charset="UTF-8" enctype="multipart/form-data">
+                {{ method_field('PUT') }}
+                <input type="hidden" name="_token" value="{{ csrf_token() }}"/>
+                <input type="hidden" name="id" value="{{ account.id }}"/>
+                <input type="hidden" name="objectType" value="{{ objectType }}"/>
+                
+                <div class="modal-body">
+
+    <div class="row">
+        <div class="col-lg-6 col-md-6 col-sm-12 col-xs-12">
+            <div class="form-group">
+                <label for="name" class="col-sm-3 control-label">{{ 'name'|_ }}</label>
+                <div class="col-sm-9">
+                    <input type="text" class="form-control" id="name" name="name" value="{{ account.name }}" required>
+                </div>
+            </div>
+
+            {% if canEditCurrency and (account.accountType.type == 'Default account' or account.accountType.type == 'Asset account' or account.accountType.type == 'Brokerage account' or account.accountType.type == 'Holding account' or objectType == 'liabilities') %}
+                <div class="form-group">
+                    <label for="currency_id" class="col-sm-3 control-label">{{ 'currency'|_ }}</label>
+                    <div class="col-sm-9">
+                        <select class="form-control" id="currency_id" name="currency_id">
+                            {% for currency in currencies %}
+                                <option value="{{ currency.id }}" {% if currency.id == account.currency_id %}selected{% endif %}>
+                                    {{ currency.name }} ({{ currency.symbol }})
+                                </option>
+                            {% endfor %}
+                        </select>
+                        <small class="help-block">{{ 'account_default_currency'|_ }}</small>
+                    </div>
+                </div>
+            {% endif %}
+
+            {% if not canEditCurrency and (account.accountType.type == 'Default account' or account.accountType.type == 'Asset account' or account.accountType.type == 'Brokerage account' or account.accountType.type == 'Holding account' or objectType == 'liabilities') %}
+                <input type="hidden" name="currency_id" value="{{ currency.id }}"/>
+                <div class="form-group">
+                    <label class="col-sm-3 control-label">{{ 'currency'|_ }}</label>
+                    <div class="col-sm-9">
+                        <p class="form-control-static">{{ trans('firefly.account_locked_currency', {name: currency.name}) }}</p>
+                    </div>
+                </div>
+            {% endif %}
+
+            {% if objectType == 'liabilities' %}
+                <div class="form-group">
+                    <label for="liability_type_id" class="col-sm-3 control-label">{{ 'liability_type'|_ }}</label>
+                    <div class="col-sm-9">
+                        <select class="form-control" id="liability_type_id" name="liability_type_id">
+                            {% for key, value in liabilityTypes %}
+                                <option value="{{ key }}" {% if key == account.liability_type_id %}selected{% endif %}>{{ value }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="opening_balance" class="col-sm-3 control-label">{{ 'debt_start_amount'|_ }}</label>
+                    <div class="col-sm-9">
+                        <input type="number" step="0.01" class="form-control" id="opening_balance" name="opening_balance" value="{{ preFilled.opening_balance }}">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="liability_direction" class="col-sm-3 control-label">{{ 'liability_direction'|_ }}</label>
+                    <div class="col-sm-9">
+                        <select class="form-control" id="liability_direction" name="liability_direction">
+                            {% for key, value in liabilityDirections %}
+                                <option value="{{ key }}" {% if key == account.liability_direction %}selected{% endif %}>{{ value }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="opening_balance_date" class="col-sm-3 control-label">{{ 'debt_start_date'|_ }}</label>
+                    <div class="col-sm-9">
+                        <input type="date" class="form-control" id="opening_balance_date" name="opening_balance_date" value="{{ preFilled.opening_balance_date }}">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="interest" class="col-sm-3 control-label">{{ 'interest'|_ }}</label>
+                    <div class="col-sm-9">
+                        <input type="number" step="0.01" class="form-control" id="interest" name="interest" value="{{ account.interest }}">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="interest_period" class="col-sm-3 control-label">{{ 'interest_period'|_ }}</label>
+                    <div class="col-sm-9">
+                        <select class="form-control" id="interest_period" name="interest_period">
+                            {% for key, value in interestPeriods %}
+                                <option value="{{ key }}" {% if key == account.interest_period %}selected{% endif %}>{{ value }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+
+        <div class="col-lg-6 col-md-6 col-sm-12 col-xs-12">
+            <div class="form-group">
+                <label for="iban" class="col-sm-3 control-label">{{ 'iban'|_ }}</label>
+                <div class="col-sm-9">
+                    <input type="text" class="form-control" id="iban" name="iban" value="{{ account.iban }}">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="BIC" class="col-sm-3 control-label">{{ 'BIC'|_ }}</label>
+                <div class="col-sm-9">
+                    <input type="text" class="form-control" id="BIC" name="BIC" maxlength="11" value="{{ account.BIC }}">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="account_number" class="col-sm-3 control-label">
+                    {% if preFilled.account_role == 'ccAsset' %}
+                        {{ 'form.creditCardNumber'|_ }}
+                    {% else %}
+                        {{ 'account_number'|_ }}
+                    {% endif %}
+                </label>
+                <div class="col-sm-9">
+                    <input type="text" class="form-control" id="account_number" name="account_number" value="{{ account.account_number }}">
+                </div>
+            </div>
+
+            {% if account.accounttype.type == 'Default account' or account.accounttype.type == 'Asset account' or account.accountType.type == 'Brokerage account' or account.accounttype.type == 'Holding account' %}
+                <div class="form-group">
+                    <label for="opening_balance" class="col-sm-3 control-label">{{ 'opening_balance'|_ }}</label>
+                    <div class="col-sm-9">
+                        <input type="number" step="0.01" class="form-control" id="opening_balance" name="opening_balance" value="{{ preFilled.opening_balance }}">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="opening_balance_date" class="col-sm-3 control-label">{{ 'opening_balance_date'|_ }}</label>
+                    <div class="col-sm-9">
+                        <input type="date" class="form-control" id="opening_balance_date" name="opening_balance_date" value="{{ preFilled.opening_balance_date }}">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="account_role" class="col-sm-3 control-label">{{ 'account_role'|_ }}</label>
+                    <div class="col-sm-9">
+                        <select class="form-control" id="account_role" name="account_role">
+                            {% for key, value in roles %}
+                                <option value="{{ key }}" {% if key == preFilled.account_role %}selected{% endif %}>{{ value }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="virtual_balance" class="col-sm-3 control-label">{{ 'virtual_balance'|_ }}</label>
+                    <div class="col-sm-9">
+                        <input type="number" step="0.01" class="form-control" id="virtual_balance" name="virtual_balance" value="{{ account.virtual_balance }}">
+                    </div>
+                </div>
+            {% endif %}
+
+            {% if showNetWorth %}
+                <div class="form-group">
+                    <div class="col-sm-offset-3 col-sm-9">
+                        <div class="checkbox">
+                            <label>
+                                <input type="checkbox" name="include_net_worth" value="1" {% if account.include_net_worth %}checked{% endif %}>
+                                {{ 'include_net_worth'|_ }}
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
+
+            <div class="form-group">
+                <label for="notes" class="col-sm-3 control-label">{{ 'notes'|_ }}</label>
+                <div class="col-sm-9">
+                    <textarea class="form-control" id="notes" name="notes" rows="3">{{ preFilled.notes }}</textarea>
+                    <small class="help-block">{{ 'firefly.field_supports_markdown'|_ }}</small>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <div class="col-sm-offset-3 col-sm-9">
+                    <div class="checkbox">
+                        <label>
+                            <input type="checkbox" name="active" value="1" {% if account.active %}checked{% endif %}>
+                            {{ 'active'|_ }}
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="attachments" class="col-sm-3 control-label">{{ 'attachments'|_ }}</label>
+                <div class="col-sm-9">
+                    <input type="file" class="form-control" id="attachments" name="attachments[]" multiple>
+                    <small class="help-block">{{ 'firefly.upload_max_file_size'|_({'size': uploadSize|filesize}) }}</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# Credit card options panel #}
+    {% if preFilled.account_role == 'ccAsset' %}
+        <div class="row">
+            <div class="col-lg-12">
+                <div class="panel panel-default">
+                    <div class="panel-heading">
+                        <h4 class="panel-title">{{ 'credit_card_options'|_ }}</h4>
+                    </div>
+                    <div class="panel-body">
+                        <div class="row">
+                            <div class="col-lg-6">
+                                <div class="form-group">
+                                    <label for="cc_type" class="col-sm-3 control-label">{{ 'cc_type'|_ }}</label>
+                                    <div class="col-sm-9">
+                                        <select class="form-control" id="cc_type" name="cc_type">
+                                            {% for key, value in ccTypes %}
+                                                <option value="{{ key }}" {% if key == account.cc_type %}selected{% endif %}>{{ value }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-lg-6">
+                                <div class="form-group">
+                                    <label for="cc_monthly_payment_date" class="col-sm-3 control-label">{{ 'cc_monthly_payment_date'|_ }}</label>
+                                    <div class="col-sm-9">
+                                        <input type="date" class="form-control" id="cc_monthly_payment_date" name="cc_monthly_payment_date" value="{{ account.cc_monthly_payment_date }}">
+                                        <small class="help-block">{{ 'firefly.cc_monthly_payment_date_help'|_ }}</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+                </div>
+                
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="saveAccountBtn">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

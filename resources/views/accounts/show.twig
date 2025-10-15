@@ -18,7 +18,7 @@
                             <button class="btn btn-box-tool dropdown-toggle" data-toggle="dropdown"><span
                                     class="fa fa-ellipsis-v"></span></button>
                             <ul class="dropdown-menu" role="menu">
-                                <li><a href="{{ route('accounts.edit', account.id) }}"><span
+                                <li><a href="#" class="edit-account-btn" data-account-id="{{ account.id }}"><span
                                             class="fa fa-pencil fa-fw"></span> {{ 'edit'|_ }}</a></li>
                                 <li><a href="{{ route('accounts.delete', account.id) }}"><span
                                             class="fa fa-trash fa-fw"></span> {{ 'delete'|_ }}</a></li>
@@ -99,6 +99,40 @@
                                                 {{ accountType }}
                                             {% else %}
                                                 {{ account.accountType.type|_ }}
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td>Beneficiaries</td>
+                                        <td>
+                                            {% set beneficiaries = accountGetBeneficiaries(account) %}
+                                            {% if beneficiaries %}
+                                                {% set priorityLabels = {
+                                                    'primary': 'Primary',
+                                                    'secondary': 'Secondary', 
+                                                    'tertiary': 'Tertiary',
+                                                    'quaternary': 'Quaternary'
+                                                } %}
+                                                {% set priorityClasses = {
+                                                    'primary': 'label-primary',
+                                                    'secondary': 'label-warning',
+                                                    'tertiary': 'label-info',
+                                                    'quaternary': 'label-default'
+                                                } %}
+                                                {% for priority, beneficiaryList in beneficiaries %}
+                                                    {% if beneficiaryList|length > 0 %}
+                                                        <div class="beneficiaries-display" {% if not loop.first %}style="margin-top: 5px;"{% endif %}>
+                                                            <strong>{{ priorityLabels[priority] }}:</strong>
+                                                            {% for beneficiary in beneficiaryList %}
+                                                                <span class="label {{ priorityClasses[priority] }}" style="margin-right: 5px;">
+                                                                    {{ beneficiary.name }}{% if beneficiary.percentage %}({{ beneficiary.percentage }}%){% endif %}
+                                                                </span>
+                                                            {% endfor %}
+                                                        </div>
+                                                    {% endif %}
+                                                {% endfor %}
+                                            {% else %}
+                                                <span class="text-muted">-</span>
                                             {% endif %}
                                         </td>
                                     </tr>
@@ -710,9 +744,92 @@
         }
         
     </script>
+    
+    <!-- Account Edit Modal JavaScript -->
+    <script type="text/javascript" nonce="{{ JS_NONCE }}">
+        $(document).ready(function() {
+            // Handle edit account button click
+            $(document).on('click', '.edit-account-btn', function(e) {
+                e.preventDefault();
+                var accountId = $(this).data('account-id');
+                loadEditModal(accountId);
+            });
+            
+            // Load edit modal content
+            function loadEditModal(accountId) {
+                $.get('/accounts/edit/' + accountId + '/modal')
+                    .done(function(data) {
+                        $('#editModalContainer').html(data);
+                        $('#editAccountModal').modal('show');
+                    })
+                    .fail(function() {
+                        showErrorAlert('Error loading edit form');
+                    });
+            }
+            
+            // Handle save button click
+            $('#saveAccountBtn').click(function() {
+                var form = $('#editAccountModal form');
+                var formData = new FormData(form[0]);
+                
+                $.ajax({
+                    url: form.attr('action'),
+                    type: 'PUT',
+                    data: formData,
+                    processData: false,
+                    contentType: false,
+                    success: function(response) {
+                        if (response.success) {
+                            $('#editAccountModal').modal('hide');
+                            showSuccessAlert(response.message);
+                            // Optionally refresh the page or update specific elements
+                            location.reload();
+                        } else {
+                            showErrorAlert(response.message || 'Error updating account');
+                        }
+                    },
+                    error: function(xhr) {
+                        var message = 'Error updating account';
+                        if (xhr.responseJSON && xhr.responseJSON.message) {
+                            message = xhr.responseJSON.message;
+                        }
+                        showErrorAlert(message);
+                    }
+                });
+            });
+            
+            // Show success alert
+            function showSuccessAlert(message) {
+                var alert = '<div class="alert alert-success alert-dismissible fade in" role="alert">' +
+                            '<button type="button" class="close" data-dismiss="alert">&times;</button>' +
+                            '<strong>Success!</strong> ' + message +
+                            '</div>';
+                
+                $('.content-wrapper .content').prepend(alert);
+                
+                setTimeout(function() {
+                    $('.alert-success').fadeOut();
+                }, 5000);
+            }
+            
+            // Show error alert
+            function showErrorAlert(message) {
+                var alert = '<div class="alert alert-danger alert-dismissible fade in" role="alert">' +
+                            '<button type="button" class="close" data-dismiss="alert">&times;</button>' +
+                            '<strong>Error!</strong> ' + message +
+                            '</div>';
+                
+                $('.content-wrapper .content').prepend(alert);
+            }
+        });
+    </script>
+    
     {# required for groups.twig #}
     <script type="text/javascript" src="v1/js/ff/list/groups.js?v={{ FF_VERSION }}" nonce="{{ JS_NONCE }}"></script>
     
+    
+    <!-- Account Edit Modal Container -->
+    <div id="editModalContainer"></div>
     
 {% endblock %}
 

@@ -60,10 +60,24 @@ trait UserNavigation
      */
     final protected function isEditableAccount(Account $account): bool
     {
-        $editable = [AccountTypeEnum::EXPENSE->value, AccountTypeEnum::REVENUE->value, AccountTypeEnum::ASSET->value, AccountTypeEnum::BROKERAGE->value, AccountTypeEnum::HOLDING->value, AccountTypeEnum::LOAN->value, AccountTypeEnum::DEBT->value, AccountTypeEnum::MORTGAGE->value];
-        $type     = $account->accountType->type;
-
-        return in_array($type, $editable, true);
+        // Get the account type name
+        $accountTypeName = $account->accountType->name;
+        
+        // Define non-editable account types (system accounts)
+        $nonEditable = [
+            'Initial balance account',
+            'Reconciliation account',
+            'Import account',
+            'Liability credit account'
+        ];
+        
+        // If it's in the non-editable list, return false
+        if (in_array($accountTypeName, $nonEditable, true)) {
+            return false;
+        }
+        
+        // All other account types are editable
+        return true;
     }
 
     final protected function isEditableGroup(TransactionGroup $group): bool

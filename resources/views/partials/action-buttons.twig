@@ -1,0 +1,47 @@
+{# 
+    Centralized action buttons partial for consistent styling across Firefly III
+    
+    Usage:
+    {% include 'partials.action-buttons' with {
+        'edit_route': 'route.name',
+        'edit_id': entity.id,
+        'delete_route': 'route.name', 
+        'delete_id': entity.id,
+        'view_route': 'route.name',
+        'view_id': entity.id,
+        'show_edit': true,
+        'show_delete': false,
+        'show_view': false,
+        'edit_modal': true,
+        'size': 'sm'
+    } %}
+#}
+
+{% set size_class = size|default('sm') %}
+{% set btn_size = 'btn-' ~ size_class %}
+
+<div class="btn-group btn-group-{{ size_class }}">
+    {% if show_view|default(false) and view_route is defined %}
+        <a href="{{ route(view_route, view_id) }}" class="btn btn-default {{ btn_size }}" title="View">
+            <i class="fa fa-eye"></i>
+        </a>
+    {% endif %}
+    
+    {% if show_edit|default(true) %}
+        {% if edit_modal|default(false) %}
+            <button class="btn btn-primary {{ btn_size }} edit-btn" data-id="{{ edit_id }}" title="Edit">
+                <i class="fa fa-pencil"></i>
+            </button>
+        {% else %}
+            <a href="{{ route(edit_route, edit_id) }}" class="btn btn-primary {{ btn_size }}" title="Edit">
+                <i class="fa fa-pencil"></i>
+            </a>
+        {% endif %}
+    {% endif %}
+    
+    {% if show_delete|default(false) and delete_route is defined %}
+        <a href="{{ route(delete_route, delete_id) }}" class="btn btn-danger {{ btn_size }}" title="Delete">
+            <i class="fa fa-trash"></i>
+        </a>
+    {% endif %}
+</div>
