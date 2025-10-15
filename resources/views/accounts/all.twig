@@ -54,6 +54,7 @@
                                                             <th>Owner</th>
                                                             <th>Product Name</th>
                                                             <th>Account Number</th>
+                                                            <th>Beneficiaries</th>
                                                             <th>Balance</th>
                                                             <th>Active</th>
                                                             <th>Actions</th>
@@ -109,6 +110,20 @@
                                                                     {% endif %}
                                                                 </td>
                                                                 <td>
+                                                                    {% set beneficiaries = accountGetBeneficiaries(account) %}
+                                                                    {% if beneficiaries %}
+                                                                        {% set totalBeneficiaries = 0 %}
+                                                                        {% for priority, beneficiaryList in beneficiaries %}
+                                                                            {% set totalBeneficiaries = totalBeneficiaries + beneficiaryList|length %}
+                                                                        {% endfor %}
+                                                                        <span class="label label-info" title="View details for beneficiary information">
+                                                                            <i class="fa fa-users"></i> {{ totalBeneficiaries }} beneficiary{{ totalBeneficiaries != 1 ? 'ies' : '' }}
+                                                                        </span>
+                                                                    {% else %}
+                                                                        <span class="text-muted">-</span>
+                                                                    {% endif %}
+                                                                </td>
+                                                                <td>
                                                                     {% if account.current_balance is not null %}
                                                                         {% if account.accountType.type in ['Asset account', 'Default account', 'Brokerage account', 'Holding account'] %}
                                                                             <span class="text-success">
@@ -137,9 +152,9 @@
                                                                         <a href="{{ route('accounts.show', account.id) }}" class="btn btn-default btn-xs" title="View">
                                                                             <i class="fa fa-eye"></i>
                                                                         </a>
-                                                                        <a href="{{ route('accounts.edit', account.id) }}" class="btn btn-primary btn-xs" title="Edit">
+                                                                        <button type="button" class="btn btn-primary btn-xs edit-account-btn" data-account-id="{{ account.id }}" title="Edit">
                                                                             <i class="fa fa-pencil"></i>
-                                                                        </a>
+                                                                        </button>
                                                                         {% if account.accountType.type in ['Asset account', 'Default account', 'Brokerage account', 'Holding account', 'Credit card', 'Loan', 'Debt', 'Mortgage'] %}
                                                                         <button type="button" class="btn btn-warning btn-xs sync-account-btn" 
                                                                                 title="Sync Account" data-account-id="{{ account.id }}" data-account-name="{{ account.name }}">
@@ -171,6 +186,9 @@
             </div>
         </div>
     </div>
+
+    <!-- Account Edit Modal Container -->
+    <div id="editModalContainer"></div>
 
     <style>
         /* Make panels inherit styling from existing Firefly III box classes */
@@ -341,6 +359,80 @@
                 btn.prop('disabled', false);
                 btn.find('span').removeClass('fa-spinner fa-spin').addClass('fa-refresh');
                 btn.find('span').next().remove();
+            }
+            
+            // Handle edit account button click
+            $(document).on('click', '.edit-account-btn', function(e) {
+                e.preventDefault();
+                var accountId = $(this).data('account-id');
+                loadEditModal(accountId);
+            });
+            
+            // Load edit modal content
+            function loadEditModal(accountId) {
+                $.get('/accounts/edit/' + accountId + '/modal')
+                    .done(function(data) {
+                        $('#editModalContainer').html(data);
+                        $('#editAccountModal').modal('show');
+                    })
+                    .fail(function() {
+                        showErrorAlert('Error loading edit form');
+                    });
+            }
+            
+            // Handle save button click
+            $('#saveAccountBtn').click(function() {
+                var form = $('#editAccountModal form');
+                var formData = new FormData(form[0]);
+                
+                $.ajax({
+                    url: form.attr('action'),
+                    type: 'PUT',
+                    data: formData,
+                    processData: false,
+                    contentType: false,
+                    success: function(response) {
+                        if (response.success) {
+                            $('#editAccountModal').modal('hide');
+                            showSuccessAlert(response.message);
+                            // Optionally refresh the page or update specific elements
+                            location.reload();
+                        } else {
+                            showErrorAlert(response.message || 'Error updating account');
+                        }
+                    },
+                    error: function(xhr) {
+                        var message = 'Error updating account';
+                        if (xhr.responseJSON && xhr.responseJSON.message) {
+                            message = xhr.responseJSON.message;
+                        }
+                        showErrorAlert(message);
+                    }
+                });
+            });
+            
+            // Show success alert
+            function showSuccessAlert(message) {
+                var alert = '<div class="alert alert-success alert-dismissible fade in" role="alert">' +
+                            '<button type="button" class="close" data-dismiss="alert">&times;</button>' +
+                            '<strong>Success!</strong> ' + message +
+                            '</div>';
+                
+                $('.content-wrapper .content').prepend(alert);
+                
+                setTimeout(function() {
+                    $('.alert-success').fadeOut();
+                }, 5000);
+            }
+            
+            // Show error alert
+            function showErrorAlert(message) {
+                var alert = '<div class="alert alert-danger alert-dismissible fade in" role="alert">' +
+                            '<button type="button" class="close" data-dismiss="alert">&times;</button>' +
+                            '<strong>Error!</strong> ' + message +
+                            '</div>';
+                
+                $('.content-wrapper .content').prepend(alert);
             }
         });
     </script>

@@ -20,3 +20,30 @@
 
 /* TODO REMOVE ME */
 
+/* Beneficiaries Display Styles */
+.beneficiaries-display {
+    margin-bottom: 5px;
+}
+
+.beneficiaries-display strong {
+    color: #333;
+    font-size: 12px;
+    text-transform: uppercase;
+}
+
+.beneficiaries-display .label {
+    font-size: 11px;
+    padding: 3px 6px;
+    margin-right: 3px;
+    margin-bottom: 2px;
+    display: inline-block;
+}
+
+.beneficiaries-display .label-primary {
+    background-color: #337ab7;
+}
+
+.beneficiaries-display .label-warning {
+    background-color: #f0ad4e;
+}
+

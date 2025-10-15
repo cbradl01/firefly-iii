@@ -13,6 +13,11 @@
         <em class="fa-solid fa-hat-wizard"></em>
     </a>
 </li>
+<li class="nav-item">
+    <a class="nav-link" href="{{ route('accounts.templates.index') }}" title="{{ __('firefly.create_new_account') }}">
+        <i class="fa-solid fa-plus-circle"></i>
+    </a>
+</li>
 <li class="nav-item dropdown">
     <a class="nav-link" data-bs-toggle="dropdown" href="#">
         <i class="fa-solid fa-gears"></i>
@@ -72,6 +77,13 @@
         </a>
         <div class="dropdown-divider"></div>
 
+        <!-- account creation -->
+        <a href="{{ route('accounts.templates.index') }}" class="dropdown-item">
+            <em class="fa-solid fa-plus-circle fa-fw me-2"></em>
+            {{ __('firefly.create_new_account') }}
+        </a>
+        <div class="dropdown-divider"></div>
+        
         <!-- asset, liability -->
         <a href="{{ route('accounts.create', ['asset']) }}" class="dropdown-item">
             <em class="fa-solid fa-money-bills fa-fw me-2"></em>

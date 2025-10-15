@@ -246,6 +246,12 @@
                 </a>
             </li>
             {% endif %}
+            <li class="{{ activeRoutePartial('financial-entities') }}">
+                <a class="{{ activeRoutePartial('financial-entities') }}" href="{{ route('financial-entities.index') }}">
+                    <span class="fa fa-angle-right fa-fw"></span>
+                    <span>{{ 'financial_entities'|_ }}</span>
+                </a>
+            </li>
             <li class="{{ activeRoutePartial('administrations') }}">
                 <a class="{{ activeRoutePartial('administration') }}" href="{{ route('administrations.index') }}">
                     <span class="fa fa-angle-right fa-fw"></span>

@@ -114,7 +114,25 @@
             <div class="navbar-breadcrumb" style="display: inline-block; margin-left: 20px;">
                 <ol class="breadcrumb" style="background: transparent; margin: 0; padding: 15px 0;">
                     <li><a href="{{ route('index') }}" style="color: #fff;">Home</a></li>
-                    {% if account is defined %}
+                    {% if current_route_name starts with 'financial-entities' %}
+                        <li><a href="{{ route('financial-entities.index') }}" style="color: #fff;">Financial Entities</a></li>
+                        {% if current_route_name == 'financial-entities.create' %}
+                            <li class="active" style="color: #fff;">Create Financial Entity</li>
+                        {% elseif current_route_name == 'financial-entities.show' %}
+                            {% if financialEntity is defined %}
+                                <li class="active" style="color: #fff;">{{ financialEntity.display_name ?: financialEntity.name }}</li>
+                            {% else %}
+                                <li class="active" style="color: #fff;">Financial Entity</li>
+                            {% endif %}
+                        {% elseif current_route_name == 'financial-entities.edit' %}
+                            {% if financialEntity is defined %}
+                                <li><a href="{{ route('financial-entities.show', financialEntity.id) }}" style="color: #fff;">{{ financialEntity.display_name ?: financialEntity.name }}</a></li>
+                                <li class="active" style="color: #fff;">Edit Financial Entity</li>
+                            {% else %}
+                                <li class="active" style="color: #fff;">Edit Financial Entity</li>
+                            {% endif %}
+                        {% endif %}
+                    {% elseif account is defined %}
                         <li><a href="{{ route('accounts.index', ['asset']) }}" style="color: #fff;">Asset accounts</a></li>
                         <li class="active" style="color: #fff;">{{ account.name }}</li>
                     {% endif %}
@@ -129,6 +147,14 @@
                            data-extra="{{ objectType|default("") }}">
                             <span class="fa fa-question-circle" data-route="{{ original_route_name }}"
                                   data-extra="{{ objectType|default("") }}"></span>
+                        </a>
+                    </li>
+
+                    {# Create New Account button #}
+                    <li class="hidden-sm hidden-xs">
+                        <a href="{{ route('accounts.templates.index') }}" title="Create New Account" 
+                           style="color: #fff; font-weight: bold;">
+                            <span class="fa fa-plus-circle"></span>
                         </a>
                     </li>
 
