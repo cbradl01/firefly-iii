@@ -120,6 +120,7 @@ return [
         // FireflyIII\Providers\BroadcastServiceProvider::class,
         EventServiceProvider::class,
         RouteServiceProvider::class,
+        FireflyIII\Providers\ViewComposerServiceProvider::class,
 
         // own stuff:
         PragmaRX\Google2FALaravel\ServiceProvider::class,

@@ -41,6 +41,7 @@ class RouteServiceProvider extends ServiceProvider
     #[Override]
     public function boot(): void
     {
+        
         $this->routes(function (): void {
             Route::prefix('api')
                 ->middleware('api')

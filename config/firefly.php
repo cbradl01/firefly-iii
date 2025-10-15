@@ -355,12 +355,12 @@ return [
         'liabilities'                       => 'fa-ticket',
     ],
     'accountTypesByIdentifier'     => [
-        'asset'       => [AccountTypeEnum::DEFAULT->value, AccountTypeEnum::ASSET->value, AccountTypeEnum::BROKERAGE->value],
-        'expense'     => [AccountTypeEnum::EXPENSE->value, AccountTypeEnum::BENEFICIARY->value],
-        'revenue'     => [AccountTypeEnum::REVENUE->value],
-        'import'      => [AccountTypeEnum::IMPORT->value],
-        'liabilities' => [AccountTypeEnum::LOAN->value, AccountTypeEnum::DEBT->value, AccountTypeEnum::CREDITCARD->value, AccountTypeEnum::MORTGAGE->value],
-        'holding'     => [AccountTypeEnum::HOLDING->value],
+        'asset'       => ['Default account', 'Asset account', 'Checking Account', 'Savings Account', 'Cash account', 'Brokerage account', 'Individual Brokerage', 'Joint Brokerage', 'Roth IRA', 'Traditional IRA', '401(k)', 'Solo 401(k)', 'Health Savings Account (HSA)', 'Cryptocurrency', 'Digital Wallet', 'Private Equity', 'Bonds', 'Beneficiary account', 'Import account', 'Initial balance account', 'Reconciliation account', 'Custodial Account (UTMA/UGMA)', 'Coverdell ESA', 'Business Checking', 'Payment Processor'],
+        'expense'     => ['Expense account'],
+        'revenue'     => ['Revenue account'],
+        'import'      => ['Import account'],
+        'liabilities' => ['Credit card', 'Debt', 'Loan', 'Auto Loan', 'Mortgage', 'Personal Loans'],
+        'holding'     => [],
     ],
     'accountTypeByIdentifier'      => [
         'asset'       => [AccountTypeEnum::ASSET->value],
@@ -841,56 +841,6 @@ return [
         AccountTypeEnum::INITIAL_BALANCE->value,
         AccountTypeEnum::RECONCILIATION->value,
         AccountTypeEnum::LIABILITY_CREDIT->value,
-    ],
-    // Comprehensive field requirements for each account type
-    'account_field_requirements' => [
-        // Fields shared across ALL account types
-        'shared' => [
-            'required' => ['name', 'active', 'currency_id', 'institution', 'owner', 'product_name', 'account_type'],
-            'optional' => ['account_number', 'BIC', 'include_net_worth', 'notes', 'iban']
-        ],
-        
-        // Asset account types (checking, savings, brokerage, etc.)
-        'asset' => [
-            'required' => ['account_role'],
-            'optional' => []
-        ],
-        
-        // Credit card asset accounts (special case of asset accounts)
-        'credit_card_asset' => [
-            'required' => ['account_role'],
-            'optional' => ['cc_monthly_payment_date', 'cc_type']
-        ],
-        
-        // Liability account types (loans, credit cards, mortgages, etc.)
-        'liability' => [
-            'required' => ['liability_direction'],
-            'optional' => ['interest', 'interest_period', 'liability_type']
-        ],
-        
-        // Expense account types
-        'expense' => [
-            'required' => [],
-            'optional' => []
-        ],
-        
-        // Revenue account types
-        'revenue' => [
-            'required' => [],
-            'optional' => []
-        ],
-        
-        // Import account types
-        'import' => [
-            'required' => [],
-            'optional' => []
-        ],
-        
-        // Holding account types
-        'holding' => [
-            'required' => [],
-            'optional' => []
-        ]
     ],
 
     // dynamic date ranges are as follows:
