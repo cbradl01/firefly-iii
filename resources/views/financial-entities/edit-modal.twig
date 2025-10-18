@@ -1,30 +1,54 @@
 {# Define macros for form components #}
-{% macro formGroup(label, name, type, value, required, help, errorId, options) %}
+{% macro formGroup(fieldName, fieldData, value, required, errorId) %}
     <div class="form-group">
-        <label for="{{ name }}">{{ label|_ }}{% if required %} <span class="text-danger">*</span>{% endif %}</label>
-        {% if type == 'textarea' %}
-            <textarea class="form-control" id="{{ name }}" name="{{ name }}" rows="{{ options.rows|default(3) }}">{{ value }}</textarea>
-        {% elseif type == 'select' %}
-            <select class="form-control" id="{{ name }}" name="{{ name }}"{% if required %} required{% endif %}>
-                {% if options.placeholder %}
-                    <option value="">{{ options.placeholder|_ }}</option>
-                {% endif %}
-                {% for key, optionLabel in options.choices %}
+        <label for="{{ fieldName }}">{{ fieldData.display_name|_ }}{% if fieldData.required or required %} <span class="text-danger">*</span>{% endif %}</label>
+        
+        {% if fieldData.input_type == 'textarea' %}
+            <textarea class="form-control" id="{{ fieldName }}" name="{{ fieldName }}" rows="3">{{ value }}</textarea>
+        {% elseif fieldData.input_type == 'select' %}
+            <select class="form-control" id="{{ fieldName }}" name="{{ fieldName }}"{% if fieldData.required or required %} required{% endif %}>
+                <option value="">{{ 'select_option'|_ }}</option>
+                {% for key, optionLabel in fieldData.options %}
                     <option value="{{ key }}"{{ value == key ? ' selected' : '' }}>{{ optionLabel }}</option>
                 {% endfor %}
             </select>
+        {% elseif fieldData.input_type == 'checkbox' %}
+            <div class="form-check">
+                <input type="checkbox" class="form-check-input" id="{{ fieldName }}" name="{{ fieldName }}" value="1"{{ value ? ' checked' : '' }}>
+                <label class="form-check-label" for="{{ fieldName }}">{{ fieldData.display_name|_ }}</label>
+            </div>
+        {% elseif fieldData.input_type == 'number' %}
+            <input type="number" class="form-control" id="{{ fieldName }}" name="{{ fieldName }}" value="{{ value }}" step="any"{% if fieldData.required or required %} required{% endif %}>
+        {% elseif fieldData.input_type == 'date' %}
+            <input type="date" class="form-control" id="{{ fieldName }}" name="{{ fieldName }}" value="{{ value }}"{% if fieldData.required or required %} required{% endif %}>
+        {% elseif fieldData.input_type == 'email' %}
+            <input type="email" class="form-control" id="{{ fieldName }}" name="{{ fieldName }}" value="{{ value }}"{% if fieldData.required or required %} required{% endif %}>
+        {% elseif fieldData.input_type == 'tel' %}
+            <input type="tel" class="form-control" id="{{ fieldName }}" name="{{ fieldName }}" value="{{ value }}"{% if fieldData.required or required %} required{% endif %}>
+        {% elseif fieldData.input_type == 'url' %}
+            <input type="url" class="form-control" id="{{ fieldName }}" name="{{ fieldName }}" value="{{ value }}"{% if fieldData.required or required %} required{% endif %}>
+        {% elseif fieldData.input_type == 'json' %}
+            <textarea class="form-control" id="{{ fieldName }}" name="{{ fieldName }}" rows="3" placeholder="Enter JSON data">{{ value is iterable ? value|json_encode : value }}</textarea>
+        {% elseif fieldData.input_type == 'beneficiaries' %}
+            <div class="form-group">
+                <div id="{{ fieldName }}_container">
+                    <div class="beneficiaries-list mb-2"></div>
+                    <input type="hidden" id="{{ fieldName }}" name="{{ fieldName }}" value="{{ value is iterable ? value|json_encode : '[]' }}">
+                </div>
+            </div>
         {% else %}
-            <input type="{{ type }}" class="form-control" id="{{ name }}" name="{{ name }}" value="{{ value }}"{% if required %} required{% endif %}>
+            <input type="{{ fieldData.input_type|default('text') }}" class="form-control" id="{{ fieldName }}" name="{{ fieldName }}" value="{{ value }}"{% if fieldData.required or required %} required{% endif %}>
         {% endif %}
-        {% if help %}
-            <small class="form-text text-muted">{{ help|_ }}</small>
+        
+        {% if fieldData.description %}
+            <small class="form-text text-muted">{{ fieldData.description|_ }}</small>
         {% endif %}
         <div class="text-danger" id="{{ errorId }}" style="display: none;"></div>
     </div>
 {% endmacro %}
 
 <div class="modal fade" id="editEntityModal" tabindex="-1" role="dialog" aria-labelledby="editEntityModalLabel">
-    <div class="modal-dialog modal-lg" role="document">
+    <div class="modal-dialog modal-xl" role="document">
         <div class="modal-content">
             <div class="modal-header">
                 <h4 class="modal-title" id="editEntityModalLabel">
@@ -35,42 +59,48 @@
                     <span aria-hidden="true">&times;</span>
                 </button>
             </div>
-            <form id="editEntityForm" method="POST">
+            <form id="editEntityForm" method="POST" action="{{ isCreate ? route('financial-entities.store.modal') : route('financial-entities.update.modal', financialEntity.id) }}">
                 <div class="modal-body">
                     <input type="hidden" name="_token" value="{{ csrf_token() }}">
                     <input type="hidden" name="_method" value="{{ isCreate ? 'POST' : 'PUT' }}">
                     <input type="hidden" name="entity_id" value="{{ isCreate ? '' : financialEntity.id }}">
                     
-                    {{ _self.formGroup('entity_type', 'entity_type', 'select', old('entity_type', isCreate ? '' : financialEntity.entity_type), true, null, 'entity_type_error', {
-                        'placeholder': 'select_entity_type',
-                        'choices': entityTypes
-                    }) }}
+                    <!-- Entity Type Selection -->
+                    <div class="form-group">
+                        <label for="entity_type">{{ 'entity_type'|_ }} <span class="text-danger">*</span></label>
+                        <select class="form-control" id="entity_type" name="entity_type" required>
+                            <option value="">{{ 'select_entity_type'|_ }}</option>
+                            {% for key, label in entityTypes %}
+                                <option value="{{ key }}" {{ old('entity_type', financialEntity.entity_type) == key ? 'selected' : '' }}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="text-danger" id="entity_type_error" style="display: none;"></div>
+                    </div>
 
-                    {{ _self.formGroup('entity_name', 'name', 'text', old('name', isCreate ? '' : financialEntity.name), true, null, 'name_error') }}
+                    <!-- Dynamic Fields Container -->
+                    <div id="dynamicFields">
+                        <div class="text-center text-muted">
+                            <i class="fa fa-info-circle"></i>
+                            Select an entity type to see available fields
+                        </div>
+                    </div>
 
+                    <!-- Trustee Selection (for trusts) -->
                     <div id="trustee-selection" style="display: none;">
-                        {{ _self.formGroup('trustee', 'trustee_id', 'select', old('trustee_id', isCreate ? '' : (currentTrustee ? currentTrustee.id : '')), false, 'trustee_help', 'trustee_id_error', {
-                            'placeholder': 'select_trustee',
-                            'choices': trusteeOptions|map(trustee => trustee.id, trustee => (trustee.display_name ?: trustee.name) ~ ' (' ~ trustee.entity_type|title ~ ')')
-                        }) }}
-                    </div>
-
-                    {{ _self.formGroup('display_name', 'display_name', 'text', old('display_name', isCreate ? '' : financialEntity.display_name), false, 'display_name_help', 'display_name_error') }}
-
-                    {{ _self.formGroup('description', 'description', 'textarea', old('description', isCreate ? '' : financialEntity.description), false, null, 'description_error', {'rows': 3}) }}
-
-                    <div class="row">
-                        <div class="col-md-6">
-                            {{ _self.formGroup('email', 'contact_info[email]', 'email', old('contact_info.email', isCreate ? '' : (financialEntity.contact_info.email ?? '')), false, null, 'contact_info.email_error') }}
-                        </div>
-                        <div class="col-md-6">
-                            {{ _self.formGroup('phone', 'contact_info[phone]', 'tel', old('contact_info.phone', isCreate ? '' : (financialEntity.contact_info.phone ?? '')), false, null, 'contact_info.phone_error') }}
+                        <div class="form-group">
+                            <label for="trustee_id">{{ 'trustee'|_ }}</label>
+                            <select class="form-control" id="trustee_id" name="trustee_id">
+                                <option value="">{{ 'select_trustee'|_ }}</option>
+                                {% for trustee in trusteeOptions %}
+                                    <option value="{{ trustee.id }}" {{ old('trustee_id', isCreate ? '' : (currentTrustee ? currentTrustee.id : '')) == trustee.id ? 'selected' : '' }}>
+                                        {{ (trustee.display_name ?: trustee.name) }} ({{ trustee.entity_type|title }})
+                                    </option>
+                                {% endfor %}
+                            </select>
+                            <small class="form-text text-muted">{{ 'trustee_help'|_ }}</small>
+                            <div class="text-danger" id="trustee_id_error" style="display: none;"></div>
                         </div>
                     </div>
-
-                    {{ _self.formGroup('address', 'contact_info[address]', 'textarea', old('contact_info.address', isCreate ? '' : (financialEntity.contact_info.address ?? '')), false, null, 'contact_info.address_error', {'rows': 2}) }}
-
-                    {{ _self.formGroup('website', 'contact_info[website]', 'url', old('contact_info.website', isCreate ? '' : (financialEntity.contact_info.website ?? '')), false, null, 'contact_info.website_error') }}
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-default" data-dismiss="modal">
@@ -87,3 +117,382 @@
     </div>
 </div>
 
+<script>
+// Current entity data for editing
+if (typeof currentEntityData === 'undefined') {
+    var currentEntityData = {{ (isCreate ? {} : mappedEntityData)|json_encode|raw }};
+} else {
+    currentEntityData = {{ (isCreate ? {} : mappedEntityData)|json_encode|raw }};
+}
+
+function updateFieldsForEntityType() {
+    const entityType = document.getElementById('entity_type').value;
+    const dynamicFieldsContainer = document.getElementById('dynamicFields');
+    const trusteeSelection = document.getElementById('trustee-selection');
+    
+    // Show/hide trustee selection for trusts
+    if (entityType === 'trust') {
+        trusteeSelection.style.display = 'block';
+    } else {
+        trusteeSelection.style.display = 'none';
+    }
+    
+    if (!entityType) {
+        dynamicFieldsContainer.innerHTML = '<div class="text-center text-muted"><i class="fa fa-info-circle"></i> Select an entity type to see available fields</div>';
+        return;
+    }
+    
+    // Show loading state
+    dynamicFieldsContainer.innerHTML = '<div class="text-center"><i class="fa fa-spinner fa-spin"></i> Loading fields...</div>';
+    
+    // Fetch fields for the selected entity type
+    fetch(`/financial-entities/fields?entity_type=${entityType}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                dynamicFieldsContainer.innerHTML = `<div class="alert alert-danger">Error: ${data.error}</div>`;
+                return;
+            }
+            
+            renderFields(data.fields, currentEntityData);
+        })
+        .catch(error => {
+            console.error('Error loading fields:', error);
+            dynamicFieldsContainer.innerHTML = '<div class="alert alert-danger">Error loading fields. Please try again.</div>';
+        });
+}
+
+function renderFields(fields, currentEntityData) {
+    // Store fields globally for form submission
+    if (typeof window.currentFields === 'undefined') {
+        window.currentFields = {};
+    }
+    
+    // Get the current entity type
+    var entityType = document.getElementById('entity_type').value;
+    if (entityType) {
+        window.currentFields[entityType] = fields;
+    }
+    
+    const dynamicFieldsContainer = document.getElementById('dynamicFields');
+    let html = '';
+    
+    // Group fields by category, separating beneficiary categories
+    const categories = {};
+    const beneficiaryCategories = {};
+    
+    Object.keys(fields).forEach(fieldName => {
+        const fieldData = fields[fieldName];
+        const category = fieldData.category;
+        
+        if (category === 'beneficiary') {
+            if (!beneficiaryCategories[category]) {
+                beneficiaryCategories[category] = [];
+            }
+            beneficiaryCategories[category].push({ fieldName, fieldData });
+        } else {
+            if (!categories[category]) {
+                categories[category] = [];
+            }
+            categories[category].push({ fieldName, fieldData });
+        }
+    });
+    
+    // Use the natural order that categories appear in the field definitions
+    const sortedCategories = Object.keys(categories);
+    
+    // Render each regular category
+    sortedCategories.forEach(category => {
+        const categoryFields = categories[category];
+        const categoryTitle = category.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+        
+        html += `<div class="card mb-4">
+            <div class="card-header bg-dark text-white">
+                <h4 class="mb-0 font-weight-bold text-uppercase">
+                    ${categoryTitle}
+                </h4>
+            </div>
+            <div class="card-body">`;
+        
+        // Group fields in rows for better layout
+        const fieldsPerRow = 2;
+        for (let i = 0; i < categoryFields.length; i += fieldsPerRow) {
+            html += '<div class="row">';
+            for (let j = 0; j < fieldsPerRow && i + j < categoryFields.length; j++) {
+                const { fieldName, fieldData } = categoryFields[i + j];
+                const currentValue = currentEntityData[fieldName] || '';
+                html += `<div class="col-md-6">${generateFieldHTML(fieldName, fieldData, currentValue)}</div>`;
+            }
+            html += '</div>';
+        }
+        
+        html += '</div></div>';
+    });
+    
+    // Render beneficiary categories as separate sections
+    Object.keys(beneficiaryCategories).forEach(category => {
+        const categoryFields = beneficiaryCategories[category];
+        const categoryTitle = category.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+        
+        html += `<div class="card mb-4">
+            <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                <h4 class="mb-0 font-weight-bold text-uppercase">
+                    ${categoryTitle}
+                </h4>
+                <button type="button" class="btn btn-outline-primary btn-sm add-beneficiary" data-field="${categoryFields[0].fieldName}" style="padding: 0.25rem 0.5rem; font-size: 0.875rem;">
+                    <i class="fa fa-plus"></i> Add Beneficiary
+                </button>
+            </div>
+            <div class="card-body">`;
+        
+        categoryFields.forEach(({ fieldName, fieldData }) => {
+            const currentValue = currentEntityData[fieldName] || '';
+            html += generateFieldHTML(fieldName, fieldData, currentValue);
+        });
+        
+        html += '</div></div>';
+    });
+    
+    dynamicFieldsContainer.innerHTML = html;
+    
+    // Initialize tooltips for the new fields
+    $('[data-toggle="tooltip"]').tooltip();
+    
+    // Load existing beneficiaries data if any
+    Object.keys(fields).forEach(fieldName => {
+        const fieldData = fields[fieldName];
+        if (fieldData.input_type === 'beneficiaries' && currentEntityData && currentEntityData[fieldName]) {
+            try {
+                const beneficiariesData = typeof currentEntityData[fieldName] === 'string' 
+                    ? JSON.parse(currentEntityData[fieldName]) 
+                    : currentEntityData[fieldName];
+                loadExistingBeneficiaries(fieldName, beneficiariesData);
+            } catch (e) {
+                console.error('Error parsing beneficiaries data:', e);
+            }
+        }
+    });
+}
+
+function generateFieldHTML(fieldName, fieldData, currentValue = '') {
+    // Create tooltip for description if it exists and show_help is explicitly true
+    const tooltipHTML = (fieldData.description && fieldData.show_help === true) ? 
+        ` <i class="fa fa-question-circle text-muted" data-toggle="tooltip" data-placement="top" title="${fieldData.description}"></i>` : '';
+    
+    let html = '';
+    
+    // Don't generate label for beneficiaries fields since they use category headers
+    if (fieldData.input_type !== 'beneficiaries') {
+        html += `<div class="form-group">
+            <label for="${fieldName}">${fieldData.display_name}${tooltipHTML}${fieldData.required ? ' <span class="text-danger">*</span>' : ''}</label>`;
+    }
+    
+    if (fieldData.input_type === 'textarea') {
+        html += `<textarea class="form-control" id="${fieldName}" name="${fieldName}" rows="3"${fieldData.required ? ' required' : ''}>${currentValue}</textarea>`;
+    } else if (fieldData.input_type === 'select') {
+        html += `<select class="form-control" id="${fieldName}" name="${fieldName}"${fieldData.required ? ' required' : ''}>
+            <option value="">Select option</option>`;
+        Object.keys(fieldData.options).forEach(key => {
+            html += `<option value="${key}"${currentValue == key ? ' selected' : ''}>${fieldData.options[key]}</option>`;
+        });
+        html += '</select>';
+    } else if (fieldData.input_type === 'checkbox') {
+        html += `<div class="form-check">
+            <input type="checkbox" class="form-check-input" id="${fieldName}" name="${fieldName}" value="1"${currentValue ? ' checked' : ''}>
+            <label class="form-check-label" for="${fieldName}">${fieldData.display_name}${tooltipHTML}</label>
+        </div>`;
+    } else if (fieldData.input_type === 'number') {
+        html += `<input type="number" class="form-control" id="${fieldName}" name="${fieldName}" value="${currentValue}" step="any"${fieldData.required ? ' required' : ''}>`;
+    } else if (fieldData.input_type === 'date') {
+        html += `<input type="date" class="form-control" id="${fieldName}" name="${fieldName}" value="${currentValue}"${fieldData.required ? ' required' : ''}>`;
+    } else if (fieldData.input_type === 'email') {
+        html += `<input type="email" class="form-control" id="${fieldName}" name="${fieldName}" value="${currentValue}"${fieldData.required ? ' required' : ''}>`;
+    } else if (fieldData.input_type === 'tel') {
+        html += `<input type="tel" class="form-control" id="${fieldName}" name="${fieldName}" value="${currentValue}"${fieldData.required ? ' required' : ''}>`;
+    } else if (fieldData.input_type === 'url') {
+        html += `<input type="url" class="form-control" id="${fieldName}" name="${fieldName}" value="${currentValue}"${fieldData.required ? ' required' : ''}>`;
+    } else if (fieldData.input_type === 'json') {
+        html += `<textarea class="form-control" id="${fieldName}" name="${fieldName}" rows="3" placeholder="Enter JSON data">${typeof currentValue === 'object' ? JSON.stringify(currentValue) : currentValue}</textarea>`;
+    } else if (fieldData.input_type === 'beneficiaries') {
+        html += `<div class="form-group">
+            <div id="${fieldName}_container">
+                <div class="beneficiaries-list mb-2"></div>
+                <input type="hidden" id="${fieldName}" name="${fieldName}" value="${typeof currentValue === 'object' ? JSON.stringify(currentValue) : (currentValue || '[]')}">
+            </div>
+        </div>`;
+    } else {
+        html += `<input type="${fieldData.input_type || 'text'}" class="form-control" id="${fieldName}" name="${fieldName}" value="${currentValue}"${fieldData.required ? ' required' : ''}>`;
+    }
+    
+    html += `<div class="text-danger" id="${fieldName}_error" style="display: none;"></div>`;
+    
+    // Close form-group wrapper only if it was opened (for non-beneficiaries fields)
+    if (fieldData.input_type !== 'beneficiaries') {
+        html += `</div>`;
+    }
+    
+    return html;
+}
+
+// Initialize fields when modal opens
+$(document).ready(function() {
+    // Bind the change event to the entity type select
+    $('#entity_type').on('change', function() {
+        updateFieldsForEntityType();
+    });
+    
+    const entityType = document.getElementById('entity_type').value;
+    if (entityType) {
+        updateFieldsForEntityType();
+    }
+    
+    // Initialize beneficiaries functionality
+    initializeBeneficiaries();
+});
+
+// Beneficiaries management
+if (typeof beneficiaryEntities === 'undefined') {
+    var beneficiaryEntities = [];
+}
+
+function initializeBeneficiaries() {
+    // Get selected trustee ID to exclude from beneficiary options
+    const trusteeId = document.getElementById('trustee_id') ? document.getElementById('trustee_id').value : '';
+    
+    // Load available entities for beneficiaries
+    const url = trusteeId ? 
+        `/financial-entities/beneficiary-entities?exclude_trustee_id=${trusteeId}` : 
+        '/financial-entities/beneficiary-entities';
+    
+    fetch(url)
+        .then(response => response.json())
+        .then(entities => {
+            beneficiaryEntities = entities;
+        })
+        .catch(error => {
+            console.error('Error loading beneficiary entities:', error);
+        });
+    
+    // Handle trustee selection change to update beneficiary options
+    $(document).on('change', '#trustee_id', function() {
+        initializeBeneficiaries();
+    });
+    
+    // Handle add beneficiary button clicks
+    $(document).on('click', '.add-beneficiary', function() {
+        const fieldName = $(this).data('field');
+        addBeneficiary(fieldName);
+        updateBeneficiariesHiddenField();
+    });
+    
+    // Handle remove beneficiary button clicks
+    $(document).on('click', '.remove-beneficiary', function() {
+        $(this).closest('.beneficiary-item').remove();
+        updateBeneficiariesHiddenField();
+    });
+    
+    // Handle beneficiary field changes
+    $(document).on('change', '.beneficiary-entity, .beneficiary-role, .beneficiary-percentage', function() {
+        updateBeneficiariesHiddenField();
+    });
+}
+
+function addBeneficiary(fieldName) {
+    const container = $(`#${fieldName}_container .beneficiaries-list`);
+    const index = container.find('.beneficiary-item').length;
+    
+    // Get selected trustee ID to exclude from beneficiary options
+    const trusteeId = document.getElementById('trustee_id') ? document.getElementById('trustee_id').value : '';
+    const url = trusteeId ? 
+        `/financial-entities/beneficiary-entities?exclude_trustee_id=${trusteeId}` : 
+        '/financial-entities/beneficiary-entities';
+    
+    // Load entities and then create the beneficiary HTML
+    fetch(url)
+        .then(response => response.json())
+        .then(entities => {
+            const beneficiaryHtml = `
+                <div class="beneficiary-item border rounded p-2 mb-2">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <label class="form-label mb-1">Entity</label>
+                            <select class="form-control form-control-sm beneficiary-entity" name="${fieldName}_entity_${index}">
+                                <option value="">Select Entity</option>
+                                ${entities.map(entity => 
+                                    `<option value="${entity.id}">${entity.display_name || entity.name} (${entity.entity_type})</option>`
+                                ).join('')}
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label mb-1">Role</label>
+                            <select class="form-control form-control-sm beneficiary-role" name="${fieldName}_role_${index}">
+                                <option value="primary">Primary</option>
+                                <option value="secondary">Secondary</option>
+                                <option value="tertiary">Tertiary</option>
+                                <option value="contingent">Contingent</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label mb-1">Percentage</label>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <input type="number" class="form-control form-control-sm beneficiary-percentage" name="${fieldName}_percentage_${index}" 
+                                       min="0" max="100" step="0.01" placeholder="0.00" style="width: 80px; flex-shrink: 0;">
+                                <button type="button" class="btn btn-link p-0 remove-beneficiary" style="border: none; background: none; color: #dc3545 !important; flex-shrink: 0;">
+                                    <i class="fa fa-trash fa-lg"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            container.append(beneficiaryHtml);
+        })
+        .catch(error => {
+            console.error('Error loading beneficiary entities:', error);
+        });
+}
+
+function updateBeneficiariesHiddenField() {
+    $('.beneficiaries-list').each(function() {
+        const container = $(this);
+        const fieldName = container.closest('[id$="_container"]').attr('id').replace('_container', '');
+        const hiddenField = $(`#${fieldName}`);
+        
+        const beneficiaries = [];
+        container.find('.beneficiary-item').each(function() {
+            const entityId = $(this).find('.beneficiary-entity').val();
+            const role = $(this).find('.beneficiary-role').val();
+            const percentage = parseFloat($(this).find('.beneficiary-percentage').val()) || 0;
+            
+            if (entityId) {
+                beneficiaries.push({
+                    entity_id: entityId,
+                    role: role,
+                    percentage: percentage
+                });
+            }
+        });
+        
+        hiddenField.val(JSON.stringify(beneficiaries));
+    });
+}
+
+// Load existing beneficiaries when editing
+function loadExistingBeneficiaries(fieldName, beneficiariesData) {
+    if (!beneficiariesData || !Array.isArray(beneficiariesData)) return;
+    
+    const container = $(`#${fieldName}_container .beneficiaries-list`);
+    container.empty();
+    
+    beneficiariesData.forEach((beneficiary, index) => {
+        addBeneficiary(fieldName);
+        const item = container.find('.beneficiary-item').last();
+        item.find('.beneficiary-entity').val(beneficiary.entity_id);
+        item.find('.beneficiary-role').val(beneficiary.role);
+        item.find('.beneficiary-percentage').val(beneficiary.percentage);
+    });
+    
+    updateBeneficiariesHiddenField();
+}
+</script>

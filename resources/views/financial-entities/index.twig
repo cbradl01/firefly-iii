@@ -20,10 +20,36 @@
                         Financial Entities
                     </h3>
                     <div class="box-tools pull-right">
-                        <button class="btn btn-primary btn-sm" id="createEntityBtn">
-                            <i class="fa fa-plus"></i>
-                            Add Entity
-                        </button>
+                        <div class="btn-group">
+                            <button type="button" class="btn btn-primary btn-sm dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                <i class="fa fa-plus"></i>
+                                Add Entity
+                                <span class="caret"></span>
+                            </button>
+                            <ul class="dropdown-menu">
+                                <li><a href="#" class="create-entity-type" data-type="individual">
+                                    <i class="fa fa-user"></i> Individual
+                                </a></li>
+                                <li><a href="#" class="create-entity-type" data-type="trust">
+                                    <i class="fa fa-shield"></i> Trust
+                                </a></li>
+                                <li><a href="#" class="create-entity-type" data-type="business">
+                                    <i class="fa fa-building"></i> Business
+                                </a></li>
+                                <li><a href="#" class="create-entity-type" data-type="advisor">
+                                    <i class="fa fa-graduation-cap"></i> Advisor
+                                </a></li>
+                                <li><a href="#" class="create-entity-type" data-type="custodian">
+                                    <i class="fa fa-lock"></i> Custodian
+                                </a></li>
+                                <li><a href="#" class="create-entity-type" data-type="plan_administrator">
+                                    <i class="fa fa-cogs"></i> Plan Administrator
+                                </a></li>
+                                <li><a href="#" class="create-entity-type" data-type="institution">
+                                    <i class="fa fa-university"></i> Institution
+                                </a></li>
+                            </ul>
+                        </div>
                     </div>
                 </div>
                 <div class="box-body">
@@ -93,9 +119,11 @@
                                         <td>
                                             {% include 'partials.action-buttons' with {
                                                 'edit_id': entity.id,
+                                                'delete_id': entity.id,
                                                 'show_edit': true,
                                                 'show_view': false,
-                                                'show_delete': false,
+                                                'show_delete': true,
+                                                'delete_route': 'financial-entities.destroy',
                                                 'edit_modal': true,
                                                 'size': 'sm'
                                             } %}
@@ -116,11 +144,39 @@
         </div>
     </div>
 
+    <style>
+        .updated-row {
+            animation: pulseHighlight 1.2s ease-in-out;
+        }
+        
+        @keyframes pulseHighlight {
+            0% {
+                background-color: inherit;
+            }
+            50% {
+                background-color: rgb(144, 148, 156);
+            }
+            100% {
+                background-color: inherit;
+            }
+        }
+    </style>
+
     <script type="text/javascript" nonce="{{ JS_NONCE }}">
         document.addEventListener('DOMContentLoaded', function() {
             const searchInput = document.getElementById('search');
             const typeFilter = document.getElementById('type-filter');
             const clearFilters = document.getElementById('clear-filters');
+
+            // Handle delete form submissions with confirmation
+            document.addEventListener('submit', function(e) {
+                if (e.target.classList.contains('delete-form')) {
+                    e.preventDefault();
+                    if (confirm('Are you sure you want to delete this financial entity? This action cannot be undone.')) {
+                        e.target.submit();
+                    }
+                }
+            });
 
             function updateFilters() {
                 const params = new URLSearchParams();
@@ -151,10 +207,11 @@
     <script type="text/javascript" nonce="{{ JS_NONCE }}">
         // Modal functionality
         $(document).ready(function() {
-            // Handle create button click
-            $(document).on('click', '#createEntityBtn', function(e) {
+            // Handle create entity type dropdown clicks
+            $(document).on('click', '.create-entity-type', function(e) {
                 e.preventDefault();
-                loadCreateModal();
+                var entityType = $(this).data('type');
+                loadCreateModal(entityType);
             });
 
             // Handle edit button click
@@ -165,8 +222,13 @@
             });
 
             // Load create modal content
-            function loadCreateModal() {
-                $.get('{{ route("financial-entities.create.modal") }}')
+            function loadCreateModal(entityType) {
+                var url = '{{ route("financial-entities.create.modal") }}';
+                if (entityType) {
+                    url += '?entity_type=' + encodeURIComponent(entityType);
+                }
+                
+                $.get(url)
                     .done(function(data) {
                         $('#editModalContainer').html(data);
                         $('#editEntityModal').modal('show');
@@ -230,7 +292,39 @@
                 
                 var form = $(this);
                 var entityId = form.find('input[name="entity_id"]').val();
-                var formData = form.serialize();
+                
+                // Collect all form data using the same field definitions used to create the form
+                var formData = {};
+                
+                // Always include these fields
+                formData.entity_type = form.find('#entity_type').val() || '';
+                formData.trustee_id = form.find('#trustee_id').val() || null;
+                
+                // Include CSRF token and method for Laravel
+                formData._token = form.find('input[name="_token"]').val();
+                formData._method = form.find('input[name="_method"]').val();
+                
+                // Get the current entity type to determine which fields to collect
+                var entityType = formData.entity_type;
+                
+                if (entityType && window.currentFields && window.currentFields[entityType]) {
+                    var fields = window.currentFields[entityType];
+                    
+                    // Collect data for all fields defined for this entity type
+                    Object.keys(fields).forEach(function(fieldName) {
+                        var fieldElement = form.find('[name="' + fieldName + '"]');
+                        if (fieldElement.length > 0) {
+                            if (fieldElement.attr('type') === 'checkbox') {
+                                formData[fieldName] = fieldElement.is(':checked');
+                            } else {
+                                formData[fieldName] = fieldElement.val() || '';
+                            }
+                        } else {
+                            // Field not found in form, set to empty
+                            formData[fieldName] = '';
+                        }
+                    });
+                }
                 
                 // Disable submit button
                 $('#saveEntityBtn').prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Saving...');
@@ -243,7 +337,8 @@
                 $.ajax({
                     url: url,
                     type: method,
-                    data: formData
+                    data: formData,
+                    contentType: 'application/x-www-form-urlencoded; charset=UTF-8'
                 })
                     .done(function(response) {
                         if (response.success) {
@@ -281,20 +376,41 @@
 
             // Update entity row with new data
             function updateEntityRow(entity) {
-                var row = $('button[data-id="' + entity.id + '"]').closest('tr');
+                var row = $('.edit-btn[data-id="' + entity.id + '"]').closest('tr');
                 
                 // Update entity name link
                 var nameCell = row.find('td:first');
                 var nameLink = nameCell.find('a');
+                
                 if (nameLink.length) {
+                    // Update the link text with display name
                     nameLink.html('<strong>' + (entity.display_name || entity.name) + '</strong>');
+                    
+                    // Update or create the small name element
+                    var smallName = nameCell.find('small.text-muted');
+                    if (entity.name && entity.name !== entity.display_name) {
+                        if (smallName.length) {
+                            smallName.text(entity.name);
+                        } else {
+                            nameCell.append('<br><small class="text-muted">' + entity.name + '</small>');
+                        }
+                    } else {
+                        // Remove the small name element if names are the same
+                        smallName.remove();
+                    }
                 } else {
-                    nameCell.html('<a href="{{ route("financial-entities.show", ":id") }}'.replace(':id', entity.id) + '" class="text-primary"><strong>' + (entity.display_name || entity.name) + '</strong></a>');
+                    // Create new link structure
+                    var linkHtml = '<a href="{{ route("financial-entities.show", ":id") }}'.replace(':id', entity.id) + '" class="text-primary"><strong>' + (entity.display_name || entity.name) + '</strong></a>';
+                    if (entity.name && entity.name !== entity.display_name) {
+                        linkHtml += '<br><small class="text-muted">' + entity.name + '</small>';
+                    }
+                    nameCell.html(linkHtml);
                 }
                 
                 // Update entity type
                 var badgeClass = getBadgeClass(entity.entity_type);
-                row.find('.badge').removeClass().addClass('badge badge-' + badgeClass).text(
+                var badge = row.find('.badge');
+                badge.removeClass().addClass('badge badge-' + badgeClass).text(
                     entity.entity_type.charAt(0).toUpperCase() + entity.entity_type.slice(1)
                 );
                 
@@ -303,6 +419,12 @@
                 if (descCell.length) {
                     descCell.text(entity.description || '-');
                 }
+                
+                // Force a visual update by adding a temporary class
+                row.addClass('updated-row');
+                setTimeout(function() {
+                    row.removeClass('updated-row');
+                }, 1200);
             }
 
             // Get badge class based on entity type

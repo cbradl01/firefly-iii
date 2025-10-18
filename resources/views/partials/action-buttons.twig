@@ -40,8 +40,12 @@
     {% endif %}
     
     {% if show_delete|default(false) and delete_route is defined %}
-        <a href="{{ route(delete_route, delete_id) }}" class="btn btn-danger {{ btn_size }}" title="Delete">
-            <i class="fa fa-trash"></i>
-        </a>
+        <form method="POST" action="{{ route(delete_route, delete_id) }}" style="display: inline;" class="delete-form">
+            <input type="hidden" name="_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="_method" value="DELETE">
+            <button type="submit" class="btn btn-danger {{ btn_size }}" title="Delete">
+                <i class="fa fa-trash"></i>
+            </button>
+        </form>
     {% endif %}
 </div>
