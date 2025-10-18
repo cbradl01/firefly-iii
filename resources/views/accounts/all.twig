@@ -45,19 +45,19 @@
                                      role="tabpanel" aria-labelledby="heading{{ typeKey|title }}">
                                     <div class="panel-body no-padding">
                                         {% if typeData.accounts.count() > 0 %}
-                                            <table class="table table-responsive table-hover">
+                                            <table class="table sortable table-responsive table-hover" id="accounts-table-{{ typeKey }}">
                                                     <thead>
                                                         <tr>
                                                             <!-- <th>Name</th> -->
-                                                            <th>Type</th>
-                                                            <th>Institution</th>
-                                                            <th>Owner</th>
-                                                            <th>Product Name</th>
-                                                            <th>Account Number</th>
-                                                            <th>Beneficiaries</th>
-                                                            <th>Balance</th>
-                                                            <th>Active</th>
-                                                            <th>Actions</th>
+                                                            <th data-defaultsign="az">Type</th>
+                                                            <th data-defaultsign="az">Institution</th>
+                                                            <th data-defaultsign="az">Owner</th>
+                                                            <th data-defaultsign="az">Product Name</th>
+                                                            <th data-defaultsign="az">Account Number</th>
+                                                            <th data-defaultsign="_19">Beneficiaries</th>
+                                                            <th data-defaultsign="_19">Balance</th>
+                                                            <th data-defaultsign="az">Active</th>
+                                                            <th data-defaultsort="disabled">Actions</th>
                                                         </tr>
                                                     </thead>
                                                     <tbody>
@@ -458,4 +458,9 @@
             }
         });
     </script>
+    
+    <!-- Table Sorting Assets -->
+    <link rel="stylesheet" href="{{ asset('css/table-sorting.css') }}" type="text/css" media="all" nonce="{{ JS_NONCE }}">
+    <script src="{{ asset('v1/js/lib/bootstrap-sortable.js') }}" nonce="{{ JS_NONCE }}"></script>
+    <script src="{{ asset('js/table-sorting.js') }}" nonce="{{ JS_NONCE }}"></script>
 {% endblock %}

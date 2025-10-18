@@ -75,21 +75,22 @@
 
                     <!-- Entities Table -->
                     <div class="table-responsive">
-                        <table class="table table-striped">
+                        <table class="table sortable table-striped table-hover" id="financial-entities-table">
                             <thead>
                                 <tr>
-                                    <th>Name</th>
-                                    <th>Type</th>
-                                    <th>Description</th>
-                                    <th>Accounts</th>
-                                    <th>Total Balance</th>
-                                    <th>Actions</th>
+                                    <th data-defaultsign="az">Name</th>
+                                    <th data-defaultsign="az">Type</th>
+                                    <th data-defaultsign="az">Description</th>
+                                    <th data-defaultsign="_19">Accounts</th>
+                                    <th data-defaultsign="_19">Total Balance</th>
+                                    <th data-defaultsort="disabled">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {% for entity in entities %}
+                                    {% set entityStats = entityService.getEntityStatistics(entity) %}
                                     <tr>
-                                        <td>
+                                        <td data-value="{{ entity.display_name|lower }}">
                                             <a href="{{ route('financial-entities.show', entity.id) }}" class="text-primary">
                                                 <strong>{{ entity.display_name }}</strong>
                                             </a>
@@ -97,20 +98,19 @@
                                                 <br><small class="text-muted">{{ entity.name }}</small>
                                             {% endif %}
                                         </td>
-                                        <td>
+                                        <td data-value="{{ entity.entity_type|lower }}">
                                             <span class="badge badge-{{ entity.entity_type == 'individual' ? 'primary' : (entity.entity_type == 'trust' ? 'success' : (entity.entity_type == 'business' ? 'warning' : 'info')) }}">
                                                 {{ entity.entity_type|title }}
                                             </span>
                                         </td>
-                                        <td>{{ entity.description|default('No description') }}</td>
-                                        <td>
-                                            {% set entityStats = entityService.getEntityStatistics(entity) %}
+                                        <td data-value="{{ entity.description|default('')|lower }}">{{ entity.description|default('No description') }}</td>
+                                        <td data-value="{{ entityStats.owned_accounts_count }}">
                                             {{ entityStats.owned_accounts_count }} owned
                                             {% if entityStats.beneficiary_accounts_count > 0 %}
                                                 <br><small class="text-muted">{{ entityStats.beneficiary_accounts_count }} beneficiary</small>
                                             {% endif %}
                                         </td>
-                                        <td>
+                                        <td data-value="{{ entityStats.owned_accounts_balance }}" style="text-align: right;">
                                             <strong>${{ entityStats.owned_accounts_balance|number_format(2) }}</strong>
                                             {% if entityStats.beneficiary_accounts_balance > 0 %}
                                                 <br><small class="text-muted">${{ entityStats.beneficiary_accounts_balance|number_format(2) }} beneficiary</small>
@@ -475,4 +475,9 @@
             });
         });
     </script>
+    
+    <!-- Table Sorting Assets -->
+    <link rel="stylesheet" href="{{ asset('css/table-sorting.css') }}" type="text/css" media="all" nonce="{{ JS_NONCE }}">
+    <script src="{{ asset('v1/js/lib/bootstrap-sortable.js') }}" nonce="{{ JS_NONCE }}"></script>
+    <script src="{{ asset('js/table-sorting.js') }}" nonce="{{ JS_NONCE }}"></script>
 {% endblock %}
