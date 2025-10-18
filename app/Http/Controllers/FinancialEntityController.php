@@ -59,6 +59,7 @@ class FinancialEntityController extends Controller
             FinancialEntity::TYPE_BUSINESS => 'Businesses',
             FinancialEntity::TYPE_ADVISOR => 'Advisors',
             FinancialEntity::TYPE_CUSTODIAN => 'Custodians',
+            FinancialEntity::TYPE_INSTITUTION => 'Institutions',
         ];
 
         // Pass request parameters to view
@@ -72,7 +73,7 @@ class FinancialEntityController extends Controller
     /**
      * Show the modal form for creating a new financial entity
      */
-    public function createModal(): View
+    public function createModal(Request $request): View
     {
         $entityTypes = [
             FinancialEntity::TYPE_INDIVIDUAL => 'Individual',
@@ -80,6 +81,8 @@ class FinancialEntityController extends Controller
             FinancialEntity::TYPE_BUSINESS => 'Business',
             FinancialEntity::TYPE_ADVISOR => 'Financial Advisor',
             FinancialEntity::TYPE_CUSTODIAN => 'Custodian',
+            FinancialEntity::TYPE_PLAN_ADMINISTRATOR => 'Plan Administrator',
+            FinancialEntity::TYPE_INSTITUTION => 'Institution',
         ];
 
         // Get all entities that can be trustees (individuals, businesses, advisors)
@@ -99,10 +102,20 @@ class FinancialEntityController extends Controller
 
         // Create a dummy entity for the form (empty values)
         $financialEntity = new FinancialEntity();
+        
+        // Pre-select entity type if provided
+        $preselectedEntityType = $request->get('entity_type');
+        if ($preselectedEntityType && array_key_exists($preselectedEntityType, $entityTypes)) {
+            $financialEntity->entity_type = $preselectedEntityType;
+        }
+        
         $currentTrustee = null;
         $isCreate = true;
 
-        return view('financial-entities.edit-modal', compact('entityTypes', 'trusteeOptions', 'financialEntity', 'currentTrustee', 'isCreate'));
+        // Get field definitions for all entity types
+        $fieldDefinitions = app(\FireflyIII\Services\FieldDefinitionService::class);
+
+        return view('financial-entities.edit-modal', compact('entityTypes', 'trusteeOptions', 'financialEntity', 'currentTrustee', 'isCreate', 'fieldDefinitions'));
     }
 
     /**
@@ -116,6 +129,7 @@ class FinancialEntityController extends Controller
             FinancialEntity::TYPE_BUSINESS => 'Business',
             FinancialEntity::TYPE_ADVISOR => 'Financial Advisor',
             FinancialEntity::TYPE_CUSTODIAN => 'Custodian',
+            FinancialEntity::TYPE_INSTITUTION => 'Institution',
         ];
 
         // Get all entities that can be trustees (individuals, businesses, advisors)
@@ -141,30 +155,14 @@ class FinancialEntityController extends Controller
      */
     public function storeModal(Request $request): JsonResponse
     {
-        $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'entity_type' => 'required|string|in:' . implode(',', [
-                FinancialEntity::TYPE_INDIVIDUAL,
-                FinancialEntity::TYPE_TRUST,
-                FinancialEntity::TYPE_BUSINESS,
-                FinancialEntity::TYPE_ADVISOR,
-                FinancialEntity::TYPE_CUSTODIAN,
-            ]),
-            'display_name' => 'nullable|string|max:255',
-            'description' => 'nullable|string',
-            'contact_info' => 'nullable|array',
-            'metadata' => 'nullable|array',
-            'trustee_id' => 'nullable|integer|exists:financial_entities,id',
-        ]);
-
-        // Custom validation: trustee_id is required when entity_type is 'trust'
-        if ($validated['entity_type'] === FinancialEntity::TYPE_TRUST && empty($validated['trustee_id'])) {
-            return response()->json([
-                'success' => false,
-                'message' => 'A trustee must be selected for trust entities.',
-                'errors' => ['trustee_id' => ['A trustee must be selected for trust entities.']]
-            ], 422);
+        // Validate entity data
+        $validationResult = $this->validateEntityData($request);
+        
+        if (!$validationResult['success']) {
+            return response()->json($validationResult, 422);
         }
+        
+        $validated = $validationResult['data'];
 
         $entity = $this->entityService->createEntity($validated);
 
@@ -208,21 +206,53 @@ class FinancialEntityController extends Controller
      */
     public function store(Request $request)
     {
-        $validated = $request->validate([
-            'name' => 'required|string|max:255',
+        // First validate the entity type
+        $entityType = $request->validate([
             'entity_type' => 'required|string|in:' . implode(',', [
                 FinancialEntity::TYPE_INDIVIDUAL,
                 FinancialEntity::TYPE_TRUST,
                 FinancialEntity::TYPE_BUSINESS,
                 FinancialEntity::TYPE_ADVISOR,
                 FinancialEntity::TYPE_CUSTODIAN,
-            ]),
-            'display_name' => 'nullable|string|max:255',
-            'description' => 'nullable|string',
-            'contact_info' => 'nullable|array',
-            'metadata' => 'nullable|array',
-            'trustee_id' => 'nullable|integer|exists:financial_entities,id',
+                FinancialEntity::TYPE_PLAN_ADMINISTRATOR,
+                FinancialEntity::TYPE_INSTITUTION,
+            ])
+        ])['entity_type'];
+
+        // Get field definitions for this entity type
+        $fieldDefinitions = app(\FireflyIII\Services\FieldDefinitionService::class);
+        $allValidationRules = $fieldDefinitions->getValidationRules($entityType);
+        
+        // Only validate fields that are actually present in the request and have values
+        $validationRules = [];
+        foreach ($request->all() as $fieldName => $value) {
+            // Skip empty values (empty strings, null, empty arrays)
+            if (empty($value) && $value !== '0' && $value !== 0) {
+                continue;
+            }
+            
+            if (isset($allValidationRules[$fieldName])) {
+                $validationRules[$fieldName] = $allValidationRules[$fieldName];
+            }
+        }
+        
+        // Always validate entity_type
+        $validationRules['entity_type'] = 'required|string|in:' . implode(',', [
+            FinancialEntity::TYPE_INDIVIDUAL,
+            FinancialEntity::TYPE_TRUST,
+            FinancialEntity::TYPE_BUSINESS,
+            FinancialEntity::TYPE_ADVISOR,
+            FinancialEntity::TYPE_CUSTODIAN,
+            FinancialEntity::TYPE_PLAN_ADMINISTRATOR,
+            FinancialEntity::TYPE_INSTITUTION,
         ]);
+        
+        // Add trustee_id if present
+        if ($request->has('trustee_id')) {
+            $validationRules['trustee_id'] = 'nullable|integer|exists:financial_entities,id';
+        }
+
+        $validated = $request->validate($validationRules);
 
         $entity = $this->entityService->createEntity($validated);
 
@@ -296,6 +326,7 @@ class FinancialEntityController extends Controller
             FinancialEntity::TYPE_BUSINESS => 'Business',
             FinancialEntity::TYPE_ADVISOR => 'Financial Advisor',
             FinancialEntity::TYPE_CUSTODIAN => 'Custodian',
+            FinancialEntity::TYPE_INSTITUTION => 'Institution',
         ];
 
         // Get all entities that can be trustees (individuals, businesses, advisors)
@@ -348,6 +379,7 @@ class FinancialEntityController extends Controller
             FinancialEntity::TYPE_BUSINESS => 'Business',
             FinancialEntity::TYPE_ADVISOR => 'Financial Advisor',
             FinancialEntity::TYPE_CUSTODIAN => 'Custodian',
+            FinancialEntity::TYPE_INSTITUTION => 'Institution',
         ];
 
         // Get all entities that can be trustees (individuals, businesses, advisors)
@@ -374,7 +406,64 @@ class FinancialEntityController extends Controller
 
         $isCreate = false;
 
-        return view('financial-entities.edit-modal', compact('financialEntity', 'entityTypes', 'trusteeOptions', 'currentTrustee', 'isCreate'));
+        // Get field definitions for all entity types
+        $fieldDefinitions = app(\FireflyIII\Services\FieldDefinitionService::class);
+        
+        // Map database fields back to form field names for editing
+        $mappedEntityData = $this->entityService->mapFieldsFromDatabase($financialEntity);
+
+        return view('financial-entities.edit-modal', compact('financialEntity', 'entityTypes', 'trusteeOptions', 'currentTrustee', 'isCreate', 'fieldDefinitions', 'mappedEntityData'));
+    }
+
+    /**
+     * Get fields for a specific entity type (AJAX endpoint)
+     */
+    public function getFieldsForEntityType(Request $request): JsonResponse
+    {
+        $entityType = $request->input('entity_type');
+
+        if (!$entityType) {
+            return response()->json(['error' => 'Entity type is required'], 400);
+        }
+
+        $fieldDefinitions = app(\FireflyIII\Services\FieldDefinitionService::class);
+        $fields = $fieldDefinitions->getFieldsWithTranslations($entityType);
+
+        return response()->json([
+            'fields' => $fields,
+            'entity_type' => $entityType
+        ]);
+    }
+
+    /**
+     * Get financial entities for beneficiaries dropdown (excluding institutions and selected trustee)
+     */
+    public function getBeneficiaryEntities(Request $request): JsonResponse
+    {
+        $excludeIds = [];
+        
+        // Exclude institutions
+        $institutionIds = FinancialEntity::where('entity_type', FinancialEntity::TYPE_INSTITUTION)->pluck('id')->toArray();
+        $excludeIds = array_merge($excludeIds, $institutionIds);
+        
+        // Exclude selected trustee if provided
+        if ($request->has('exclude_trustee_id') && $request->exclude_trustee_id) {
+            $excludeIds[] = $request->exclude_trustee_id;
+        }
+        
+        // Remove empty values
+        $excludeIds = array_filter($excludeIds);
+        
+        $query = FinancialEntity::where('entity_type', '!=', FinancialEntity::TYPE_INSTITUTION);
+        
+        if (!empty($excludeIds)) {
+            $query->whereNotIn('id', $excludeIds);
+        }
+        
+        $entities = $query->orderBy('name')
+            ->get(['id', 'name', 'display_name', 'entity_type']);
+
+        return response()->json($entities);
     }
 
     /**
@@ -401,6 +490,7 @@ class FinancialEntityController extends Controller
                 FinancialEntity::TYPE_BUSINESS,
                 FinancialEntity::TYPE_ADVISOR,
                 FinancialEntity::TYPE_CUSTODIAN,
+                FinancialEntity::TYPE_INSTITUTION,
             ]),
             'display_name' => 'nullable|string|max:255',
             'description' => 'nullable|string',
@@ -439,6 +529,7 @@ class FinancialEntityController extends Controller
      */
     public function updateModal(Request $request, $id): JsonResponse
     {
+        
         $user = Auth::user();
         
         // Find the entity and check if user has permission
@@ -453,32 +544,16 @@ class FinancialEntityController extends Controller
             ], 404);
         }
         
-        $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'entity_type' => 'required|string|in:' . implode(',', [
-                FinancialEntity::TYPE_INDIVIDUAL,
-                FinancialEntity::TYPE_TRUST,
-                FinancialEntity::TYPE_BUSINESS,
-                FinancialEntity::TYPE_ADVISOR,
-                FinancialEntity::TYPE_CUSTODIAN,
-            ]),
-            'display_name' => 'nullable|string|max:255',
-            'description' => 'nullable|string',
-            'contact_info' => 'nullable|array',
-            'metadata' => 'nullable|array',
-            'trustee_id' => 'nullable|integer|exists:financial_entities,id',
-        ]);
-
-        // Custom validation: trustee_id is required when entity_type is 'trust'
-        if ($validated['entity_type'] === FinancialEntity::TYPE_TRUST && empty($validated['trustee_id'])) {
-            return response()->json([
-                'success' => false,
-                'message' => 'A trustee must be selected for trust entities.',
-                'errors' => ['trustee_id' => ['A trustee must be selected for trust entities.']]
-            ], 422);
+        // Validate entity data
+        $validationResult = $this->validateEntityData($request);
+        
+        if (!$validationResult['success']) {
+            return response()->json($validationResult, 422);
         }
+        
+        $validated = $validationResult['data'];
 
-        $financialEntity->update($validated);
+        $this->entityService->updateEntity($financialEntity, $validated);
 
         // Handle trustee relationship for trusts
         if ($financialEntity->entity_type === FinancialEntity::TYPE_TRUST) {
@@ -516,12 +591,54 @@ class FinancialEntityController extends Controller
     /**
      * Remove the specified financial entity
      */
-    public function destroy(FinancialEntity $financialEntity)
+    public function destroy($id)
     {
-        $financialEntity->update(['is_active' => false]);
+        try {
+            $user = Auth::user();
+            $financialEntity = FinancialEntity::whereHas('users', function ($query) use ($user) {
+                $query->where('user_id', $user->id);
+            })->find($id);
 
-        return redirect()->route('financial-entities.index')
-            ->with('success', 'Financial entity deactivated successfully.');
+            if (!$financialEntity) {
+                return redirect()->route('financial-entities.index')
+                    ->with('error', 'Financial entity not found or you do not have permission to delete it.');
+            }
+
+            // Check if entity has any accounts
+            $entityStats = $this->entityService->getEntityStatistics($financialEntity);
+            if ($entityStats['owned_accounts_count'] > 0 || $entityStats['beneficiary_accounts_count'] > 0) {
+                return redirect()->route('financial-entities.index')
+                    ->with('error', 'Cannot delete financial entity that has associated accounts. Please remove or reassign accounts first.');
+            }
+
+            // Get entity name before deletion
+            $entityName = $financialEntity->display_name ?: $financialEntity->name;
+            
+            // Delete related records first to avoid foreign key constraints
+            $financialEntity->accountRoles()->delete();
+            $financialEntity->relationships()->delete();
+            $financialEntity->relatedRelationships()->delete();
+            $financialEntity->notes()->delete();
+            
+            // Remove user permissions
+            $financialEntity->users()->detach();
+            
+            // Finally delete the entity
+            $deleted = $financialEntity->delete();
+            
+            if (!$deleted) {
+                return redirect()->route('financial-entities.index')
+                    ->with('error', "Failed to delete financial entity '{$entityName}'. Please try again.");
+            }
+
+            return redirect()->route('financial-entities.index')
+                ->with('success', "Financial entity '{$entityName}' has been deleted successfully.");
+                
+        } catch (\Exception $e) {
+            \Log::error('Failed to delete financial entity: ' . $e->getMessage());
+            return redirect()->route('financial-entities.index')
+                ->with('error', 'An error occurred while deleting the financial entity. Please try again.');
+        }
     }
 
     /**
@@ -572,4 +689,86 @@ class FinancialEntityController extends Controller
         $statistics = $this->entityService->getEntityStatistics($financialEntity);
         return response()->json($statistics);
     }
+
+    /**
+     * Validate entity data based on entity type and field definitions
+     */
+    private function validateEntityData(Request $request): array
+    {
+        // First validate the entity type
+        $entityType = $request->validate([
+            'entity_type' => 'required|string|in:' . implode(',', [
+                FinancialEntity::TYPE_INDIVIDUAL,
+                FinancialEntity::TYPE_TRUST,
+                FinancialEntity::TYPE_BUSINESS,
+                FinancialEntity::TYPE_ADVISOR,
+                FinancialEntity::TYPE_CUSTODIAN,
+                FinancialEntity::TYPE_PLAN_ADMINISTRATOR,
+                FinancialEntity::TYPE_INSTITUTION,
+            ])
+        ])['entity_type'];
+
+        // Get field definitions for this entity type
+        $fieldDefinitions = app(\FireflyIII\Services\FieldDefinitionService::class);
+        $allValidationRules = $fieldDefinitions->getValidationRules($entityType);
+        
+        // Only validate fields that are actually present in the request and have values
+        $validationRules = [];
+        foreach ($request->all() as $fieldName => $value) {
+            // Skip empty values (empty strings, null, empty arrays)
+            if (empty($value) && $value !== '0' && $value !== 0) {
+                continue;
+            }
+            
+            if (isset($allValidationRules[$fieldName])) {
+                $validationRules[$fieldName] = $allValidationRules[$fieldName];
+            }
+        }
+        
+        // Always validate entity_type
+        $validationRules['entity_type'] = 'required|string|in:' . implode(',', [
+            FinancialEntity::TYPE_INDIVIDUAL,
+            FinancialEntity::TYPE_TRUST,
+            FinancialEntity::TYPE_BUSINESS,
+            FinancialEntity::TYPE_ADVISOR,
+            FinancialEntity::TYPE_CUSTODIAN,
+            FinancialEntity::TYPE_PLAN_ADMINISTRATOR,
+            FinancialEntity::TYPE_INSTITUTION,
+        ]);
+        
+        // Add trustee_id if present
+        if ($request->has('trustee_id')) {
+            $validationRules['trustee_id'] = 'nullable|integer|exists:financial_entities,id';
+        }
+
+        try {
+            $validated = $request->validate($validationRules);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return [
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ];
+        }
+
+        // Custom validation: trustee_id is required when entity_type is 'trust'
+        if ($validated['entity_type'] === FinancialEntity::TYPE_TRUST && empty($validated['trustee_id'])) {
+            return [
+                'success' => false,
+                'message' => 'A trustee must be selected for trust entities.',
+                'errors' => ['trustee_id' => ['A trustee must be selected for trust entities.']]
+            ];
+        }
+
+        // Return ALL request data, not just validated fields
+        $allData = $request->all();
+        // Remove Laravel-specific fields
+        unset($allData['_token'], $allData['_method']);
+
+        return [
+            'success' => true,
+            'data' => $allData
+        ];
+    }
+
 }
