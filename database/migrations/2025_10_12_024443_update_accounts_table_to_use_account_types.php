@@ -12,21 +12,10 @@ return new class extends Migration
      */
     public function up(): void
     {
-        // 1. Add account_type_id column to accounts table
-        Schema::table('accounts', function (Blueprint $table) {
-            $table->foreignId('account_type_id')->nullable()->constrained('account_types');
-        });
-
-        // 2. Migrate existing category_id/behavior_id combinations to account_type_id
-        $this->migrateToAccountTypes();
-
-        // 3. Make account_type_id required and remove old columns
-        Schema::table('accounts', function (Blueprint $table) {
-            $table->foreignId('account_type_id')->nullable(false)->change();
-            $table->dropForeign(['category_id']);
-            $table->dropForeign(['behavior_id']);
-            $table->dropColumn(['category_id', 'behavior_id']);
-        });
+        // This migration is no longer needed as we're using account_templates instead of account_types
+        // The account_type_id column exists but references a non-existent table
+        // The system now uses template_id which references account_templates
+        return;
     }
 
     /**
@@ -34,22 +23,8 @@ return new class extends Migration
      */
     public function down(): void
     {
-        // 1. Add back category_id and behavior_id columns
-        Schema::table('accounts', function (Blueprint $table) {
-            $table->foreignId('category_id')->nullable()->constrained('account_categories');
-            $table->foreignId('behavior_id')->nullable()->constrained('account_behaviors');
-        });
-
-        // 2. Migrate data back from account_type_id to category_id/behavior_id
-        $this->migrateBackToCategoryBehavior();
-
-        // 3. Make category_id and behavior_id required and remove account_type_id
-        Schema::table('accounts', function (Blueprint $table) {
-            $table->foreignId('category_id')->nullable(false)->change();
-            $table->foreignId('behavior_id')->nullable(false)->change();
-            $table->dropForeign(['account_type_id']);
-            $table->dropColumn('account_type_id');
-        });
+        // Nothing to rollback as this migration does nothing
+        return;
     }
 
     /**

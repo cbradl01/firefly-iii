@@ -17,6 +17,7 @@ return new class extends Migration
             $table->id();
             $table->string('name', 100)->unique(); // Stable identifier (never changes)
             $table->string('label', 100); // Display name (can change)
+            $table->string('template_name', 255)->unique(); // Template name for display
             $table->foreignId('category_id')->constrained('account_categories');
             $table->foreignId('behavior_id')->constrained('account_behaviors');
             $table->text('description')->nullable();
