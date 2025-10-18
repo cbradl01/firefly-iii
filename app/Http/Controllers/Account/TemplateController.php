@@ -237,9 +237,11 @@ class TemplateController extends Controller
                 'field_name' => $fieldName,
                 'display_name' => $fieldData['display_name'],
                 'data_type' => $fieldData['data_type'],
+                'input_type' => $fieldData['input_type'] ?? 'text',
                 'category' => $fieldData['category'],
                 'description' => $fieldData['description'],
                 'validation_rules' => json_encode(['required' => $fieldData['required'] ?? false]),
+                'options' => $fieldData['options'] ?? [],
                 'is_system_field' => true,
                 'target_type' => 'account'
             ];

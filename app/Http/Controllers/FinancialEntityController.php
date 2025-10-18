@@ -441,10 +441,17 @@ class FinancialEntityController extends Controller
     public function getBeneficiaryEntities(Request $request): JsonResponse
     {
         $excludeIds = [];
+        $excludeTypes = $request->get('exclude_types', []);
         
-        // Exclude institutions
-        $institutionIds = FinancialEntity::where('entity_type', FinancialEntity::TYPE_INSTITUTION)->pluck('id')->toArray();
-        $excludeIds = array_merge($excludeIds, $institutionIds);
+        // Convert comma-separated string to array if needed
+        if (is_string($excludeTypes)) {
+            $excludeTypes = explode(',', $excludeTypes);
+        }
+        
+        // Exclude institutions by default
+        if (!in_array('institution', $excludeTypes)) {
+            $excludeTypes[] = 'institution';
+        }
         
         // Exclude selected trustee if provided
         if ($request->has('exclude_trustee_id') && $request->exclude_trustee_id) {
@@ -454,7 +461,12 @@ class FinancialEntityController extends Controller
         // Remove empty values
         $excludeIds = array_filter($excludeIds);
         
-        $query = FinancialEntity::where('entity_type', '!=', FinancialEntity::TYPE_INSTITUTION);
+        $query = FinancialEntity::query();
+        
+        // Exclude specified entity types
+        if (!empty($excludeTypes)) {
+            $query->whereNotIn('entity_type', $excludeTypes);
+        }
         
         if (!empty($excludeIds)) {
             $query->whereNotIn('id', $excludeIds);
