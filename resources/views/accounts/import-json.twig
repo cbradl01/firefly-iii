@@ -29,14 +29,9 @@
                                 <p>The JSON file should be an array of account objects. Each account object can contain:</p>
                                 <ul>
                                     <li><strong>name</strong> - Account name (required)</li>
-                                    <li><strong>type</strong> - Account type: "asset" or "liability" (required)</li>
+                                    <li><strong>template_name</strong> - Account template name (required) - See available templates below</li>
                                     <li><strong>active</strong> - Active status (true/false, defaults to true)</li>
                                     <li><strong>include_net_worth</strong> - Include in net worth (true/false, defaults to true)</li>
-                                    <li><strong>account_role</strong> - For asset accounts: "defaultAsset", "savingAsset", "sharedAsset", "brokerageAsset"</li>
-                                    <li><strong>liability_type</strong> - For liability accounts: "debt", "loan", "mortgage", "creditcard"</li>
-                                    <li><strong>liability_direction</strong> - For liability accounts: "debit" (I owe) or "credit" (I am owed)</li>
-                                    <li><strong>interest</strong> - Interest rate (for loans/debts)</li>
-                                    <li><strong>interest_period</strong> - Interest period: "monthly", "yearly", etc.</li>
                                     <li><strong>opening_balance</strong> - Opening balance amount</li>
                                     <li><strong>opening_balance_date</strong> - Opening balance date (YYYY-MM-DD)</li>
                                     <li><strong>account_number</strong> - Account number</li>
@@ -44,6 +39,42 @@
                                     <li><strong>beneficiaries</strong> - Array of beneficiaries with name, relationship, priority, percentage, email, phone, notes</li>
                                     <li><strong>owner</strong> - Account owner (string, required) - Must match an existing financial entity display name</li>
                                 </ul>
+                                
+                                <h4>Available Template Names:</h4>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <h5>Asset Accounts:</h5>
+                                        <ul>
+                                            <li>personal_checking</li>
+                                            <li>business_checking</li>
+                                            <li>high_yield_savings</li>
+                                            <li>emergency_fund</li>
+                                            <li>money_market_account</li>
+                                            <li>certificate_of_deposit</li>
+                                            <li>business_savings</li>
+                                            <li>cash_wallet</li>
+                                            <li>cryptocurrency_wallet</li>
+                                            <li>roth_ira</li>
+                                            <li>traditional_ira</li>
+                                            <li>401k</li>
+                                            <li>individual_brokerage</li>
+                                            <li>joint_brokerage</li>
+                                        </ul>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <h5>Liability Accounts:</h5>
+                                        <ul>
+                                            <li>personal_credit_card</li>
+                                            <li>business_credit_card</li>
+                                            <li>auto_loan</li>
+                                            <li>home_mortgage</li>
+                                            <li>student_loan</li>
+                                            <li>personal_loan</li>
+                                            <li>home_equity_loan</li>
+                                            <li>business_term_loan</li>
+                                        </ul>
+                                    </div>
+                                </div>
                             </div>
 
                             {% if entityMapping is not empty %}

@@ -70,13 +70,13 @@
                 </div>
 
                 <!-- Results Summary -->
-                {% if search or category or accountType %}
+                {% if search or category or behavior %}
                     <div class="alert alert-info">
                         <span class="fa fa-info-circle"></span>
                         {{ ('showing_results_for')|_ }}: 
                         {% if search %}<strong>{{ search }}</strong>{% endif %}
                         {% if category %}{{ ('in_category')|_ }} <strong>{{ category }}</strong>{% endif %}
-                        {% if accountType %}{{ ('of_type')|_ }} <strong>{{ accountType }}</strong>{% endif %}
+                        {% if behavior %}{{ ('of_type')|_ }} <strong>{{ behavior }}</strong>{% endif %}
                         ({{ templates|length }} {{ ('templates_found')|_ }})
                     </div>
                 {% endif %}
@@ -85,7 +85,7 @@
                     <div class="alert alert-warning text-center">
                         <span class="fa fa-search"></span>
                         {{ ('no_templates_found')|_ }}
-                        {% if search or category or accountType %}
+                        {% if search or category or behavior %}
                             <br><small>{{ ('try_adjusting_your_filters')|_ }}</small>
                         {% endif %}
                     </div>
@@ -104,29 +104,39 @@
                                         <div class="box template-card" style="cursor: pointer; min-height: 200px;" data-template-name="{{ template.name }}">
                                             <div class="box-body">
                                                 <h5>
-                                                    <span class="fa fa-{{ template.accountType.category.name == 'Asset' ? 'money' : (template.accountType.category.name == 'Liability' ? 'landmark' : 'chart-line') }}"></span>
-                                                    {{ template.name }}
+                                                    <span class="fa fa-{{ template.category.name == 'Asset' ? 'money' : (template.category.name == 'Liability' ? 'landmark' : 'chart-line') }}"></span>
+                                                    {{ template.label }}
                                                 </h5>
                                                 <p class="text-muted small">
                                                     {{ template.description }}
                                                 </p>
-                                                {% if template.suggested_fields and template.suggested_fields|length > 0 %}
+                                                {% if template.metadata_schema.account_fields %}
                                                     <div style="margin-top: 10px;">
                                                         <small class="text-info">
                                                             <span class="fa fa-info-circle"></span>
-                                                            {{ ('suggested_fields')|_ }}: {{ template.suggested_fields|slice(0, 3)|join(', ') }}
-                                                            {% if template.suggested_fields|length > 3 %}
-                                                                +{{ template.suggested_fields|length - 3 }} {{ ('more')|_ }}
+                                                            {{ ('configured_fields')|_ }}: {{ template.metadata_schema.account_fields|keys|slice(0, 3)|join(', ') }}
+                                                            {% if template.metadata_schema.account_fields|keys|length > 3 %}
+                                                                +{{ template.metadata_schema.account_fields|keys|length - 3 }} {{ ('more')|_ }}
                                                             {% endif %}
                                                         </small>
                                                     </div>
                                                 {% endif %}
                                             </div>
                                             <div class="box-footer">
-                                                <button class="btn btn-primary btn-sm btn-block" data-template-name="{{ template.name }}">
-                                                    <span class="fa fa-plus"></span>
-                                                    {{ ('create_account')|_ }}
-                                                </button>
+                                                <div class="row">
+                                                    <div class="col-xs-6">
+                                                        <button class="btn btn-primary btn-sm btn-block" data-template-name="{{ template.name }}">
+                                                            <span class="fa fa-plus"></span>
+                                                            {{ ('create_account')|_ }}
+                                                        </button>
+                                                    </div>
+                                                    <div class="col-xs-6">
+                                                        <button class="btn btn-default btn-sm btn-block edit-template-btn" data-template-id="{{ template.id }}" data-template-name="{{ template.name }}">
+                                                            <span class="fa fa-edit"></span>
+                                                            {{ ('edit')|_ }}
+                                                        </button>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -188,6 +198,78 @@
         </div>
     </div>
 </div>
+
+<!-- Template Edit Modal -->
+<div class="modal fade" id="editTemplateModal" tabindex="-1" role="dialog" aria-labelledby="editTemplateModalLabel">
+    <div class="modal-dialog" role="document" style="width: 95%; max-width: 1400px;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                <h4 class="modal-title" id="editTemplateModalLabel">
+                    <span class="fa fa-edit"></span>
+                    {{ ('edit_template')|_ }}: <span id="templateName"></span>
+                </h4>
+            </div>
+            <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+                <form id="editTemplateForm">
+                    <input type="hidden" id="templateId" name="template_id">
+                    
+                    <!-- Template Basic Info -->
+                    <div class="row" style="margin-bottom: 20px;">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="templateLabel">{{ ('template_label')|_ }}</label>
+                                <input type="text" class="form-control" id="templateLabel" name="label" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="templateDescription">{{ ('description')|_ }}</label>
+                                <textarea class="form-control" id="templateDescription" name="description" rows="2"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Field Configuration Table -->
+                    <div class="row">
+                        <div class="col-md-12">
+                            <h5>{{ ('field_configuration')|_ }}</h5>
+                            <p class="text-muted">{{ ('configure_which_fields_are_required_or_optional')|_ }}</p>
+                            
+                            <!-- Field Configuration Table -->
+                            <div class="table-responsive">
+                                <table class="table table-striped table-bordered" id="fieldConfigurationTable">
+                                    <thead>
+                                        <tr>
+                                            <th style="width: 25%;">{{ ('field_name')|_ }}</th>
+                                            <th style="width: 35%;">{{ ('description')|_ }}</th>
+                                            <th style="width: 15%; text-align: center;">{{ ('required')|_ }}</th>
+                                            <th style="width: 25%;">{{ ('default_value')|_ }}</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="fieldConfigurationTableBody">
+                                        <!-- Content will be populated by JavaScript -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">
+                    {{ ('cancel')|_ }}
+                </button>
+                <button type="button" class="btn btn-primary" id="saveTemplateBtn">
+                    <span class="fa fa-save"></span>
+                    {{ ('save_changes')|_ }}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -206,16 +288,25 @@ document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('.template-card button').forEach(function(button) {
         button.addEventListener('click', function(e) {
             e.stopPropagation(); // Prevent card click
-            var templateName = this.getAttribute('data-template-name');
-            var baseUrl = "/accounts/templates/create/" + encodeURIComponent(templateName);
-            window.location.href = baseUrl;
+            
+            if (this.classList.contains('edit-template-btn')) {
+                // Handle edit button
+                var templateId = this.getAttribute('data-template-id');
+                var templateName = this.getAttribute('data-template-name');
+                openEditModal(templateId, templateName);
+            } else {
+                // Handle create button
+                var templateName = this.getAttribute('data-template-name');
+                var baseUrl = "/accounts/templates/create/" + encodeURIComponent(templateName);
+                window.location.href = baseUrl;
+            }
         });
     });
     
     // Search and filter functionality
     var searchInput = document.getElementById('search');
     var categorySelect = document.getElementById('category');
-    var accountTypeSelect = document.getElementById('account_type');
+    var behaviorSelect = document.getElementById('account_type');
     var sortSelect = document.getElementById('sort');
     
     function updateFilters() {
@@ -227,8 +318,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (categorySelect.value) {
             params.set('category', categorySelect.value);
         }
-        if (accountTypeSelect.value) {
-            params.set('account_type', accountTypeSelect.value);
+        if (behaviorSelect.value) {
+            params.set('account_type', behaviorSelect.value);
         }
         if (sortSelect.value) {
             params.set('sort', sortSelect.value);
@@ -249,7 +340,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     categorySelect.addEventListener('change', updateFilters);
-    accountTypeSelect.addEventListener('change', updateFilters);
+    behaviorSelect.addEventListener('change', updateFilters);
     sortSelect.addEventListener('change', updateFilters);
     
     // Clear filters button
@@ -263,7 +354,280 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     document.querySelector('.col-md-2 .form-group').appendChild(clearButton);
+    
+    // Edit modal functionality
+    var fieldDefinitions = null;
+    var currentTemplate = null;
+    
+    // Load field definitions when page loads
+    loadFieldDefinitions();
+    
+    // Save template button handler
+    document.getElementById('saveTemplateBtn').addEventListener('click', function() {
+        saveTemplate();
+    });
 });
+
+// Function to open edit modal
+function openEditModal(templateId, templateName) {
+    document.getElementById('templateId').value = templateId;
+    document.getElementById('templateName').textContent = templateName;
+    
+    // Show modal first
+    $('#editTemplateModal').modal('show');
+    
+    // Load template data after modal is shown
+    loadTemplateData(templateId);
+}
+
+// Function to load field definitions
+function loadFieldDefinitions() {
+    console.log('Loading field definitions...');
+    fetch('/accounts/templates/field-definitions')
+        .then(response => {
+            console.log('Field definitions response status:', response.status);
+            if (!response.ok) {
+                throw new Error('HTTP ' + response.status);
+            }
+            return response.json();
+        })
+        .then(data => {
+            fieldDefinitions = data;
+            console.log('Field definitions loaded:', fieldDefinitions);
+        })
+        .catch(error => {
+            console.error('Error loading field definitions:', error);
+            // Try to load a fallback or show error
+            fieldDefinitions = null;
+        });
+}
+
+// Function to load template data
+function loadTemplateData(templateId) {
+    console.log('Loading template data for ID:', templateId);
+    fetch('/accounts/templates/' + templateId + '/edit')
+        .then(response => {
+            console.log('Template data response status:', response.status);
+            if (!response.ok) {
+                throw new Error('HTTP ' + response.status);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Template data loaded:', data);
+            currentTemplate = data;
+            
+            // Populate basic info
+            document.getElementById('templateLabel').value = data.label || '';
+            document.getElementById('templateDescription').value = data.description || '';
+            
+            // Populate field configuration
+            populateFieldConfiguration(data);
+        })
+        .catch(error => {
+            console.error('Error loading template data:', error);
+            // Show error in modal
+            document.getElementById('fieldCategoryContent').innerHTML = 
+                '<div class="alert alert-danger">Error loading template data: ' + error.message + '</div>';
+        });
+}
+
+// Function to populate field configuration
+function populateFieldConfiguration(template) {
+    if (!fieldDefinitions) {
+        console.error('Field definitions not loaded yet, retrying...');
+        // Retry loading field definitions
+        loadFieldDefinitions();
+        // Try again after a short delay
+        setTimeout(function() {
+            if (fieldDefinitions) {
+                populateFieldConfiguration(template);
+            } else {
+                console.error('Failed to load field definitions');
+                // Show a message in the modal
+                document.getElementById('fieldConfigurationTableBody').innerHTML = 
+                    '<tr><td colspan="4" class="text-center"><div class="alert alert-warning">Failed to load field definitions. Please refresh the page and try again.</div></td></tr>';
+            }
+        }, 1000);
+        return;
+    }
+    
+    // Sort fields by category and display name
+    var sortedFields = fieldDefinitions.sort(function(a, b) {
+        if (a.category !== b.category) {
+            return a.category.localeCompare(b.category);
+        }
+        return a.display_name.localeCompare(b.display_name);
+    });
+    
+    // Create table rows
+    var tableRowsHtml = '';
+    var currentCategory = '';
+    
+    sortedFields.forEach(function(field) {
+        var fieldConfig = template.account_fields && template.account_fields[field.field_name] ? template.account_fields[field.field_name] : {};
+        var isRequired = fieldConfig.required || false;
+        var defaultValue = fieldConfig.default || '';
+        
+        // Add category separator if category changed
+        if (currentCategory !== field.category) {
+            if (currentCategory !== '') {
+                tableRowsHtml += '<tr><td colspan="4" style="background-color: #f5f5f5; font-weight: bold; padding: 8px;">&nbsp;</td></tr>';
+            }
+            currentCategory = field.category;
+        }
+        
+        // Create row
+        tableRowsHtml += '<tr>';
+        tableRowsHtml += '<td>';
+        tableRowsHtml += '<strong>' + field.display_name + '</strong>';
+        tableRowsHtml += '<br><small class="text-muted">' + field.category.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) + '</small>';
+        tableRowsHtml += '</td>';
+        tableRowsHtml += '<td>' + (field.description || '') + '</td>';
+        tableRowsHtml += '<td class="text-center">';
+        tableRowsHtml += '<input type="checkbox" name="field_required_' + field.field_name + '" ' + (isRequired ? 'checked' : '') + '>';
+        tableRowsHtml += '</td>';
+        tableRowsHtml += '<td>';
+        tableRowsHtml += getInputFieldForDataType(field.data_type, field.field_name, defaultValue);
+        tableRowsHtml += '</td>';
+        tableRowsHtml += '</tr>';
+    });
+    
+    // Update DOM
+    document.getElementById('fieldConfigurationTableBody').innerHTML = tableRowsHtml;
+}
+
+// Function to get appropriate input field based on data type
+function getInputFieldForDataType(dataType, fieldName, defaultValue) {
+    var inputHtml = '';
+    
+    switch (dataType.toLowerCase()) {
+        case 'boolean':
+        case 'bool':
+            var isChecked = defaultValue === '1' || defaultValue === 'true' || defaultValue === true;
+            inputHtml = '<input type="checkbox" name="field_default_' + fieldName + '" ' + (isChecked ? 'checked' : '') + '>';
+            break;
+            
+        case 'date':
+            inputHtml = '<input type="date" class="form-control input-sm" name="field_default_' + fieldName + '" value="' + defaultValue + '">';
+            break;
+            
+        case 'datetime':
+        case 'timestamp':
+            inputHtml = '<input type="datetime-local" class="form-control input-sm" name="field_default_' + fieldName + '" value="' + defaultValue + '">';
+            break;
+            
+        case 'integer':
+        case 'int':
+            inputHtml = '<input type="number" class="form-control input-sm" name="field_default_' + fieldName + '" value="' + defaultValue + '" step="1">';
+            break;
+            
+        case 'decimal':
+        case 'float':
+        case 'double':
+            inputHtml = '<input type="number" class="form-control input-sm" name="field_default_' + fieldName + '" value="' + defaultValue + '" step="0.01">';
+            break;
+            
+        case 'email':
+            inputHtml = '<input type="email" class="form-control input-sm" name="field_default_' + fieldName + '" value="' + defaultValue + '">';
+            break;
+            
+        case 'url':
+            inputHtml = '<input type="url" class="form-control input-sm" name="field_default_' + fieldName + '" value="' + defaultValue + '">';
+            break;
+            
+        case 'tel':
+        case 'phone':
+            inputHtml = '<input type="tel" class="form-control input-sm" name="field_default_' + fieldName + '" value="' + defaultValue + '">';
+            break;
+            
+        case 'textarea':
+        case 'text':
+        default:
+            inputHtml = '<input type="text" class="form-control input-sm" name="field_default_' + fieldName + '" value="' + defaultValue + '" placeholder="Default value">';
+            break;
+    }
+    
+    return inputHtml;
+}
+
+// Function to save template
+function saveTemplate() {
+    var templateId = document.getElementById('templateId').value;
+    var label = document.getElementById('templateLabel').value;
+    var description = document.getElementById('templateDescription').value;
+    
+    // Collect field configurations
+    var accountFields = {};
+    
+    if (fieldDefinitions) {
+        fieldDefinitions.forEach(function(field) {
+            var requiredCheckbox = document.querySelector('input[name="field_required_' + field.field_name + '"]');
+            var defaultInput = document.querySelector('input[name="field_default_' + field.field_name + '"]');
+            
+            if (requiredCheckbox && defaultInput) {
+                var defaultValue = defaultInput.value;
+                
+                // Handle different input types
+                if (defaultInput.type === 'checkbox') {
+                    defaultValue = defaultInput.checked ? '1' : '0';
+                } else if (defaultInput.type === 'number') {
+                    defaultValue = defaultInput.value || '0';
+                } else if (defaultInput.type === 'date' || defaultInput.type === 'datetime-local') {
+                    defaultValue = defaultInput.value || '';
+                }
+                
+                accountFields[field.field_name] = {
+                    required: requiredCheckbox.checked,
+                    default: defaultValue
+                };
+            }
+        });
+    }
+    
+    var data = {
+        label: label,
+        description: description,
+        account_fields: accountFields
+    };
+    
+    // Show loading state
+    var saveBtn = document.getElementById('saveTemplateBtn');
+    var originalText = saveBtn.innerHTML;
+    saveBtn.innerHTML = '<span class="fa fa-spinner fa-spin"></span> Saving...';
+    saveBtn.disabled = true;
+    
+    // Send request
+    fetch('/accounts/templates/' + templateId, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Show success message
+            alert('Template updated successfully!');
+            $('#editTemplateModal').modal('hide');
+            // Reload page to show changes
+            window.location.reload();
+        } else {
+            alert('Error updating template: ' + (data.message || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        console.error('Error saving template:', error);
+        alert('Error saving template. Please try again.');
+    })
+    .finally(function() {
+        // Restore button state
+        saveBtn.innerHTML = originalText;
+        saveBtn.disabled = false;
+    });
+}
 </script>
 
 <style>

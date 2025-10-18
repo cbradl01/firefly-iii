@@ -380,33 +380,55 @@
                     });
             }
             
-            // Handle save button click
-            $('#saveAccountBtn').click(function() {
-                var form = $('#editAccountModal form');
-                var formData = new FormData(form[0]);
+            // Handle form submission via AJAX
+            $(document).on('submit', '#editAccountForm', function(e) {
+                e.preventDefault();
+                
+                var form = $(this);
+                var formData = form.serialize();
+                
+                // Disable submit button
+                $('#saveAccountBtn').prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> {{ "saving"|_ }}...');
                 
                 $.ajax({
                     url: form.attr('action'),
-                    type: 'PUT',
+                    type: 'POST',
                     data: formData,
-                    processData: false,
-                    contentType: false,
                     success: function(response) {
                         if (response.success) {
+                            // Show success message
+                            showSuccessAlert(response.message || '{{ "account_updated_successfully"|_ }}');
+                            
+                            // Close modal
                             $('#editAccountModal').modal('hide');
-                            showSuccessAlert(response.message);
-                            // Optionally refresh the page or update specific elements
-                            location.reload();
+                            
+                            // Reload the page to show updated data
+                            setTimeout(function() {
+                                window.location.reload();
+                            }, 1000);
                         } else {
-                            showErrorAlert(response.message || 'Error updating account');
+                            showErrorAlert(response.message || '{{ "error_updating_account"|_ }}');
                         }
                     },
                     error: function(xhr) {
-                        var message = 'Error updating account';
+                        var errorMessage = '{{ "error_updating_account"|_ }}';
+                        
                         if (xhr.responseJSON && xhr.responseJSON.message) {
-                            message = xhr.responseJSON.message;
+                            errorMessage = xhr.responseJSON.message;
+                        } else if (xhr.responseJSON && xhr.responseJSON.errors) {
+                            // Handle validation errors
+                            var errors = [];
+                            $.each(xhr.responseJSON.errors, function(field, messages) {
+                                errors.push(messages.join(', '));
+                            });
+                            errorMessage = errors.join('; ');
                         }
-                        showErrorAlert(message);
+                        
+                        showErrorAlert(errorMessage);
+                    },
+                    complete: function() {
+                        // Re-enable submit button
+                        $('#saveAccountBtn').prop('disabled', false).html('<i class="fa fa-save"></i> {{ "save_changes"|_ }}');
                     }
                 });
             });

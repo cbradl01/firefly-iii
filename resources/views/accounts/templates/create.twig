@@ -10,6 +10,10 @@
                     Create account from template: {{ template.name }}
                 </h3>
                 <div class="box-tools pull-right">
+                    <button type="button" class="btn btn-warning btn-sm" id="editTemplateBtn" data-template-id="{{ template.id }}" data-template-name="{{ template.name }}">
+                        <span class="fa fa-edit"></span>
+                        {{ ('edit_template')|_ }}
+                    </button>
                     <a href="{{ route('accounts.templates.index') }}" class="btn btn-default btn-sm">
                         <span class="fa fa-arrow-left"></span>
                         {{ ('back_to_templates')|_ }}
@@ -24,167 +28,12 @@
                             <input type="hidden" name="template" value="{{ template.name }}">
                             <input type="hidden" name="account_type_id" value="{{ template.account_type_id }}">
 
-                            <!-- Basic Information -->
-                            <div class="box">
-                                <div class="box-header with-border">
-                                        <h4 class="box-title">
-                                            <span class="fa fa-info-circle"></span>
-                                            Basic Information
-                                        </h4>
-                                </div>
-                                <div class="box-body">
-                                    <div class="row">
-                                        <div class="col-md-6">
-                                            <div class="form-group">
-                                                <label for="name">
-                                                    Account Name <span class="text-danger">*</span>
-                                                </label>
-                                                <input type="text" class="form-control" id="name" name="name" required value="{{ old('name') }}">
-                                                {% if errors.has('name') %}
-                                                    <span class="text-danger">{{ errors.first('name') }}</span>
-                                                {% endif %}
-                                            </div>
-                                        </div>
-                                        <div class="col-md-6">
-                                            <div class="form-group">
-                                                <label for="currency_id">
-                                                    Currency <span class="text-danger">*</span>
-                                                </label>
-                                                <select class="form-control" id="currency_id" name="currency_id" required>
-                                                    <option value="">Select Currency</option>
-                                                    {% for currency in allCurrencies %}
-                                                        <option value="{{ currency.id }}" 
-                                                                {{ (old('currency_id') == currency.id) or (not old('currency_id') and defaultCurrency.id == currency.id) ? 'selected' : '' }}>
-                                                            {{ currency.code }} - {{ currency.name }}
-                                                        </option>
-                                                    {% endfor %}
-                                                </select>
-                                                {% if errors.has('currency_id') %}
-                                                    <span class="text-danger">{{ errors.first('currency_id') }}</span>
-                                                {% endif %}
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="row">
-                                        <div class="col-md-6">
-                                            <div class="form-group">
-                                                <label for="institution">
-                                                    Institution <span class="text-danger">*</span>
-                                                </label>
-                                                <input type="text" class="form-control" id="institution" name="institution" required value="{{ old('institution') }}" placeholder="Enter institution name">
-                                                {% if errors.has('institution') %}
-                                                    <span class="text-danger">{{ errors.first('institution') }}</span>
-                                                {% endif %}
-                                            </div>
-                                        </div>
-                                        <div class="col-md-6">
-                                            <div class="form-group">
-                                                <label for="owner">
-                                                    Owner <span class="text-danger">*</span>
-                                                </label>
-                                                <input type="text" class="form-control" id="owner" name="owner" required value="{{ old('owner', userName) }}">
-                                                {% if errors.has('owner') %}
-                                                    <span class="text-danger">{{ errors.first('owner') }}</span>
-                                                {% endif %}
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="row">
-                                        <div class="col-md-6">
-                                            <div class="form-group">
-                                                <label for="product_name">
-                                                    Product Name <span class="text-danger">*</span>
-                                                </label>
-                                                <input type="text" class="form-control" id="product_name" name="product_name" required value="{{ old('product_name') }}">
-                                                {% if errors.has('product_name') %}
-                                                    <span class="text-danger">{{ errors.first('product_name') }}</span>
-                                                {% endif %}
-                                            </div>
-                                        </div>
-                                        <div class="col-md-6">
-                                            <div class="form-group">
-                                                <label for="iban">
-                                                    IBAN
-                                                </label>
-                                                <input type="text" class="form-control" id="iban" name="iban">
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
+                            <!-- Dynamic Template Fields -->
+                            <div id="template-fields-container">
+                                <!-- Fields will be dynamically loaded here -->
                             </div>
 
-                            <!-- Template-Specific Fields -->
-                            {% if suggestedFields|length > 0 %}
-                                <div class="box">
-                                    <div class="box-header with-border">
-                                        <h4 class="box-title">
-                                            <span class="fa fa-cog"></span>
-                                            Template-Specific Fields
-                                        </h4>
-                                    </div>
-                                    <div class="box-body">
-                                        {% for field in suggestedFields %}
-                                            {% if field != 'institution' %}
-                                            <div class="form-group">
-                                                <label for="{{ field }}">
-                                                    {% set fieldDef = fieldDefinitions[field] %}
-                                                    {% if fieldDef %}
-                                                        {{ (fieldDef.label)|_ }}
-                                                    {% else %}
-                                                        {{ field|title|replace({'_': ' '}) }}
-                                                    {% endif %}
-                                                    {% if field in requiredFields %}
-                                                        <span class="text-danger">*</span>
-                                                    {% endif %}
-                                                </label>
-                                                {% set fieldDef = fieldDefinitions[field] %}
-                                                {% if fieldDef and fieldDef.type == 'select' %}
-                                                    <select class="form-control" id="{{ field }}" name="{{ field }}" 
-                                                            {% if field in requiredFields %} required {% endif %}>
-                                                        <option value="">{{ ('select_option')|_ }}</option>
-                                                        {% if fieldDef.options %}
-                                                            {% for option in fieldDef.options %}
-                                                                <option value="{{ option }}">{{ option|title|replace({'_': ' '}) }}</option>
-                                                            {% endfor %}
-                                                        {% endif %}
-                                                    </select>
-                                                {% else %}
-                                                    <input type="{{ fieldDef and fieldDef.type ? fieldDef.type : 'text' }}" 
-                                                           class="form-control" 
-                                                           id="{{ field }}" 
-                                                           name="{{ field }}"
-                                                           {% if field in requiredFields %} required {% endif %}>
-                                                {% endif %}
-                                            </div>
-                                            {% endif %}
-                                        {% endfor %}
-                                    </div>
-                                </div>
-                            {% endif %}
 
-                            <!-- Additional Options -->
-                            <div class="box">
-                                <div class="box-header with-border">
-                                        <h4 class="box-title">
-                                            <span class="fa fa-sliders"></span>
-                                            Additional Options
-                                        </h4>
-                                </div>
-                                <div class="box-body">
-                                    <div class="checkbox">
-                                        <label>
-                                            <input type="checkbox" id="active" name="active" value="1" checked>
-                                            Account Active
-                                        </label>
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="virtual_balance">
-                                            Virtual Balance
-                                        </label>
-                                        <input type="number" class="form-control" id="virtual_balance" name="virtual_balance" step="0.01">
-                                    </div>
-                                </div>
-                            </div>
 
                             <div class="form-group">
                                 <a href="{{ route('accounts.templates.index') }}" class="btn btn-default">
@@ -247,4 +96,976 @@
         </div>
     </div>
 </div>
+
+<!-- Template Edit Modal -->
+<div class="modal fade" id="editTemplateModal" tabindex="-1" role="dialog" aria-labelledby="editTemplateModalLabel">
+    <div class="modal-dialog" role="document" style="width: 95%; max-width: 1400px;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                <h4 class="modal-title" id="editTemplateModalLabel">
+                    <span class="fa fa-edit"></span>
+                    {{ ('edit_template')|_ }}: <span id="templateName"></span>
+                </h4>
+            </div>
+            <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+                <form id="editTemplateForm">
+                    <input type="hidden" id="templateId" name="template_id">
+                    
+                    <!-- Template Basic Info -->
+                    <div class="row" style="margin-bottom: 20px;">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="templateLabel">{{ ('template_label')|_ }}</label>
+                                <input type="text" class="form-control" id="templateLabel" name="label" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="templateDescription">{{ ('description')|_ }}</label>
+                                <textarea class="form-control" id="templateDescription" name="description" rows="2"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Current Template Fields -->
+                    <div class="row" style="margin-bottom: 20px;">
+                        <div class="col-md-12">
+                            <h5>{{ ('current_template_fields')|_ }}</h5>
+                            <p class="text-muted">{{ ('fields_currently_configured_for_this_template')|_ }}</p>
+                            
+                            <div class="table-responsive">
+                                <table class="table table-striped table-bordered" id="currentFieldsTable">
+                                    <thead>
+                                        <tr>
+                                            <th style="width: 25%;">{{ ('field_name')|_ }}</th>
+                                            <th style="width: 35%;">{{ ('description')|_ }}</th>
+                                            <th style="width: 15%; text-align: center;">{{ ('required')|_ }}</th>
+                                            <th style="width: 15%; text-align: center;">{{ ('default_value')|_ }}</th>
+                                            <th style="width: 10%; text-align: center;">{{ ('actions')|_ }}</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="currentFieldsTableBody">
+                                        <!-- Content will be populated by JavaScript -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Available Fields -->
+                    <div class="row">
+                        <div class="col-md-12">
+                            <h5>{{ ('available_fields')|_ }}</h5>
+                            <p class="text-muted">{{ ('add_fields_to_template')|_ }}</p>
+                            
+                            <div class="table-responsive">
+                                <table class="table table-striped table-bordered" id="availableFieldsTable">
+                                    <thead>
+                                        <tr>
+                                            <th style="width: 25%;">{{ ('field_name')|_ }}</th>
+                                            <th style="width: 35%;">{{ ('description')|_ }}</th>
+                                            <th style="width: 20%; text-align: center;">{{ ('required')|_ }}</th>
+                                            <th style="width: 20%; text-align: center;">{{ ('optional')|_ }}</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="availableFieldsTableBody">
+                                        <!-- Content will be populated by JavaScript -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">
+                    {{ ('cancel')|_ }}
+                </button>
+                <button type="button" class="btn btn-primary" id="saveTemplateBtn">
+                    <span class="fa fa-save"></span>
+                    {{ ('save_changes')|_ }}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script type="text/javascript" nonce="{{ JS_NONCE }}">
+document.addEventListener('DOMContentLoaded', function() {
+    // Edit template button handler
+    document.getElementById('editTemplateBtn').addEventListener('click', function() {
+        var templateId = this.getAttribute('data-template-id');
+        var templateName = this.getAttribute('data-template-name');
+        openEditModal(templateId, templateName);
+    });
+    
+    // Save template button handler
+    document.getElementById('saveTemplateBtn').addEventListener('click', function() {
+        saveTemplate();
+    });
+    
+    // Load field definitions when page loads
+    loadFieldDefinitions();
+    
+    // Initialize template form with current template configuration
+    initializeTemplateForm();
+    
+    // Load financial entities for account_holder dropdowns
+    loadFinancialEntities();
+});
+
+// Function to load financial entities for account_holder dropdowns
+function loadFinancialEntities() {
+    fetch('/financial-entities')
+        .then(response => response.text())
+        .then(html => {
+            // Parse the HTML to extract financial entities
+            var parser = new DOMParser();
+            var doc = parser.parseFromString(html, 'text/html');
+            var entityRows = doc.querySelectorAll('tbody tr');
+            
+            var entities = [];
+            entityRows.forEach(function(row) {
+                var cells = row.querySelectorAll('td');
+                if (cells.length >= 6) {
+                    // Column 1: Name (display_name)
+                    var nameCell = cells[0];
+                    var displayName = nameCell.querySelector('strong').textContent.trim();
+                    
+                    // Column 2: Type
+                    var typeCell = cells[1];
+                    var type = typeCell.textContent.trim();
+                    
+                    // Get ID from edit button in actions column (last column)
+                    var actionsCell = cells[5];
+                    var editButton = actionsCell.querySelector('.edit-btn');
+                    var id = editButton ? editButton.getAttribute('data-id') : null;
+                    
+                    if (id && displayName) {
+                        entities.push({
+                            id: id,
+                            displayName: displayName,
+                            type: type
+                        });
+                    }
+                }
+            });
+            
+            // Populate all account_holder dropdowns
+            populateAccountHolderDropdowns(entities);
+        })
+        .catch(error => {
+            console.error('Error loading financial entities:', error);
+        });
+}
+
+// Function to populate account_holder dropdowns
+function populateAccountHolderDropdowns(entities) {
+    var accountHolderSelects = document.querySelectorAll('select[name="account_holder"]');
+    
+    accountHolderSelects.forEach(function(select) {
+        // Clear existing options except the first one
+        while (select.children.length > 1) {
+            select.removeChild(select.lastChild);
+        }
+        
+        // Add entity options
+        entities.forEach(function(entity) {
+            var option = document.createElement('option');
+            option.value = entity.id;
+            option.textContent = entity.displayName;
+            select.appendChild(option);
+        });
+    });
+}
+
+// Function to setup field dependencies
+function setupFieldDependencies() {
+    // Handle overdraft protection -> overdraft account dependency
+    var overdraftProtectionCheckbox = document.querySelector('input[name="overdraft_protection"]');
+    var overdraftAccountField = document.querySelector('[data-depends-on="overdraft_protection"]');
+    
+    if (overdraftProtectionCheckbox && overdraftAccountField) {
+        // Initial state
+        updateOverdraftAccountVisibility();
+        
+        // Add event listener
+        overdraftProtectionCheckbox.addEventListener('change', updateOverdraftAccountVisibility);
+        
+        // Load accounts for overdraft dropdown
+        loadOverdraftAccounts();
+    }
+}
+
+// Function to update overdraft account field visibility
+function updateOverdraftAccountVisibility() {
+    var overdraftProtectionCheckbox = document.querySelector('input[name="overdraft_protection"]');
+    var overdraftAccountField = document.querySelector('[data-depends-on="overdraft_protection"]');
+    
+    if (overdraftProtectionCheckbox && overdraftAccountField) {
+        if (overdraftProtectionCheckbox.checked) {
+            overdraftAccountField.style.display = 'block';
+            // Make the field required
+            var select = overdraftAccountField.querySelector('select');
+            if (select) {
+                select.required = true;
+            }
+        } else {
+            overdraftAccountField.style.display = 'none';
+            // Remove required and clear value
+            var select = overdraftAccountField.querySelector('select');
+            if (select) {
+                select.required = false;
+                select.value = '';
+            }
+        }
+    }
+}
+
+// Function to load accounts for overdraft account dropdown
+function loadOverdraftAccounts() {
+    fetch('/accounts/all')
+        .then(response => response.text())
+        .then(html => {
+            // Parse the HTML to extract accounts
+            var parser = new DOMParser();
+            var doc = parser.parseFromString(html, 'text/html');
+            var accountRows = doc.querySelectorAll('tbody tr');
+            
+            var accounts = [];
+            accountRows.forEach(function(row) {
+                var cells = row.querySelectorAll('td');
+                if (cells.length >= 2) {
+                    // Column 1: Account name
+                    var nameCell = cells[0];
+                    var accountName = nameCell.textContent.trim();
+                    
+                    // Get account ID from edit button (if available)
+                    var actionsCell = cells[cells.length - 1]; // Last column usually has actions
+                    var editButton = actionsCell.querySelector('.edit-btn');
+                    var accountId = editButton ? editButton.getAttribute('data-id') : null;
+                    
+                    if (accountId && accountName) {
+                        accounts.push({
+                            id: accountId,
+                            name: accountName
+                        });
+                    }
+                }
+            });
+            
+            // Populate overdraft account dropdowns
+            populateOverdraftAccountDropdowns(accounts);
+        })
+        .catch(error => {
+            console.error('Error loading accounts for overdraft:', error);
+        });
+}
+
+// Function to populate overdraft account dropdowns
+function populateOverdraftAccountDropdowns(accounts) {
+    var overdraftAccountSelects = document.querySelectorAll('select[name="overdraft_account"]');
+    
+    overdraftAccountSelects.forEach(function(select) {
+        // Clear existing options except the first one
+        while (select.children.length > 1) {
+            select.removeChild(select.lastChild);
+        }
+        
+        // Add account options
+        accounts.forEach(function(account) {
+            var option = document.createElement('option');
+            option.value = account.id;
+            option.textContent = account.name;
+            select.appendChild(option);
+        });
+    });
+}
+
+// Function to initialize template form with current configuration
+function initializeTemplateForm() {
+    // Get template data from the page (passed from controller)
+    var templateData = {
+        account_fields: {{ template.metadata_schema.account_fields|default({})|json_encode|raw }}
+    };
+    
+    console.log('Template data:', templateData);
+    console.log('Account fields:', templateData.account_fields);
+    console.log('Field definitions loaded:', fieldDefinitions);
+    
+    // Update the form with current template configuration
+    if (templateData.account_fields && Object.keys(templateData.account_fields).length > 0) {
+        console.log('Updating template form with fields:', Object.keys(templateData.account_fields));
+        updateTemplateForm(templateData.account_fields);
+    } else {
+        console.log('No template fields configured');
+        // If no fields configured, show a message
+        var container = document.getElementById('template-fields-container');
+        if (container) {
+            container.innerHTML = '<div class="alert alert-info"><i class="fa fa-info-circle"></i> No template fields configured. Use the "Edit Template" button to configure fields for this template.</div>';
+        }
+    }
+}
+
+// Global variables
+var fieldDefinitions = null;
+var currentTemplate = null;
+
+// Function to open edit modal
+function openEditModal(templateId, templateName) {
+    document.getElementById('templateId').value = templateId;
+    document.getElementById('templateName').textContent = templateName;
+    
+    // Show modal first
+    $('#editTemplateModal').modal('show');
+    
+    // Load template data after modal is shown
+    loadTemplateData(templateId);
+}
+
+// Function to load field definitions
+function loadFieldDefinitions() {
+    console.log('Loading field definitions...');
+    fetch('/accounts/templates/field-definitions')
+        .then(response => {
+            console.log('Field definitions response status:', response.status);
+            if (!response.ok) {
+                throw new Error('HTTP ' + response.status);
+            }
+            return response.json();
+        })
+        .then(data => {
+            fieldDefinitions = data;
+            console.log('Field definitions loaded:', fieldDefinitions);
+        })
+        .catch(error => {
+            console.error('Error loading field definitions:', error);
+            fieldDefinitions = null;
+        });
+}
+
+// Function to load template data
+function loadTemplateData(templateId) {
+    console.log('Loading template data for ID:', templateId);
+    fetch('/accounts/templates/' + templateId + '/edit')
+        .then(response => {
+            console.log('Template data response status:', response.status);
+            if (!response.ok) {
+                throw new Error('HTTP ' + response.status);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Template data loaded:', data);
+            currentTemplate = data;
+            
+            // Populate basic info
+            document.getElementById('templateLabel').value = data.label || '';
+            document.getElementById('templateDescription').value = data.description || '';
+            
+            // Populate field configuration
+            populateFieldConfiguration(data);
+        })
+        .catch(error => {
+            console.error('Error loading template data:', error);
+            // Show error in modal
+            document.getElementById('currentFieldsTableBody').innerHTML = 
+                '<tr><td colspan="5" class="text-center"><div class="alert alert-danger">Error loading template data: ' + error.message + '</div></td></tr>';
+        });
+}
+
+// Function to populate field configuration
+function populateFieldConfiguration(template) {
+    if (!fieldDefinitions) {
+        console.error('Field definitions not loaded yet, retrying...');
+        loadFieldDefinitions();
+        setTimeout(function() {
+            if (fieldDefinitions) {
+                populateFieldConfiguration(template);
+            } else {
+                console.error('Failed to load field definitions');
+                document.getElementById('currentFieldsTableBody').innerHTML = 
+                    '<tr><td colspan="5" class="text-center"><div class="alert alert-warning">Failed to load field definitions. Please refresh the page and try again.</div></td></tr>';
+            }
+        }, 1000);
+        return;
+    }
+    
+    // Populate current fields table
+    populateCurrentFieldsTable(template);
+    
+    // Populate available fields table
+    populateAvailableFieldsTable(template);
+}
+
+// Function to populate current fields table
+function populateCurrentFieldsTable(template) {
+    var currentFields = template.account_fields || {};
+    var currentFieldsHtml = '';
+    
+    if (Object.keys(currentFields).length === 0) {
+        currentFieldsHtml = '<tr><td colspan="5" class="text-center text-muted">No fields configured for this template</td></tr>';
+    } else {
+        Object.keys(currentFields).forEach(function(fieldName) {
+            var fieldConfig = currentFields[fieldName];
+            var field = fieldDefinitions.find(f => f.field_name === fieldName);
+            
+            if (field) {
+                currentFieldsHtml += '<tr data-field-name="' + fieldName + '">';
+                currentFieldsHtml += '<td><strong>' + field.display_name + '</strong></td>';
+                currentFieldsHtml += '<td>' + (field.description || '') + '</td>';
+                currentFieldsHtml += '<td class="text-center">';
+                currentFieldsHtml += '<input type="checkbox" name="current_required_' + fieldName + '" ' + (fieldConfig.required ? 'checked' : '') + '>';
+                currentFieldsHtml += '</td>';
+                currentFieldsHtml += '<td class="text-center">';
+                currentFieldsHtml += getInputFieldForDataType(field.data_type, 'current_default_' + fieldName, fieldConfig.default || '');
+                currentFieldsHtml += '</td>';
+                currentFieldsHtml += '<td class="text-center">';
+                currentFieldsHtml += '<button type="button" class="btn btn-danger btn-xs removeFieldBtn" data-field-name="' + fieldName + '">';
+                currentFieldsHtml += '<span class="fa fa-trash"></span>';
+                currentFieldsHtml += '</button>';
+                currentFieldsHtml += '</td>';
+                currentFieldsHtml += '</tr>';
+            }
+        });
+    }
+    
+    document.getElementById('currentFieldsTableBody').innerHTML = currentFieldsHtml;
+    
+    // Add event listeners for remove buttons
+    document.querySelectorAll('.removeFieldBtn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var fieldName = this.getAttribute('data-field-name');
+            removeFieldFromTemplate(fieldName);
+        });
+    });
+}
+
+// Function to populate available fields table
+function populateAvailableFieldsTable(template) {
+    var currentFields = template.account_fields || {};
+    var availableFields = fieldDefinitions.filter(field => !currentFields.hasOwnProperty(field.field_name));
+    
+    // Sort by category and display name
+    availableFields.sort(function(a, b) {
+        if (a.category !== b.category) {
+            return a.category.localeCompare(b.category);
+        }
+        return a.display_name.localeCompare(b.display_name);
+    });
+    
+    var availableFieldsHtml = '';
+    var currentCategory = '';
+    
+    availableFields.forEach(function(field) {
+        // Add category separator if category changed
+        if (currentCategory !== field.category) {
+            if (currentCategory !== '') {
+                availableFieldsHtml += '<tr><td colspan="4" style="background-color: #f5f5f5; font-weight: bold; padding: 8px;">&nbsp;</td></tr>';
+            }
+            currentCategory = field.category;
+        }
+        
+        availableFieldsHtml += '<tr data-field-name="' + field.field_name + '">';
+        availableFieldsHtml += '<td><strong>' + field.display_name + '</strong><br><small class="text-muted">' + field.category.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) + '</small></td>';
+        availableFieldsHtml += '<td>' + (field.description || '') + '</td>';
+        availableFieldsHtml += '<td class="text-center">';
+        availableFieldsHtml += '<input type="checkbox" name="add_required_' + field.field_name + '" class="addFieldCheckbox" data-field-name="' + field.field_name + '" data-field-type="required">';
+        availableFieldsHtml += '</td>';
+        availableFieldsHtml += '<td class="text-center">';
+        availableFieldsHtml += '<input type="checkbox" name="add_optional_' + field.field_name + '" class="addFieldCheckbox" data-field-name="' + field.field_name + '" data-field-type="optional">';
+        availableFieldsHtml += '</td>';
+        availableFieldsHtml += '</tr>';
+    });
+    
+    document.getElementById('availableFieldsTableBody').innerHTML = availableFieldsHtml;
+    
+    // Add event listeners for add checkboxes
+    document.querySelectorAll('.addFieldCheckbox').forEach(function(checkbox) {
+        checkbox.addEventListener('change', function() {
+            var fieldName = this.getAttribute('data-field-name');
+            var fieldType = this.getAttribute('data-field-type');
+            var isChecked = this.checked;
+            
+            // Uncheck the other checkbox for the same field
+            var otherCheckbox = document.querySelector('input[name="add_' + (fieldType === 'required' ? 'optional' : 'required') + '_' + fieldName + '"]');
+            if (otherCheckbox) {
+                otherCheckbox.checked = false;
+            }
+            
+            if (isChecked) {
+                addFieldToTemplate(fieldName, fieldType === 'required');
+            }
+        });
+    });
+}
+
+// Function to add field to template
+function addFieldToTemplate(fieldName, isRequired) {
+    var field = fieldDefinitions.find(f => f.field_name === fieldName);
+    if (!field) return;
+    
+    // Add to current fields table
+    var currentFieldsTableBody = document.getElementById('currentFieldsTableBody');
+    var emptyRow = currentFieldsTableBody.querySelector('td[colspan="5"]');
+    if (emptyRow) {
+        emptyRow.parentElement.remove();
+    }
+    
+    var newRow = document.createElement('tr');
+    newRow.setAttribute('data-field-name', fieldName);
+    newRow.innerHTML = '<td><strong>' + field.display_name + '</strong></td>' +
+                      '<td>' + (field.description || '') + '</td>' +
+                      '<td class="text-center"><input type="checkbox" name="current_required_' + fieldName + '" ' + (isRequired ? 'checked' : '') + '></td>' +
+                      '<td class="text-center">' + getInputFieldForDataType(field.data_type, 'current_default_' + fieldName, '') + '</td>' +
+                      '<td class="text-center"><button type="button" class="btn btn-danger btn-xs removeFieldBtn" data-field-name="' + fieldName + '"><span class="fa fa-trash"></span></button></td>';
+    
+    currentFieldsTableBody.appendChild(newRow);
+    
+    // Add event listener for remove button
+    newRow.querySelector('.removeFieldBtn').addEventListener('click', function() {
+        removeFieldFromTemplate(fieldName);
+    });
+    
+    // Remove from available fields table
+    var availableRow = document.querySelector('#availableFieldsTableBody tr[data-field-name="' + fieldName + '"]');
+    if (availableRow) {
+        availableRow.remove();
+    }
+}
+
+// Function to remove field from template
+function removeFieldFromTemplate(fieldName) {
+    // Remove from current fields table
+    var currentRow = document.querySelector('#currentFieldsTableBody tr[data-field-name="' + fieldName + '"]');
+    if (currentRow) {
+        currentRow.remove();
+    }
+    
+    // Add back to available fields table
+    var field = fieldDefinitions.find(f => f.field_name === fieldName);
+    if (field) {
+        // Find the right position to insert (maintain category grouping)
+        var availableTableBody = document.getElementById('availableFieldsTableBody');
+        var rows = Array.from(availableTableBody.querySelectorAll('tr[data-field-name]'));
+        
+        // Find insertion point based on category and name
+        var insertIndex = 0;
+        for (var i = 0; i < rows.length; i++) {
+            var rowFieldName = rows[i].getAttribute('data-field-name');
+            var rowField = fieldDefinitions.find(f => f.field_name === rowFieldName);
+            
+            if (field.category < rowField.category || 
+                (field.category === rowField.category && field.display_name < rowField.display_name)) {
+                insertIndex = i;
+                break;
+            }
+            insertIndex = i + 1;
+        }
+        
+        // Create new row
+        var newRow = document.createElement('tr');
+        newRow.setAttribute('data-field-name', fieldName);
+        newRow.innerHTML = '<td><strong>' + field.display_name + '</strong><br><small class="text-muted">' + field.category.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) + '</small></td>' +
+                          '<td>' + (field.description || '') + '</td>' +
+                          '<td class="text-center"><input type="checkbox" name="add_required_' + fieldName + '" class="addFieldCheckbox" data-field-name="' + fieldName + '" data-field-type="required"></td>' +
+                          '<td class="text-center"><input type="checkbox" name="add_optional_' + fieldName + '" class="addFieldCheckbox" data-field-name="' + fieldName + '" data-field-type="optional"></td>';
+        
+        // Insert at the right position
+        if (insertIndex >= rows.length) {
+            availableTableBody.appendChild(newRow);
+        } else {
+            availableTableBody.insertBefore(newRow, rows[insertIndex]);
+        }
+        
+        // Add event listeners for add checkboxes
+        newRow.querySelectorAll('.addFieldCheckbox').forEach(function(checkbox) {
+            checkbox.addEventListener('change', function() {
+                var fieldName = this.getAttribute('data-field-name');
+                var fieldType = this.getAttribute('data-field-type');
+                var isChecked = this.checked;
+                
+                // Uncheck the other checkbox for the same field
+                var otherCheckbox = document.querySelector('input[name="add_' + (fieldType === 'required' ? 'optional' : 'required') + '_' + fieldName + '"]');
+                if (otherCheckbox) {
+                    otherCheckbox.checked = false;
+                }
+                
+                if (isChecked) {
+                    addFieldToTemplate(fieldName, fieldType === 'required');
+                }
+            });
+        });
+    }
+    
+    // Check if current fields table is empty
+    var currentFieldsTableBody = document.getElementById('currentFieldsTableBody');
+    if (currentFieldsTableBody.children.length === 0) {
+        currentFieldsTableBody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No fields configured for this template</td></tr>';
+    }
+}
+
+// Function to get appropriate input field based on data type
+function getInputFieldForDataType(dataType, fieldName, defaultValue) {
+    var inputHtml = '';
+    
+    switch (dataType.toLowerCase()) {
+        case 'boolean':
+        case 'bool':
+            var isChecked = defaultValue === '1' || defaultValue === 'true' || defaultValue === true;
+            inputHtml = '<input type="checkbox" name="' + fieldName + '" ' + (isChecked ? 'checked' : '') + '>';
+            break;
+            
+        case 'date':
+            inputHtml = '<input type="date" class="form-control input-sm" name="' + fieldName + '" value="' + defaultValue + '">';
+            break;
+            
+        case 'datetime':
+        case 'timestamp':
+            inputHtml = '<input type="datetime-local" class="form-control input-sm" name="' + fieldName + '" value="' + defaultValue + '">';
+            break;
+            
+        case 'integer':
+        case 'int':
+            inputHtml = '<input type="number" class="form-control input-sm" name="' + fieldName + '" value="' + defaultValue + '" step="1">';
+            break;
+            
+        case 'decimal':
+        case 'float':
+        case 'double':
+            inputHtml = '<input type="number" class="form-control input-sm" name="' + fieldName + '" value="' + defaultValue + '" step="0.01">';
+            break;
+            
+        case 'email':
+            inputHtml = '<input type="email" class="form-control input-sm" name="' + fieldName + '" value="' + defaultValue + '">';
+            break;
+            
+        case 'url':
+            inputHtml = '<input type="url" class="form-control input-sm" name="' + fieldName + '" value="' + defaultValue + '">';
+            break;
+            
+        case 'tel':
+        case 'phone':
+            inputHtml = '<input type="tel" class="form-control input-sm" name="' + fieldName + '" value="' + defaultValue + '">';
+            break;
+            
+        case 'textarea':
+        case 'text':
+        default:
+            inputHtml = '<input type="text" class="form-control input-sm" name="' + fieldName + '" value="' + defaultValue + '" placeholder="Default value">';
+            break;
+    }
+    
+    return inputHtml;
+}
+
+// Function to save template
+function saveTemplate() {
+    var templateId = document.getElementById('templateId').value;
+    var label = document.getElementById('templateLabel').value;
+    var description = document.getElementById('templateDescription').value;
+    
+    // Collect field configurations from current fields table
+    var accountFields = {};
+    var currentRows = document.querySelectorAll('#currentFieldsTableBody tr[data-field-name]');
+    
+    currentRows.forEach(function(row) {
+        var fieldName = row.getAttribute('data-field-name');
+        var requiredCheckbox = row.querySelector('input[name="current_required_' + fieldName + '"]');
+        var defaultInput = row.querySelector('input[name="current_default_' + fieldName + '"]');
+        
+        if (requiredCheckbox && defaultInput) {
+            var defaultValue = defaultInput.value;
+            
+            // Handle different input types
+            if (defaultInput.type === 'checkbox') {
+                defaultValue = defaultInput.checked ? '1' : '0';
+            } else if (defaultInput.type === 'number') {
+                defaultValue = defaultInput.value || '0';
+            } else if (defaultInput.type === 'date' || defaultInput.type === 'datetime-local') {
+                defaultValue = defaultInput.value || '';
+            }
+            
+            accountFields[fieldName] = {
+                required: requiredCheckbox.checked,
+                default: defaultValue
+            };
+        }
+    });
+    
+    var data = {
+        label: label,
+        description: description,
+        account_fields: accountFields
+    };
+    
+    // Show loading state
+    var saveBtn = document.getElementById('saveTemplateBtn');
+    var originalText = saveBtn.innerHTML;
+    saveBtn.innerHTML = '<span class="fa fa-spinner fa-spin"></span> Saving...';
+    saveBtn.disabled = true;
+    
+    // Send request
+    fetch('/accounts/templates/' + templateId, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Show success message
+            alert('Template updated successfully!');
+            $('#editTemplateModal').modal('hide');
+            
+            // Update the template form on the page with new field configuration
+            updateTemplateForm(accountFields);
+        } else {
+            alert('Error updating template: ' + (data.message || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        console.error('Error saving template:', error);
+        alert('Error saving template. Please try again.');
+    })
+    .finally(function() {
+        // Restore button state
+        saveBtn.innerHTML = originalText;
+        saveBtn.disabled = false;
+    });
+}
+
+// Function to update the template form on the page
+function updateTemplateForm(accountFields) {
+    // Find the template fields container
+    var templateFieldsContainer = document.getElementById('template-fields-container');
+    if (!templateFieldsContainer) return;
+    
+    // Clear existing content
+    templateFieldsContainer.innerHTML = '';
+    
+    // If no field definitions loaded yet, wait for them
+    if (!fieldDefinitions) {
+        setTimeout(function() {
+            if (fieldDefinitions) {
+                updateTemplateForm(accountFields);
+            }
+        }, 500);
+        return;
+    }
+    
+    // Group configured fields by requirement type
+    var requiredFields = [];
+    var optionalFields = [];
+    
+    fieldDefinitions.forEach(function(field) {
+        // Get configuration for this field (if it exists)
+        var config = accountFields[field.field_name] || { required: false, default: '' };
+        var isConfigured = !!accountFields[field.field_name];
+        
+        if (isConfigured) {
+            var fieldData = {
+                field: field,
+                config: config,
+                isConfigured: isConfigured
+            };
+            
+            if (config.required) {
+                requiredFields.push(fieldData);
+            } else {
+                optionalFields.push(fieldData);
+            }
+        }
+    });
+    
+    // Create Required Fields section
+    if (requiredFields.length > 0) {
+        var requiredSection = document.createElement('div');
+        requiredSection.className = 'box';
+        
+        requiredSection.innerHTML = '<div class="box-header with-border">' +
+                                   '<h4 class="box-title text-primary">' +
+                                   '<i class="fa fa-asterisk"></i> Required Fields' +
+                                   '</h4>' +
+                                   '</div>' +
+                                   '<div class="box-body">' +
+                                   '<div class="row" id="required-fields">' +
+                                   '</div>' +
+                                   '</div>';
+        
+        var requiredContainer = requiredSection.querySelector('#required-fields');
+        
+        requiredFields.forEach(function(fieldData) {
+            var fieldHtml = createFormField(fieldData.field, fieldData.config, fieldData.isConfigured);
+            requiredContainer.innerHTML += fieldHtml;
+        });
+        
+        templateFieldsContainer.appendChild(requiredSection);
+    }
+    
+    // Create Optional Fields section
+    if (optionalFields.length > 0) {
+        var optionalSection = document.createElement('div');
+        optionalSection.className = 'box';
+        
+        optionalSection.innerHTML = '<div class="box-header with-border">' +
+                                   '<h4 class="box-title text-muted">' +
+                                   '<i class="fa fa-plus-circle"></i> Optional Fields' +
+                                   '</h4>' +
+                                   '</div>' +
+                                   '<div class="box-body">' +
+                                   '<div class="row" id="optional-fields">' +
+                                   '</div>' +
+                                   '</div>';
+        
+        var optionalContainer = optionalSection.querySelector('#optional-fields');
+        
+        optionalFields.forEach(function(fieldData) {
+            var fieldHtml = createFormField(fieldData.field, fieldData.config, fieldData.isConfigured);
+            optionalContainer.innerHTML += fieldHtml;
+        });
+        
+        templateFieldsContainer.appendChild(optionalSection);
+    }
+    
+    // Populate account_holder dropdowns after form is updated
+    setTimeout(function() {
+        loadFinancialEntities();
+        setupFieldDependencies();
+    }, 100);
+}
+
+// Function to create form field HTML
+function createFormField(field, config, isConfigured) {
+    var fieldHtml = '<div class="col-md-6">';
+    fieldHtml += '<div class="form-group"';
+    
+    // Hide field if not configured
+    if (!isConfigured) {
+        fieldHtml += ' style="display: none;"';
+    }
+    
+    // Add dependency classes for field dependencies
+    if (field.field_name === 'overdraft_account') {
+        fieldHtml += ' data-depends-on="overdraft_protection"';
+    }
+    
+    fieldHtml += '>';
+    fieldHtml += '<label for="' + field.field_name + '">';
+    fieldHtml += field.display_name;
+    if (config.required) {
+        fieldHtml += ' <span class="text-danger">*</span>';
+    }
+    fieldHtml += '</label>';
+    
+    // Create appropriate input based on data type
+    var inputHtml = getFormInputForDataType(field.data_type, field.field_name, config.default || '', config.required);
+    fieldHtml += inputHtml;
+    
+    // Add error display div
+    fieldHtml += '<div class="field-error" id="' + field.field_name + '_error" style="display: none;">';
+    fieldHtml += '<span class="text-danger"></span>';
+    fieldHtml += '</div>';
+    
+    fieldHtml += '</div>';
+    fieldHtml += '</div>';
+    
+    return fieldHtml;
+}
+
+// Function to get form input based on data type
+function getFormInputForDataType(dataType, fieldName, defaultValue, isRequired) {
+    var inputHtml = '';
+    var requiredAttr = isRequired ? ' required' : '';
+    
+    // Special handling for account_holder field
+    if (fieldName === 'account_holder') {
+        inputHtml = '<select class="form-control" name="' + fieldName + '"' + requiredAttr + '>';
+        inputHtml += '<option value="">Select Account Holder</option>';
+        // Financial entities will be populated via AJAX
+        inputHtml += '</select>';
+        return inputHtml;
+    }
+    
+    // Special handling for overdraft_account field
+    if (fieldName === 'overdraft_account') {
+        inputHtml = '<select class="form-control" name="' + fieldName + '"' + requiredAttr + '>';
+        inputHtml += '<option value="">Select Overdraft Account</option>';
+        // Other accounts will be populated via AJAX
+        inputHtml += '</select>';
+        return inputHtml;
+    }
+    
+    switch (dataType.toLowerCase()) {
+        case 'boolean':
+        case 'bool':
+            var isChecked = defaultValue === '1' || defaultValue === 'true' || defaultValue === true;
+            inputHtml = '<div class="checkbox">';
+            inputHtml += '<label>';
+            inputHtml += '<input type="checkbox" name="' + fieldName + '" value="1" ' + (isChecked ? 'checked' : '') + requiredAttr + '>';
+            inputHtml += 'Enable ' + fieldName.replace(/_/g, ' ');
+            inputHtml += '</label>';
+            inputHtml += '</div>';
+            break;
+            
+        case 'select':
+            inputHtml = '<select class="form-control" name="' + fieldName + '"' + requiredAttr + '>';
+            inputHtml += '<option value="">Select Option</option>';
+            inputHtml += '</select>';
+            break;
+            
+        case 'date':
+            inputHtml = '<input type="date" class="form-control" name="' + fieldName + '" value="' + defaultValue + '"' + requiredAttr + '>';
+            break;
+            
+        case 'datetime':
+        case 'timestamp':
+            inputHtml = '<input type="datetime-local" class="form-control" name="' + fieldName + '" value="' + defaultValue + '"' + requiredAttr + '>';
+            break;
+            
+        case 'integer':
+        case 'int':
+            inputHtml = '<input type="number" class="form-control" name="' + fieldName + '" value="' + defaultValue + '" step="1"' + requiredAttr + '>';
+            break;
+            
+        case 'decimal':
+        case 'float':
+        case 'double':
+            inputHtml = '<input type="number" class="form-control" name="' + fieldName + '" value="' + defaultValue + '" step="0.01"' + requiredAttr + '>';
+            break;
+            
+        case 'email':
+            inputHtml = '<input type="email" class="form-control" name="' + fieldName + '" value="' + defaultValue + '"' + requiredAttr + '>';
+            break;
+            
+        case 'url':
+            inputHtml = '<input type="url" class="form-control" name="' + fieldName + '" value="' + defaultValue + '"' + requiredAttr + '>';
+            break;
+            
+        case 'tel':
+        case 'phone':
+            inputHtml = '<input type="tel" class="form-control" name="' + fieldName + '" value="' + defaultValue + '"' + requiredAttr + '>';
+            break;
+            
+        case 'textarea':
+            inputHtml = '<textarea class="form-control" name="' + fieldName + '" rows="3"' + requiredAttr + '>' + defaultValue + '</textarea>';
+            break;
+            
+        case 'text':
+        default:
+            inputHtml = '<input type="text" class="form-control" name="' + fieldName + '" value="' + defaultValue + '"' + requiredAttr + '>';
+            break;
+    }
+    
+    return inputHtml;
+}
+</script>
 {% endblock %}
