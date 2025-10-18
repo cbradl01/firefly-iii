@@ -18,7 +18,111 @@ class FinancialEntityService
      */
     public function createEntity(array $data): FinancialEntity
     {
-        return FinancialEntity::create($data);
+        // Map entity-specific field names to database column names
+        $mappedData = $this->mapFieldsToDatabase($data);
+        
+        return FinancialEntity::create($mappedData);
+    }
+    
+    /**
+     * Map entity-specific field names to database column names
+     */
+    private function mapFieldsToDatabase(array $data): array
+    {
+        $mappedData = $data;
+        
+        // Map entity-specific name fields to the 'name' column
+        if (isset($data['individual_name'])) {
+            $mappedData['name'] = $data['individual_name'];
+            unset($mappedData['individual_name']);
+        } elseif (isset($data['institution_name'])) {
+            $mappedData['name'] = $data['institution_name'];
+            unset($mappedData['institution_name']);
+        } elseif (isset($data['trustee_name'])) {
+            $mappedData['name'] = $data['trustee_name'];
+            unset($mappedData['trustee_name']);
+        } elseif (isset($data['business_name'])) {
+            $mappedData['name'] = $data['business_name'];
+            unset($mappedData['business_name']);
+        } elseif (isset($data['advisor_name'])) {
+            $mappedData['name'] = $data['advisor_name'];
+            unset($mappedData['advisor_name']);
+        } elseif (isset($data['custodian_name'])) {
+            $mappedData['name'] = $data['custodian_name'];
+            unset($mappedData['custodian_name']);
+        } elseif (isset($data['plan_administrator_name'])) {
+            $mappedData['name'] = $data['plan_administrator_name'];
+            unset($mappedData['plan_administrator_name']);
+        }
+        
+        // Store all other fields in metadata
+        $metadata = [];
+        foreach ($mappedData as $key => $value) {
+            if (!in_array($key, ['name', 'entity_type', 'display_name', 'description', 'contact_info', 'is_active'])) {
+                $metadata[$key] = $value;
+                unset($mappedData[$key]);
+            }
+        }
+        
+        if (!empty($metadata)) {
+            $mappedData['metadata'] = $metadata;
+        }
+        
+        return $mappedData;
+    }
+    
+    /**
+     * Update an existing financial entity
+     */
+    public function updateEntity(FinancialEntity $entity, array $data): FinancialEntity
+    {
+        // Map entity-specific field names to database column names
+        $mappedData = $this->mapFieldsToDatabase($data);
+        
+        // Handle metadata merging for updates
+        if (isset($mappedData['metadata'])) {
+            $existingMetadata = $entity->metadata ?? [];
+            $newMetadata = $mappedData['metadata'];
+            $mappedData['metadata'] = array_merge($existingMetadata, $newMetadata);
+        }
+        
+        // Use fill and save instead of update
+        $entity->fill($mappedData);
+        $entity->save();
+        
+        return $entity;
+    }
+    
+    /**
+     * Map database fields back to form field names for editing
+     */
+    public function mapFieldsFromDatabase(FinancialEntity $entity): array
+    {
+        $data = $entity->toArray();
+        
+        // Map the 'name' field back to entity-specific field names
+        if ($entity->entity_type === FinancialEntity::TYPE_INDIVIDUAL) {
+            $data['individual_name'] = $entity->name;
+        } elseif ($entity->entity_type === FinancialEntity::TYPE_INSTITUTION) {
+            $data['institution_name'] = $entity->name;
+        } elseif ($entity->entity_type === FinancialEntity::TYPE_TRUST) {
+            $data['trustee_name'] = $entity->name;
+        } elseif ($entity->entity_type === FinancialEntity::TYPE_BUSINESS) {
+            $data['business_name'] = $entity->name;
+        } elseif ($entity->entity_type === FinancialEntity::TYPE_ADVISOR) {
+            $data['advisor_name'] = $entity->name;
+        } elseif ($entity->entity_type === FinancialEntity::TYPE_CUSTODIAN) {
+            $data['custodian_name'] = $entity->name;
+        } elseif ($entity->entity_type === FinancialEntity::TYPE_PLAN_ADMINISTRATOR) {
+            $data['plan_administrator_name'] = $entity->name;
+        }
+        
+        // Merge metadata fields back into the main data array
+        if (isset($entity->metadata) && is_array($entity->metadata)) {
+            $data = array_merge($data, $entity->metadata);
+        }
+        
+        return $data;
     }
 
     /**
@@ -76,6 +180,14 @@ class FinancialEntityService
     public function getCustodians(): Collection
     {
         return $this->getEntitiesByType(FinancialEntity::TYPE_CUSTODIAN);
+    }
+
+    /**
+     * Get all institutions
+     */
+    public function getInstitutions(): Collection
+    {
+        return $this->getEntitiesByType(FinancialEntity::TYPE_INSTITUTION);
     }
 
     /**
