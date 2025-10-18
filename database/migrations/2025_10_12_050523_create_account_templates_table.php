@@ -15,18 +15,20 @@ return new class extends Migration
         // Create account_templates table
         Schema::create('account_templates', function (Blueprint $table) {
             $table->id();
-            $table->string('name', 100)->unique();
-            $table->foreignId('account_type_id')->constrained('account_types');
+            $table->string('name', 100)->unique(); // Stable identifier (never changes)
+            $table->string('label', 100); // Display name (can change)
+            $table->foreignId('category_id')->constrained('account_categories');
+            $table->foreignId('behavior_id')->constrained('account_behaviors');
             $table->text('description')->nullable();
-            $table->json('metadata_preset')->nullable(); // JSON preset for common metadata
-            $table->json('suggested_fields')->nullable(); // JSON array of suggested field names
+            $table->json('metadata_schema')->nullable(); // JSON schema for account metadata and field requirements
             $table->boolean('is_system_template')->default(false); // System vs user-created
             $table->foreignId('created_by_user_id')->nullable()->constrained('users'); // null for system templates
             $table->boolean('active')->default(true);
             $table->timestamps();
             
-            $table->index(['account_type_id', 'active']);
+            $table->index(['category_id', 'behavior_id', 'active']);
             $table->index(['is_system_template', 'active']);
+            $table->index(['name', 'active']);
         });
 
         // Seed common templates
@@ -46,411 +48,288 @@ return new class extends Migration
      */
     private function seedAccountTemplates(): void
     {
-        // Get account type IDs
-        $accountTypes = DB::table('account_types')->pluck('id', 'name');
+        // Get category and behavior IDs
+        $categories = DB::table('account_categories')->pluck('id', 'name');
+        $behaviors = DB::table('account_behaviors')->pluck('id', 'name');
 
         $templates = [
-            // Asset Account Templates
+            // Asset Account Templates - Simple Behavior
             [
-                'name' => 'Personal Checking',
-                'account_type_id' => $accountTypes['Checking Account'],
-                'description' => 'Personal checking account for daily transactions',
-                'metadata_preset' => json_encode([
-                    'account_role' => 'defaultAsset',
-                    'ownership' => 'individual'
+                'name' => 'checking_account',
+                'label' => 'Checking Account',
+                'category_id' => $categories['Asset'],
+                'behavior_id' => $behaviors['Simple'],
+                'description' => 'Checking account for daily transactions (personal, business, trust, etc.)',
+                'metadata_schema' => json_encode([
+                    'required_fields' => ['account_holder_type', 'overdraft_protection', 'institution'],
+                    'optional_fields' => [
+                        'account_number', 
+                        'routing_number', 
+                        'authorized_signers', 
+                        'signature_authority', 
+                        'required_documents',
+                        'interest_rate',
+                        'minimum_balance',
+                        'fee_structure'
+                    ]
                 ]),
-                'suggested_fields' => json_encode([
-                    'account_number', 'routing_number', 'institution', 'overdraft_protection'
-                ]),
-                'is_system_template' => true,
-                'created_by_user_id' => null,
-                'active' => true,
-                'created_at' => now(),
-                'updated_at' => now()
             ],
             [
-                'name' => 'Business Checking',
-                'account_type_id' => $accountTypes['Business Checking'],
-                'description' => 'Business checking account',
-                'metadata_preset' => json_encode([
-                    'account_role' => 'defaultAsset',
-                    'ownership' => 'business'
+                'name' => 'savings_account',
+                'label' => 'Savings Account',
+                'category_id' => $categories['Asset'],
+                'behavior_id' => $behaviors['Simple'],
+                'description' => 'Savings account',
+                'metadata_schema' => json_encode([
+                    'required_fields' => ['account_holder_type', 'overdraft_protection', 'institution'],
+                    'optional_fields' => [
+                        'account_number', 
+                        'routing_number', 
+                        'authorized_signers', 
+                        'signature_authority', 
+                        'required_documents',
+                        'interest_rate',
+                        'minimum_balance',
+                        'fee_structure'
+                    ]
                 ]),
-                'suggested_fields' => json_encode([
-                    'account_number', 'routing_number', 'business_name', 'business_type'
-                ]),
-                'is_system_template' => true,
-                'created_by_user_id' => null,
-                'active' => true,
-                'created_at' => now(),
-                'updated_at' => now()
             ],
             [
-                'name' => 'High-Yield Savings',
-                'account_type_id' => $accountTypes['Savings Account'],
-                'description' => 'High-yield savings account',
-                'metadata_preset' => json_encode([
-                    'account_role' => 'savingAsset',
-                    'ownership' => 'individual'
-                ]),
-                'suggested_fields' => json_encode([
-                    'account_number', 'routing_number', 'interest_rate', 'minimum_balance'
-                ]),
-                'is_system_template' => true,
-                'created_by_user_id' => null,
-                'active' => true,
-                'created_at' => now(),
-                'updated_at' => now()
-            ],
-            [
-                'name' => 'Emergency Fund',
-                'account_type_id' => $accountTypes['Savings Account'],
+                'name' => 'emergency_fund',
+                'label' => 'Emergency Fund',
+                'category_id' => $categories['Asset'],
+                'behavior_id' => $behaviors['Simple'],
                 'description' => 'Emergency fund savings account',
-                'metadata_preset' => json_encode([
-                    'account_role' => 'savingAsset',
-                    'purpose' => 'emergency_fund'
+                'metadata_schema' => json_encode([
+                    'account_fields' => [
+                        'account_number' => ['required' => false, 'default' => ''],
+                        'routing_number' => ['required' => false, 'default' => ''],
+                        'target_amount' => ['required' => false, 'default' => ''],
+                        'current_balance' => ['required' => false, 'default' => '']
+                    ]
                 ]),
-                'suggested_fields' => json_encode([
-                    'account_number', 'routing_number', 'target_amount', 'current_balance'
-                ]),
-                'is_system_template' => true,
-                'created_by_user_id' => null,
-                'active' => true,
-                'created_at' => now(),
-                'updated_at' => now()
-            ],
-            [
-                'name' => 'Individual Brokerage',
-                'account_type_id' => $accountTypes['Individual Brokerage'],
-                'description' => 'Individual investment brokerage account',
-                'metadata_preset' => json_encode([
-                    'account_role' => 'brokerageAsset',
-                    'ownership' => 'individual'
-                ]),
-                'suggested_fields' => json_encode([
-                    'account_number', 'brokerage_firm', 'beneficiaries', 'investment_style'
-                ]),
-                'is_system_template' => true,
-                'created_by_user_id' => null,
-                'active' => true,
-                'created_at' => now(),
-                'updated_at' => now()
-            ],
-            [
-                'name' => 'Joint Brokerage',
-                'account_type_id' => $accountTypes['Joint Brokerage'],
-                'description' => 'Joint investment brokerage account',
-                'metadata_preset' => json_encode([
-                    'account_role' => 'brokerageAsset',
-                    'ownership' => 'joint'
-                ]),
-                'suggested_fields' => json_encode([
-                    'account_number', 'brokerage_firm', 'joint_owners', 'beneficiaries'
-                ]),
-                'is_system_template' => true,
-                'created_by_user_id' => null,
-                'active' => true,
-                'created_at' => now(),
-                'updated_at' => now()
-            ],
-            [
-                'name' => 'Roth IRA',
-                'account_type_id' => $accountTypes['Roth IRA'],
-                'description' => 'Roth Individual Retirement Account',
-                'metadata_preset' => json_encode([
-                    'account_role' => 'brokerageAsset',
-                    'account_type' => 'roth_ira'
-                ]),
-                'suggested_fields' => json_encode([
-                    'account_number', 'brokerage_firm', 'beneficiaries', 'contribution_limit', 'current_contribution'
-                ]),
-                'is_system_template' => true,
-                'created_by_user_id' => null,
-                'active' => true,
-                'created_at' => now(),
-                'updated_at' => now()
-            ],
-            [
-                'name' => 'Traditional IRA',
-                'account_type_id' => $accountTypes['Traditional IRA'],
-                'description' => 'Traditional Individual Retirement Account',
-                'metadata_preset' => json_encode([
-                    'account_role' => 'brokerageAsset',
-                    'account_type' => 'traditional_ira'
-                ]),
-                'suggested_fields' => json_encode([
-                    'account_number', 'brokerage_firm', 'beneficiaries', 'contribution_limit', 'current_contribution'
-                ]),
-                'is_system_template' => true,
-                'created_by_user_id' => null,
-                'active' => true,
-                'created_at' => now(),
-                'updated_at' => now()
-            ],
-            [
-                'name' => '401(k)',
-                'account_type_id' => $accountTypes['401(k)'],
-                'description' => 'Employer-sponsored 401(k) retirement account',
-                'metadata_preset' => json_encode([
-                    'account_role' => 'brokerageAsset',
-                    'account_type' => '401k'
-                ]),
-                'suggested_fields' => json_encode([
-                    'account_number', 'employer_id', 'employer_name', 'beneficiaries', 'contribution_limit', 'employer_match'
-                ]),
-                'is_system_template' => true,
-                'created_by_user_id' => null,
-                'active' => true,
-                'created_at' => now(),
-                'updated_at' => now()
+
             ],
             [
                 'name' => 'Health Savings Account',
-                'account_type_id' => $accountTypes['Health Savings Account (HSA)'],
-                'description' => 'Health Savings Account for medical expenses',
-                'metadata_preset' => json_encode([
-                    'account_role' => 'savingAsset',
-                    'account_type' => 'hsa'
+                'template_name' => 'health_savings_account',
+                'category_id' => $categories['Asset'],
+                'behavior_id' => $behaviors['Simple'],
+                'description' => 'Health Savings Accounts (HSAs) are tax-advantaged savings accounts for qualified medical expenses.',
+                'metadata_schema' => json_encode([
+                    'required_fields' => ['account_holder_type', 'overdraft_protection', 'institution'],
+                    'optional_fields' => [
+                        'account_number', 
+                        'routing_number', 
+                        'authorized_signers', 
+                        'signature_authority', 
+                        'required_documents',
+                        'interest_rate',
+                        'minimum_balance',
+                        'fee_structure',
+                        'contribution_limit',
+                        'current_contribution',
+                        'employer_contribution'
+                    ]
                 ]),
-                'suggested_fields' => json_encode([
-                    'account_number', 'contribution_limit', 'current_contribution', 'employer_contribution'
+
+            ],
+
+            // Asset Account Templates - Container Behavior
+            [
+                'name' => 'Brokerage Account',
+                'template_name' => 'brokerage_account',
+                'category_id' => $categories['Asset'],
+                'behavior_id' => $behaviors['Container'],
+                'description' => 'Investment brokerage account (individual, joint, business, trust, etc.)',
+                'metadata_schema' => json_encode([
+                    'required_fields' => ['account_holder_type', 'overdraft_protection', 'institution'],
+                    'optional_fields' => [
+                        'account_number', 
+                        'brokerage_firm', 
+                        'authorized_signers', 
+                        'signature_authority', 
+                        'beneficiaries',
+                        'investment_style',
+                        'interest_rate',
+                        'minimum_balance',
+                        'fee_structure'
+                    ]
                 ]),
-                'is_system_template' => true,
-                'created_by_user_id' => null,
-                'active' => true,
-                'created_at' => now(),
-                'updated_at' => now()
+
             ],
             [
-                'name' => 'Cash Wallet',
-                'account_type_id' => $accountTypes['Cash account'],
-                'description' => 'Physical cash wallet',
-                'metadata_preset' => json_encode([
-                    'account_role' => 'cashWalletAsset',
-                    'ownership' => 'individual'
+                'name' => 'Roth IRA',
+                'template_name' => 'roth_ira',
+                'category_id' => $categories['Asset'],
+                'behavior_id' => $behaviors['Container'],
+                'description' => 'Roth Individual Retirement Account',
+                'metadata_schema' => json_encode([
+                    'required_fields' => [],
+                    'optional_fields' => ['account_number', 'brokerage_firm', 'beneficiaries', 'contribution_limit', 'current_contribution']
                 ]),
-                'suggested_fields' => json_encode([
-                    'currency_code', 'location'
+
+            ],
+            [
+                'name' => 'Traditional IRA',
+                'template_name' => 'traditional_ira',
+                'category_id' => $categories['Asset'],
+                'behavior_id' => $behaviors['Container'],
+                'description' => 'Traditional Individual Retirement Account',
+                'metadata_schema' => json_encode([
+                    'required_fields' => [],
+                    'optional_fields' => ['account_number', 'brokerage_firm', 'beneficiaries', 'contribution_limit', 'current_contribution']
                 ]),
-                'is_system_template' => true,
-                'created_by_user_id' => null,
-                'active' => true,
-                'created_at' => now(),
-                'updated_at' => now()
+
+            ],
+            [
+                'name' => '401(k)',
+                'template_name' => '401k',
+                'category_id' => $categories['Asset'],
+                'behavior_id' => $behaviors['Container'],
+                'description' => 'Employer-sponsored 401(k) retirement account',
+                'metadata_schema' => json_encode([
+                    'required_fields' => [],
+                    'optional_fields' => ['account_number', 'employer_id', 'employer_name', 'beneficiaries', 'contribution_limit', 'employer_match']
+                ]),
+
             ],
             [
                 'name' => 'Cryptocurrency Wallet',
-                'account_type_id' => $accountTypes['Cryptocurrency'],
+                'template_name' => 'cryptocurrency_wallet',
+                'category_id' => $categories['Asset'],
+                'behavior_id' => $behaviors['Container'],
                 'description' => 'Cryptocurrency wallet',
-                'metadata_preset' => json_encode([
-                    'account_role' => 'defaultAsset',
-                    'asset_type' => 'cryptocurrency'
+                'metadata_schema' => json_encode([
+                    'required_fields' => [],
+                    'optional_fields' => ['wallet_address', 'currency_code', 'wallet_type', 'exchange']
                 ]),
-                'suggested_fields' => json_encode([
-                    'wallet_address', 'currency_code', 'wallet_type', 'exchange'
-                ]),
-                'is_system_template' => true,
-                'created_by_user_id' => null,
-                'active' => true,
-                'created_at' => now(),
-                'updated_at' => now()
+
             ],
+
+            // Asset Account Templates - Cash Behavior
+            [
+                'name' => 'Cash Wallet',
+                'template_name' => 'cash_wallet',
+                'category_id' => $categories['Asset'],
+                'behavior_id' => $behaviors['Cash'],
+                'description' => 'Physical cash wallet',
+                'metadata_schema' => json_encode([
+                    'required_fields' => [],
+                    'optional_fields' => ['currency_code', 'location']
+                ]),
+
+            ],
+
+            // Digital Payment Platforms - Simple Behavior
             [
                 'name' => 'PayPal Account',
-                'account_type_id' => $accountTypes['Digital Wallet'],
+                'template_name' => 'paypal_account',
+                'category_id' => $categories['Asset'],
+                'behavior_id' => $behaviors['Simple'],
                 'description' => 'PayPal digital wallet account',
-                'metadata_preset' => json_encode([
-                    'account_role' => 'defaultAsset',
-                    'wallet_provider' => 'paypal'
+                'metadata_schema' => json_encode([
+                    'required_fields' => [],
+                    'optional_fields' => ['account_number', 'email', 'currency_code']
                 ]),
-                'suggested_fields' => json_encode([
-                    'account_number', 'email', 'currency_code'
-                ]),
-                'is_system_template' => true,
-                'created_by_user_id' => null,
-                'active' => true,
-                'created_at' => now(),
-                'updated_at' => now()
+
             ],
             [
                 'name' => 'Venmo Account',
-                'account_type_id' => $accountTypes['Digital Wallet'],
+                'template_name' => 'venmo_account',
+                'category_id' => $categories['Asset'],
+                'behavior_id' => $behaviors['Simple'],
                 'description' => 'Venmo digital wallet account',
-                'metadata_preset' => json_encode([
-                    'account_role' => 'defaultAsset',
-                    'wallet_provider' => 'venmo'
+                'metadata_schema' => json_encode([
+                    'required_fields' => [],
+                    'optional_fields' => ['account_number', 'username', 'currency_code']
                 ]),
-                'suggested_fields' => json_encode([
-                    'account_number', 'username', 'currency_code'
-                ]),
-                'is_system_template' => true,
-                'created_by_user_id' => null,
-                'active' => true,
-                'created_at' => now(),
-                'updated_at' => now()
+
             ],
 
-            // Liability Account Templates
+            // Liability Account Templates - Simple Behavior
             [
                 'name' => 'Personal Credit Card',
-                'account_type_id' => $accountTypes['Credit card'],
+                'template_name' => 'personal_credit_card',
+                'category_id' => $categories['Liability'],
+                'behavior_id' => $behaviors['Simple'],
                 'description' => 'Personal credit card account',
-                'metadata_preset' => json_encode([
-                    'liability_direction' => 'credit',
-                    'ownership' => 'individual'
+                'metadata_schema' => json_encode([
+                    'required_fields' => [],
+                    'optional_fields' => ['account_number', 'credit_limit', 'interest_rate', 'payment_due_date']
                 ]),
-                'suggested_fields' => json_encode([
-                    'account_number', 'credit_limit', 'interest_rate', 'payment_due_date'
-                ]),
-                'is_system_template' => true,
-                'created_by_user_id' => null,
-                'active' => true,
-                'created_at' => now(),
-                'updated_at' => now()
+
             ],
             [
                 'name' => 'Business Credit Card',
-                'account_type_id' => $accountTypes['Credit card'],
+                'template_name' => 'business_credit_card',
+                'category_id' => $categories['Liability'],
+                'behavior_id' => $behaviors['Simple'],
                 'description' => 'Business credit card account',
-                'metadata_preset' => json_encode([
-                    'liability_direction' => 'credit',
-                    'ownership' => 'business'
+                'metadata_schema' => json_encode([
+                    'required_fields' => [],
+                    'optional_fields' => ['account_number', 'credit_limit', 'interest_rate', 'business_name']
                 ]),
-                'suggested_fields' => json_encode([
-                    'account_number', 'credit_limit', 'interest_rate', 'business_name'
-                ]),
-                'is_system_template' => true,
-                'created_by_user_id' => null,
-                'active' => true,
-                'created_at' => now(),
-                'updated_at' => now()
+
             ],
             [
                 'name' => 'Auto Loan',
-                'account_type_id' => $accountTypes['Auto Loan'],
+                'template_name' => 'auto_loan',
+                'category_id' => $categories['Liability'],
+                'behavior_id' => $behaviors['Simple'],
                 'description' => 'Automobile loan account',
-                'metadata_preset' => json_encode([
-                    'liability_direction' => 'debit',
-                    'liability_type' => 'auto_loan'
+                'metadata_schema' => json_encode([
+                    'required_fields' => [],
+                    'optional_fields' => ['account_number', 'loan_amount', 'interest_rate', 'vehicle_info', 'lender_name']
                 ]),
-                'suggested_fields' => json_encode([
-                    'account_number', 'loan_amount', 'interest_rate', 'vehicle_info', 'lender_name'
-                ]),
-                'is_system_template' => true,
-                'created_by_user_id' => null,
-                'active' => true,
-                'created_at' => now(),
-                'updated_at' => now()
+
             ],
             [
                 'name' => 'Home Mortgage',
-                'account_type_id' => $accountTypes['Mortgage'],
+                'template_name' => 'home_mortgage',
+                'category_id' => $categories['Liability'],
+                'behavior_id' => $behaviors['Simple'],
                 'description' => 'Home mortgage loan account',
-                'metadata_preset' => json_encode([
-                    'liability_direction' => 'debit',
-                    'liability_type' => 'mortgage'
+                'metadata_schema' => json_encode([
+                    'required_fields' => [],
+                    'optional_fields' => ['account_number', 'loan_amount', 'interest_rate', 'property_address', 'lender_name']
                 ]),
-                'suggested_fields' => json_encode([
-                    'account_number', 'loan_amount', 'interest_rate', 'property_address', 'lender_name'
-                ]),
-                'is_system_template' => true,
-                'created_by_user_id' => null,
-                'active' => true,
-                'created_at' => now(),
-                'updated_at' => now()
+
             ],
             [
                 'name' => 'Student Loan',
-                'account_type_id' => $accountTypes['Personal Loans'],
+                'template_name' => 'student_loan',
+                'category_id' => $categories['Liability'],
+                'behavior_id' => $behaviors['Simple'],
                 'description' => 'Student loan account',
-                'metadata_preset' => json_encode([
-                    'liability_direction' => 'debit',
-                    'liability_type' => 'student_loan'
+                'metadata_schema' => json_encode([
+                    'required_fields' => [],
+                    'optional_fields' => ['account_number', 'loan_amount', 'interest_rate', 'lender_name', 'school_name']
                 ]),
-                'suggested_fields' => json_encode([
-                    'account_number', 'loan_amount', 'interest_rate', 'lender_name', 'school_name'
-                ]),
-                'is_system_template' => true,
-                'created_by_user_id' => null,
-                'active' => true,
-                'created_at' => now(),
-                'updated_at' => now()
+
             ],
             [
                 'name' => 'Personal Loan',
-                'account_type_id' => $accountTypes['Personal Loans'],
+                'template_name' => 'personal_loan',
+                'category_id' => $categories['Liability'],
+                'behavior_id' => $behaviors['Simple'],
                 'description' => 'Personal loan account',
-                'metadata_preset' => json_encode([
-                    'liability_direction' => 'debit',
-                    'liability_type' => 'personal_loan'
+                'metadata_schema' => json_encode([
+                    'required_fields' => [],
+                    'optional_fields' => ['account_number', 'loan_amount', 'interest_rate', 'lender_name', 'loan_purpose']
                 ]),
-                'suggested_fields' => json_encode([
-                    'account_number', 'loan_amount', 'interest_rate', 'lender_name', 'loan_purpose'
-                ]),
-                'is_system_template' => true,
-                'created_by_user_id' => null,
-                'active' => true,
-                'created_at' => now(),
-                'updated_at' => now()
-            ],
 
-            // International Templates
-            [
-                'name' => 'UK ISA Account',
-                'account_type_id' => $accountTypes['Savings Account'],
-                'description' => 'UK Individual Savings Account',
-                'metadata_preset' => json_encode([
-                    'account_role' => 'savingAsset',
-                    'country' => 'UK',
-                    'account_type' => 'isa'
-                ]),
-                'suggested_fields' => json_encode([
-                    'account_number', 'isa_type', 'contribution_limit', 'current_contribution'
-                ]),
-                'is_system_template' => true,
-                'created_by_user_id' => null,
-                'active' => true,
-                'created_at' => now(),
-                'updated_at' => now()
-            ],
-            [
-                'name' => 'Canadian TFSA',
-                'account_type_id' => $accountTypes['Savings Account'],
-                'description' => 'Canadian Tax-Free Savings Account',
-                'metadata_preset' => json_encode([
-                    'account_role' => 'savingAsset',
-                    'country' => 'Canada',
-                    'account_type' => 'tfsa'
-                ]),
-                'suggested_fields' => json_encode([
-                    'account_number', 'contribution_limit', 'current_contribution'
-                ]),
-                'is_system_template' => true,
-                'created_by_user_id' => null,
-                'active' => true,
-                'created_at' => now(),
-                'updated_at' => now()
-            ],
-            [
-                'name' => 'Australian Superannuation',
-                'account_type_id' => $accountTypes['401(k)'],
-                'description' => 'Australian Superannuation retirement account',
-                'metadata_preset' => json_encode([
-                    'account_role' => 'brokerageAsset',
-                    'country' => 'Australia',
-                    'account_type' => 'superannuation'
-                ]),
-                'suggested_fields' => json_encode([
-                    'account_number', 'employer_name', 'contribution_rate', 'employer_contribution'
-                ]),
-                'is_system_template' => true,
-                'created_by_user_id' => null,
-                'active' => true,
-                'created_at' => now(),
-                'updated_at' => now()
             ]
         ];
 
+        foreach ($templates as $template) {
+            $template['is_system_template'] = true;
+            $template['created_by_user_id'] = null;
+            $template['active'] = true;
+            $template['created_at'] = now();
+            $template['updated_at'] = now();
+        }
+        
         DB::table('account_templates')->insert($templates);
     }
 };
