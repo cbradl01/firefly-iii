@@ -1,0 +1,209 @@
+/**
+ * Centralized Table Sorting and Styling
+ * Provides consistent table appearance and sorting functionality across the application
+ */
+
+/* Base table styling */
+.table.sortable {
+    width: 100%;
+    margin-bottom: 1rem;
+    background-color: transparent;
+    border-collapse: collapse;
+}
+
+.table.sortable th,
+.table.sortable td {
+    padding: 0.75rem;
+    vertical-align: top;
+    border-top: 1px solid #dee2e6;
+}
+
+.table.sortable thead th {
+    vertical-align: bottom;
+    border-bottom: 2px solid #dee2e6;
+    font-weight: 600;
+}
+
+/* Sortable column styling - match transaction table appearance */
+.table.sortable th[data-defaultsign]:not([data-defaultsort=disabled]) {
+    cursor: pointer;
+    position: relative;
+    user-select: none;
+    transition: background-color 0.2s ease;
+    outline: none !important; /* Remove blue border on focus/click */
+    box-shadow: none !important; /* Remove any box shadow */
+}
+
+.table.sortable th[data-defaultsign]:not([data-defaultsort=disabled]):focus {
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+.table.sortable th[data-defaultsign]:not([data-defaultsort=disabled]):active {
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+.table.sortable th[data-defaultsign]:not([data-defaultsort=disabled]):hover {
+    background-color: #f5f5f5;
+}
+
+/* Sort icons - inline with text */
+.table.sortable th[data-defaultsign]:not([data-defaultsort=disabled]) .fa-sort,
+.table.sortable th[data-defaultsign]:not([data-defaultsort=disabled]) .fa-sort-asc,
+.table.sortable th[data-defaultsign]:not([data-defaultsort=disabled]) .fa-sort-desc {
+    opacity: 0.3;
+    transition: opacity 0.2s ease;
+}
+
+.table.sortable th[data-defaultsign]:not([data-defaultsort=disabled]):hover .fa-sort {
+    opacity: 0.7;
+}
+
+.table.sortable th[data-defaultsign]:not([data-defaultsort=disabled]) .fa-sort-asc,
+.table.sortable th[data-defaultsign]:not([data-defaultsort=disabled]) .fa-sort-desc {
+    opacity: 1;
+}
+
+/* Sort inactive state - match transaction table */
+.sort-inactive {
+    opacity: 0.3;
+}
+
+.sort-inactive:hover {
+    opacity: 0.7;
+}
+
+.table.sortable th.arrow:after {
+    content: '';
+}
+
+/* Arrow indicators */
+.table.sortable span.arrow,
+.table.sortable span.reversed,
+.table.sortable th.arrow.down:after,
+.table.sortable th.reversedarrow.down:after,
+.table.sortable th.arrow.up:after,
+.table.sortable th.reversedarrow.up:after {
+    border-style: solid;
+    border-width: 5px;
+    font-size: 0;
+    border-color: #6c757d transparent transparent transparent;
+    line-height: 0;
+    height: 0;
+    width: 0;
+    margin-top: -2px;
+}
+
+.table.sortable span.arrow.up,
+.table.sortable th.arrow.up:after {
+    border-color: transparent transparent #6c757d transparent;
+    margin-top: -7px;
+}
+
+.table.sortable span.reversed,
+.table.sortable th.reversedarrow.down:after {
+    border-color: transparent transparent #6c757d transparent;
+    margin-top: -7px;
+}
+
+.table.sortable span.reversed.up,
+.table.sortable th.reversedarrow.up:after {
+    border-color: #6c757d transparent transparent transparent;
+    margin-top: -2px;
+}
+
+/* Text-based sorting indicators removed - using Font Awesome icons only */
+
+/* Disabled sorting - no text indicators needed */
+
+/* Active sorting state */
+.table.sortable th.arrow,
+.table.sortable th.az,
+.table.sortable th.AZ,
+.table.sortable th._19,
+.table.sortable th.month {
+    background-color: #e3f2fd;
+    color: #1976d2;
+}
+
+.table.sortable th.arrow:after,
+.table.sortable th.az:after,
+.table.sortable th.AZ:after,
+.table.sortable th._19:after,
+.table.sortable th.month:after {
+    opacity: 1;
+    color: #1976d2;
+}
+
+/* Responsive table styling */
+.table-responsive {
+    display: block;
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Striped rows */
+.table.sortable.table-striped tbody tr:nth-of-type(odd) {
+    background-color: rgba(0, 0, 0, 0.02);
+}
+
+.table.sortable.table-hover tbody tr:hover {
+    background-color: rgba(0, 0, 0, 0.075);
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+    .table.sortable th[data-defaultsign]:not([data-defaultsort=disabled]):hover {
+        background-color: #2a2f34;
+    }
+    
+    .table.sortable th.arrow,
+    .table.sortable th.az,
+    .table.sortable th.AZ,
+    .table.sortable th._19,
+    .table.sortable th.month {
+        background-color: #1e3a5f;
+        color: #64b5f6;
+    }
+    
+    .table.sortable th.arrow:after,
+    .table.sortable th.az:after,
+    .table.sortable th.AZ:after,
+    .table.sortable th._19:after,
+    .table.sortable th.month:after {
+        color: #64b5f6;
+    }
+}
+
+/* Accessibility improvements */
+.table.sortable th[data-defaultsign]:not([data-defaultsort=disabled]):focus {
+    outline: 2px solid #007bff;
+    outline-offset: -2px;
+}
+
+/* Loading state */
+.table.sortable.loading {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+.table.sortable.loading::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 20px;
+    height: 20px;
+    margin: -10px 0 0 -10px;
+    border: 2px solid #f3f3f3;
+    border-top: 2px solid #007bff;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}

@@ -1,0 +1,101 @@
+{#
+    Reusable Sortable Table Partial
+    
+    Usage:
+    {% include 'partials.sortable-table' with {
+        'tableId': 'my-table',
+        'columns': [
+            {
+                'key': 'name',
+                'title': 'Name',
+                'sortable': true,
+                'sortType': 'az',
+                'width': '25%'
+            },
+            {
+                'key': 'amount',
+                'title': 'Amount',
+                'sortable': true,
+                'sortType': '_19',
+                'width': '15%',
+                'align': 'right'
+            }
+        ],
+        'rows': entities,
+        'rowTemplate': 'partials.entity-row',
+        'emptyMessage': 'No entities found',
+        'responsive': true,
+        'striped': true,
+        'hover': true
+    } %}
+#}
+
+{% set tableId = tableId|default('sortable-table') %}
+{% set responsive = responsive|default(true) %}
+{% set striped = striped|default(true) %}
+{% set hover = hover|default(true) %}
+{% set emptyMessage = emptyMessage|default('No data available') %}
+
+<div class="table-responsive">
+    <table class="table sortable{% if striped %} table-striped{% endif %}{% if hover %} table-hover{% endif %}" id="{{ tableId }}">
+        <thead>
+            <tr>
+                {% for column in columns %}
+                    <th 
+                        {% if column.sortable and column.sortType %}
+                            data-defaultsign="{{ column.sortType }}"
+                        {% elseif not column.sortable %}
+                            data-defaultsort="disabled"
+                        {% endif %}
+                        {% if column.width %}style="width: {{ column.width }};"{% endif %}
+                        {% if column.align %}class="text-{{ column.align }}"{% endif %}
+                        {% if column.attributes %}{{ column.attributes|raw }}{% endif %}
+                    >
+                        {{ column.title|_ }}
+                        {% if column.help %}
+                            <i class="fa fa-question-circle text-muted" data-toggle="tooltip" title="{{ column.help|_ }}"></i>
+                        {% endif %}
+                    </th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% if rows and rows|length > 0 %}
+                {% for row in rows %}
+                    {% if rowTemplate %}
+                        {% include rowTemplate with { 'row': row, 'loop': loop } %}
+                    {% else %}
+                        <tr>
+                            {% for column in columns %}
+                                <td 
+                                    {% if column.align %}class="text-{{ column.align }}"{% endif %}
+                                    {% if column.dataValue %}data-value="{{ attribute(row, column.dataValue) }}"{% endif %}
+                                >
+                                    {% if column.template %}
+                                        {% include column.template with { 'row': row, 'column': column } %}
+                                    {% elseif column.key %}
+                                        {{ attribute(row, column.key) }}
+                                    {% endif %}
+                                </td>
+                            {% endfor %}
+                        </tr>
+                    {% endif %}
+                {% endfor %}
+            {% else %}
+                <tr>
+                    <td colspan="{{ columns|length }}" class="text-center text-muted">
+                        <i class="fa fa-info-circle"></i> {{ emptyMessage|_ }}
+                    </td>
+                </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+
+{# Include table sorting assets if not already included #}
+{% if not tableSortingIncluded|default(false) %}
+    <link rel="stylesheet" href="{{ asset('css/table-sorting.css') }}" type="text/css" media="all" nonce="{{ JS_NONCE }}">
+    <script src="{{ asset('v1/js/lib/bootstrap-sortable.js') }}" nonce="{{ JS_NONCE }}"></script>
+    <script src="{{ asset('js/table-sorting.js') }}" nonce="{{ JS_NONCE }}"></script>
+    {% set tableSortingIncluded = true %}
+{% endif %}
