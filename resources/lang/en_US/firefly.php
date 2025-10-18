@@ -1927,6 +1927,28 @@ return [
     'add_fields_to_template'                    => 'Add fields to template',
     'optional'                                  => 'Optional',
     'actions'                                   => 'Actions',
+    
+    // Enhanced template management
+    'add_fields'                                => 'Add Fields',
+    'currently_configured_fields'               => 'Currently Configured Fields',
+    'fields_currently_included_in_this_template' => 'Fields currently included in this template',
+    'available_fields_to_add'                   => 'Available Fields to Add',
+    'select_fields_to_add_to_this_template'     => 'Select fields to add to this template',
+    'search_fields'                             => 'Search fields...',
+    'all_categories'                            => 'All Categories',
+    'basic_info'                                => 'Basic Info',
+    'financial'                                 => 'Financial',
+    'features'                                  => 'Features',
+    'investment'                                => 'Investment',
+    'digital'                                   => 'Digital',
+    'fees'                                      => 'Fees',
+    'field_management'                          => 'Field Management',
+    'manage_which_fields_are_included_in_this_template' => 'Manage which fields are included in this template',
+    'display_unused_fields'                     => 'Display unused fields',
+    'active'                                    => 'Active',
+    'category'                                  => 'Category',
+    'data_type'                                 => 'Data Type',
+    'preview'                                   => 'Preview',
 
     // budgets:
     'daily_budgets'                             => 'Daily budgets',

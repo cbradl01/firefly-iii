@@ -105,18 +105,18 @@
                                             <div class="box-body">
                                                 <h5>
                                                     <span class="fa fa-{{ template.category.name == 'Asset' ? 'money' : (template.category.name == 'Liability' ? 'landmark' : 'chart-line') }}"></span>
-                                                    {{ template.label }}
+                                                    {{ template.name }}
                                                 </h5>
                                                 <p class="text-muted small">
                                                     {{ template.description }}
                                                 </p>
-                                                {% if template.metadata_schema.account_fields %}
+                                                {% if template.firefly_mapping.account_fields %}
                                                     <div style="margin-top: 10px;">
                                                         <small class="text-info">
                                                             <span class="fa fa-info-circle"></span>
-                                                            {{ ('configured_fields')|_ }}: {{ template.metadata_schema.account_fields|keys|slice(0, 3)|join(', ') }}
-                                                            {% if template.metadata_schema.account_fields|keys|length > 3 %}
-                                                                +{{ template.metadata_schema.account_fields|keys|length - 3 }} {{ ('more')|_ }}
+                                                            {{ ('configured_fields')|_ }}: {{ template.firefly_mapping.account_fields|keys|slice(0, 3)|join(', ') }}
+                                                            {% if template.firefly_mapping.account_fields|keys|length > 3 %}
+                                                                +{{ template.firefly_mapping.account_fields|keys|length - 3 }} {{ ('more')|_ }}
                                                             {% endif %}
                                                         </small>
                                                     </div>
@@ -232,24 +232,51 @@
                         </div>
                     </div>
                     
-                    <!-- Field Configuration Table -->
+                    <!-- Field Management -->
                     <div class="row">
                         <div class="col-md-12">
-                            <h5>{{ ('field_configuration')|_ }}</h5>
-                            <p class="text-muted">{{ ('configure_which_fields_are_required_or_optional')|_ }}</p>
+                            <h5>{{ ('field_management')|_ }}</h5>
+                            <p class="text-muted">{{ ('manage_which_fields_are_included_in_this_template')|_ }}</p>
                             
-                            <!-- Field Configuration Table -->
+                            <!-- Search and Filter Controls -->
+                            <div class="row" style="margin-bottom: 15px;">
+                                <div class="col-md-6">
+                                    <input type="text" class="form-control" id="fieldSearch" placeholder="{{ ('search_fields')|_ }}">
+                                </div>
+                                <div class="col-md-3">
+                                    <select class="form-control" id="fieldCategoryFilter">
+                                        <option value="">{{ ('all_categories')|_ }}</option>
+                                        <option value="basic_info">{{ ('basic_info')|_ }}</option>
+                                        <option value="financial">{{ ('financial')|_ }}</option>
+                                        <option value="features">{{ ('features')|_ }}</option>
+                                        <option value="investment">{{ ('investment')|_ }}</option>
+                                        <option value="digital">{{ ('digital')|_ }}</option>
+                                        <option value="fees">{{ ('fees')|_ }}</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="checkbox">
+                                        <label>
+                                            <input type="checkbox" id="showUnusedFields"> {{ ('display_unused_fields')|_ }}
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Fields Table -->
                             <div class="table-responsive">
-                                <table class="table table-striped table-bordered" id="fieldConfigurationTable">
+                                <table class="table table-striped table-bordered" id="fieldsTable">
                                     <thead>
                                         <tr>
+                                            <th style="width: 8%; text-align: center;">{{ ('active')|_ }}</th>
                                             <th style="width: 25%;">{{ ('field_name')|_ }}</th>
-                                            <th style="width: 35%;">{{ ('description')|_ }}</th>
-                                            <th style="width: 15%; text-align: center;">{{ ('required')|_ }}</th>
-                                            <th style="width: 25%;">{{ ('default_value')|_ }}</th>
+                                            <th style="width: 30%;">{{ ('description')|_ }}</th>
+                                            <th style="width: 12%;">{{ ('category')|_ }}</th>
+                                            <th style="width: 10%; text-align: center;">{{ ('required')|_ }}</th>
+                                            <th style="width: 15%;">{{ ('default_value')|_ }}</th>
                                         </tr>
                                     </thead>
-                                    <tbody id="fieldConfigurationTableBody">
+                                    <tbody id="fieldsTableBody">
                                         <!-- Content will be populated by JavaScript -->
                                     </tbody>
                                 </table>
@@ -262,7 +289,7 @@
                 <button type="button" class="btn btn-default" data-dismiss="modal">
                     {{ ('cancel')|_ }}
                 </button>
-                <button type="button" class="btn btn-primary" id="saveTemplateBtn">
+                <button type="button" class="btn btn-primary" id="saveTemplateBtn" disabled>
                     <span class="fa fa-save"></span>
                     {{ ('save_changes')|_ }}
                 </button>
@@ -358,6 +385,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // Edit modal functionality
     var fieldDefinitions = null;
     var currentTemplate = null;
+    var configuredFields = {};
+    var originalConfiguredFields = {};
+    var hasChanges = false;
     
     // Load field definitions when page loads
     loadFieldDefinitions();
@@ -366,6 +396,42 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('saveTemplateBtn').addEventListener('click', function() {
         saveTemplate();
     });
+    
+    
+    // Show unused fields checkbox handler
+    document.getElementById('showUnusedFields').addEventListener('change', function() {
+        populateFieldsTable();
+    });
+    
+    // Field search functionality
+    document.getElementById('fieldSearch').addEventListener('input', function() {
+        filterFields();
+    });
+    
+    // Field category filter
+    document.getElementById('fieldCategoryFilter').addEventListener('change', function() {
+        filterFields();
+    });
+    
+    // Function to update button states
+    function updateButtonStates() {
+        var saveBtn = document.getElementById('saveTemplateBtn');
+        
+        // Check if there are any changes
+        hasChanges = JSON.stringify(configuredFields) !== JSON.stringify(originalConfiguredFields);
+        
+        // Enable/disable Save button based on changes
+        saveBtn.disabled = !hasChanges;
+        
+        // Update Save button appearance
+        if (hasChanges) {
+            saveBtn.classList.remove('btn-primary');
+            saveBtn.classList.add('btn-warning');
+        } else {
+            saveBtn.classList.remove('btn-warning');
+            saveBtn.classList.add('btn-primary');
+        }
+    }
 });
 
 // Function to open edit modal
@@ -418,7 +484,7 @@ function loadTemplateData(templateId) {
             currentTemplate = data;
             
             // Populate basic info
-            document.getElementById('templateLabel').value = data.label || '';
+            document.getElementById('templateLabel').value = data.name || '';
             document.getElementById('templateDescription').value = data.description || '';
             
             // Populate field configuration
@@ -445,12 +511,28 @@ function populateFieldConfiguration(template) {
             } else {
                 console.error('Failed to load field definitions');
                 // Show a message in the modal
-                document.getElementById('fieldConfigurationTableBody').innerHTML = 
-                    '<tr><td colspan="4" class="text-center"><div class="alert alert-warning">Failed to load field definitions. Please refresh the page and try again.</div></td></tr>';
+                document.getElementById('configuredFieldsTableBody').innerHTML = 
+                    '<tr><td colspan="5" class="text-center"><div class="alert alert-warning">Failed to load field definitions. Please refresh the page and try again.</div></td></tr>';
             }
         }, 1000);
         return;
     }
+    
+    // Store configured fields
+    configuredFields = template.account_fields || {};
+    originalConfiguredFields = JSON.parse(JSON.stringify(configuredFields)); // Deep copy
+    
+    // Populate the single fields table
+    populateFieldsTable();
+    
+    // Update button states
+    updateButtonStates();
+}
+
+// Function to populate the single fields table
+function populateFieldsTable() {
+    var tableRowsHtml = '';
+    var showUnused = document.getElementById('showUnusedFields').checked;
     
     // Sort fields by category and display name
     var sortedFields = fieldDefinitions.sort(function(a, b) {
@@ -460,41 +542,166 @@ function populateFieldConfiguration(template) {
         return a.display_name.localeCompare(b.display_name);
     });
     
-    // Create table rows
-    var tableRowsHtml = '';
-    var currentCategory = '';
-    
     sortedFields.forEach(function(field) {
-        var fieldConfig = template.account_fields && template.account_fields[field.field_name] ? template.account_fields[field.field_name] : {};
-        var isRequired = fieldConfig.required || false;
-        var defaultValue = fieldConfig.default || '';
+        var isActive = configuredFields[field.field_name] ? true : false;
+        var fieldConfig = configuredFields[field.field_name] || { required: false, default: '' };
         
-        // Add category separator if category changed
-        if (currentCategory !== field.category) {
-            if (currentCategory !== '') {
-                tableRowsHtml += '<tr><td colspan="4" style="background-color: #f5f5f5; font-weight: bold; padding: 8px;">&nbsp;</td></tr>';
-            }
-            currentCategory = field.category;
+        // Skip inactive fields if not showing unused
+        if (!isActive && !showUnused) {
+            return;
         }
         
-        // Create row
-        tableRowsHtml += '<tr>';
-        tableRowsHtml += '<td>';
-        tableRowsHtml += '<strong>' + field.display_name + '</strong>';
-        tableRowsHtml += '<br><small class="text-muted">' + field.category.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) + '</small>';
-        tableRowsHtml += '</td>';
-        tableRowsHtml += '<td>' + (field.description || '') + '</td>';
+        // Determine row class based on active status
+        var rowClass = isActive ? 'field-row-active' : 'field-row-inactive';
+        
+        tableRowsHtml += '<tr class="' + rowClass + '" data-field="' + field.field_name + '" data-category="' + field.category + '">';
+        
+        // Active checkbox
         tableRowsHtml += '<td class="text-center">';
-        tableRowsHtml += '<input type="checkbox" name="field_required_' + field.field_name + '" ' + (isRequired ? 'checked' : '') + '>';
+        tableRowsHtml += '<input type="checkbox" class="field-active" data-field="' + field.field_name + '" ' + (isActive ? 'checked' : '') + '>';
         tableRowsHtml += '</td>';
+        
+        // Field name
+        tableRowsHtml += '<td><strong>' + field.display_name + '</strong></td>';
+        
+        // Description
+        tableRowsHtml += '<td>' + (field.description || '') + '</td>';
+        
+        // Category
+        tableRowsHtml += '<td>' + field.category.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) + '</td>';
+        
+        // Required checkbox (only show if active)
+        tableRowsHtml += '<td class="text-center">';
+        if (isActive) {
+            tableRowsHtml += '<input type="checkbox" class="field-required" data-field="' + field.field_name + '" ' + (fieldConfig.required ? 'checked' : '') + '>';
+        } else {
+            tableRowsHtml += '-';
+        }
+        tableRowsHtml += '</td>';
+        
+        // Default value (only show if active)
         tableRowsHtml += '<td>';
-        tableRowsHtml += getInputFieldForDataType(field.data_type, field.field_name, defaultValue);
+        if (isActive) {
+            tableRowsHtml += getInputFieldForDataType(field.data_type, field.field_name, fieldConfig.default || '');
+        } else {
+            tableRowsHtml += '-';
+        }
         tableRowsHtml += '</td>';
+        
         tableRowsHtml += '</tr>';
     });
     
-    // Update DOM
-    document.getElementById('fieldConfigurationTableBody').innerHTML = tableRowsHtml;
+    document.getElementById('fieldsTableBody').innerHTML = tableRowsHtml;
+    
+    // Add event listeners
+    addFieldEventListeners();
+}
+
+// Function to get input field preview
+function getInputFieldPreview(dataType) {
+    switch (dataType.toLowerCase()) {
+        case 'boolean':
+        case 'bool':
+            return '<input type="checkbox" disabled>';
+        case 'date':
+            return '<input type="date" class="form-control input-sm" disabled>';
+        case 'datetime':
+        case 'timestamp':
+            return '<input type="datetime-local" class="form-control input-sm" disabled>';
+        case 'integer':
+        case 'int':
+            return '<input type="number" class="form-control input-sm" disabled>';
+        case 'decimal':
+        case 'float':
+        case 'double':
+            return '<input type="number" class="form-control input-sm" disabled>';
+        case 'email':
+            return '<input type="email" class="form-control input-sm" disabled>';
+        case 'url':
+            return '<input type="url" class="form-control input-sm" disabled>';
+        case 'tel':
+        case 'phone':
+            return '<input type="tel" class="form-control input-sm" disabled>';
+        case 'textarea':
+            return '<textarea class="form-control input-sm" disabled></textarea>';
+        case 'text':
+        default:
+            return '<input type="text" class="form-control input-sm" disabled>';
+    }
+}
+
+// Function to add event listeners for field interactions
+function addFieldEventListeners() {
+    // Active checkboxes
+    document.querySelectorAll('.field-active').forEach(function(checkbox) {
+        checkbox.addEventListener('change', function() {
+            var fieldName = this.getAttribute('data-field');
+            var row = this.closest('tr');
+            
+            if (this.checked) {
+                // Add field to configured fields
+                configuredFields[fieldName] = {
+                    required: false,
+                    default: ''
+                };
+                // Update row class to active
+                row.classList.remove('field-row-inactive');
+                row.classList.add('field-row-active');
+            } else {
+                // Remove field from configured fields
+                delete configuredFields[fieldName];
+                // Update row class to inactive
+                row.classList.remove('field-row-active');
+                row.classList.add('field-row-inactive');
+            }
+            updateButtonStates();
+        });
+    });
+    
+    // Required checkboxes
+    document.querySelectorAll('.field-required').forEach(function(checkbox) {
+        checkbox.addEventListener('change', function() {
+            var fieldName = this.getAttribute('data-field');
+            if (configuredFields[fieldName]) {
+                configuredFields[fieldName].required = this.checked;
+                updateButtonStates();
+            }
+        });
+    });
+    
+    // Default value inputs
+    document.querySelectorAll('input[name^="field_default_"], textarea[name^="field_default_"]').forEach(function(input) {
+        input.addEventListener('input', function() {
+            updateButtonStates();
+        });
+    });
+}
+
+
+// Function to filter fields
+function filterFields() {
+    var searchTerm = document.getElementById('fieldSearch').value.toLowerCase();
+    var categoryFilter = document.getElementById('fieldCategoryFilter').value;
+    var rows = document.querySelectorAll('#fieldsTableBody tr[data-field]');
+    
+    rows.forEach(function(row) {
+        var fieldName = row.getAttribute('data-field');
+        var category = row.getAttribute('data-category');
+        var fieldDef = fieldDefinitions.find(function(f) { return f.field_name === fieldName; });
+        
+        var matchesSearch = !searchTerm || 
+            fieldName.toLowerCase().includes(searchTerm) ||
+            (fieldDef && fieldDef.display_name.toLowerCase().includes(searchTerm)) ||
+            (fieldDef && fieldDef.description && fieldDef.description.toLowerCase().includes(searchTerm));
+        
+        var matchesCategory = !categoryFilter || category === categoryFilter;
+        
+        if (matchesSearch && matchesCategory) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    });
 }
 
 // Function to get appropriate input field based on data type
@@ -554,42 +761,42 @@ function getInputFieldForDataType(dataType, fieldName, defaultValue) {
 // Function to save template
 function saveTemplate() {
     var templateId = document.getElementById('templateId').value;
-    var label = document.getElementById('templateLabel').value;
+    var name = document.getElementById('templateLabel').value;
     var description = document.getElementById('templateDescription').value;
     
-    // Collect field configurations
+    // Collect field configurations from configured fields
     var accountFields = {};
     
-    if (fieldDefinitions) {
-        fieldDefinitions.forEach(function(field) {
-            var requiredCheckbox = document.querySelector('input[name="field_required_' + field.field_name + '"]');
-            var defaultInput = document.querySelector('input[name="field_default_' + field.field_name + '"]');
-            
-            if (requiredCheckbox && defaultInput) {
-                var defaultValue = defaultInput.value;
-                
-                // Handle different input types
-                if (defaultInput.type === 'checkbox') {
-                    defaultValue = defaultInput.checked ? '1' : '0';
-                } else if (defaultInput.type === 'number') {
-                    defaultValue = defaultInput.value || '0';
-                } else if (defaultInput.type === 'date' || defaultInput.type === 'datetime-local') {
-                    defaultValue = defaultInput.value || '';
-                }
-                
-                accountFields[field.field_name] = {
-                    required: requiredCheckbox.checked,
-                    default: defaultValue
-                };
+    Object.keys(configuredFields).forEach(function(fieldName) {
+        var fieldConfig = configuredFields[fieldName];
+        var defaultInput = document.querySelector('input[name="field_default_' + fieldName + '"], textarea[name="field_default_' + fieldName + '"]');
+        
+        var defaultValue = '';
+        if (defaultInput) {
+            // Handle different input types
+            if (defaultInput.type === 'checkbox') {
+                defaultValue = defaultInput.checked ? '1' : '0';
+            } else if (defaultInput.type === 'number') {
+                defaultValue = defaultInput.value || '0';
+            } else if (defaultInput.type === 'date' || defaultInput.type === 'datetime-local') {
+                defaultValue = defaultInput.value || '';
+            } else {
+                defaultValue = defaultInput.value || '';
             }
-        });
-    }
+        }
+        
+        accountFields[fieldName] = {
+            required: fieldConfig.required,
+            default: defaultValue
+        };
+    });
     
     var data = {
-        label: label,
+        name: name,
         description: description,
         account_fields: accountFields
     };
+    
     
     // Show loading state
     var saveBtn = document.getElementById('saveTemplateBtn');
@@ -611,6 +818,12 @@ function saveTemplate() {
         if (data.success) {
             // Show success message
             alert('Template updated successfully!');
+            
+            // Reset change tracking
+            originalConfiguredFields = JSON.parse(JSON.stringify(configuredFields));
+            hasChanges = false;
+            updateButtonStates();
+            
             $('#editTemplateModal').modal('hide');
             // Reload page to show changes
             window.location.reload();
@@ -635,6 +848,39 @@ function saveTemplate() {
     transform: translateY(-2px);
     box-shadow: 0 4px 8px rgba(0,0,0,0.1);
     transition: all 0.2s ease;
+}
+
+/* Field row styling - work with Bootstrap striping */
+.field-row-inactive {
+    color: #999 !important;
+    opacity: 0.7;
+}
+
+.field-row-inactive td {
+    color: #999 !important;
+}
+
+.field-row-inactive strong {
+    color: #666 !important;
+}
+
+/* Keep Bootstrap striping for active rows */
+.field-row-active {
+    /* Let Bootstrap handle the striping */
+}
+
+/* When inactive row becomes active, restore normal colors */
+.field-row-inactive.field-row-active {
+    color: inherit !important;
+    opacity: 1;
+}
+
+.field-row-inactive.field-row-active td {
+    color: inherit !important;
+}
+
+.field-row-inactive.field-row-active strong {
+    color: inherit !important;
 }
 </style>
 {% endblock %}
