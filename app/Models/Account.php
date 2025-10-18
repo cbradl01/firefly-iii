@@ -95,10 +95,7 @@ class Account extends Model
         return $this->belongsTo(AccountType::class);
     }
 
-    public function template(): BelongsTo
-    {
-        return $this->belongsTo(AccountTemplate::class);
-    }
+    // Template relationship removed - using account types directly now
 
     /**
      * Get the financial entity that owns this account

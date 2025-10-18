@@ -95,6 +95,7 @@ class AccountType extends Model
         'behavior_id',
         'description',
         'firefly_mapping',
+        'metadata_schema',
         'active',
     ];
 
@@ -102,6 +103,8 @@ class AccountType extends Model
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
         'active' => 'boolean',
+        'metadata_schema' => 'array',
+        'firefly_mapping' => 'array',
     ];
 
     public function accounts(): HasMany
