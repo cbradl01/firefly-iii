@@ -213,6 +213,9 @@ Route::group(
         Route::get('templates', ['uses' => 'Account\TemplateController@index', 'as' => 'templates.index']);
         Route::get('templates/create/{templateName}', ['uses' => 'Account\TemplateController@create', 'as' => 'templates.create']);
         Route::post('templates/store', ['uses' => 'Account\TemplateController@store', 'as' => 'templates.store']);
+        Route::get('templates/field-definitions', ['uses' => 'Account\TemplateController@getFieldDefinitions', 'as' => 'templates.field-definitions']);
+        Route::get('templates/{id}/edit', ['uses' => 'Account\TemplateController@edit', 'as' => 'templates.edit']);
+        Route::put('templates/{id}', ['uses' => 'Account\TemplateController@update', 'as' => 'templates.update']);
 
         // reconcile routes:
         Route::get('reconcile/{account}/index/{start_date?}/{end_date?}', ['uses' => 'Account\ReconcileController@reconcile', 'as' => 'reconcile'])
@@ -253,9 +256,12 @@ Route::group(
         Route::put('update/{id}', ['uses' => 'FinancialEntityController@update', 'as' => 'update']);
         Route::get('edit/{id}/modal', ['uses' => 'FinancialEntityController@editModal', 'as' => 'edit.modal']);
         Route::put('update/{id}/modal', ['uses' => 'FinancialEntityController@updateModal', 'as' => 'update.modal']);
+        Route::delete('destroy/{id}', ['uses' => 'FinancialEntityController@destroy', 'as' => 'destroy']);
         
         // API routes - put these before the wildcard routes
         Route::get('autocomplete', ['uses' => 'FinancialEntityController@autocomplete', 'as' => 'autocomplete']);
+        Route::get('fields', ['uses' => 'FinancialEntityController@getFieldsForEntityType', 'as' => 'fields']);
+        Route::get('beneficiary-entities', ['uses' => 'FinancialEntityController@getBeneficiaryEntities', 'as' => 'beneficiary-entities']);
         
         // Wildcard routes - these must come last to avoid conflicts
         Route::get('{financialEntity}/relationships', ['uses' => 'FinancialEntityController@relationships', 'as' => 'relationships']);
