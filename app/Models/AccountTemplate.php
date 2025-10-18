@@ -34,11 +34,11 @@ class AccountTemplate extends Model
 
     protected $fillable = [
         'name',
-        'account_type_id',
+        'label',
+        'category_id',
+        'behavior_id',
         'description',
-        'metadata_preset',
-        'suggested_fields',
-        'field_requirements',
+        'metadata_schema',
         'is_system_template',
         'created_by_user_id',
         'active',
@@ -49,19 +49,22 @@ class AccountTemplate extends Model
         'updated_at' => 'datetime',
         'active' => 'boolean',
         'is_system_template' => 'boolean',
-        'metadata_preset' => 'array',
-        'suggested_fields' => 'array',
-        'field_requirements' => 'array',
+        'metadata_schema' => 'array',
     ];
 
-    public function accountType(): BelongsTo
+    public function category(): BelongsTo
     {
-        return $this->belongsTo(AccountType::class);
+        return $this->belongsTo(AccountCategory::class);
+    }
+
+    public function behavior(): BelongsTo
+    {
+        return $this->belongsTo(AccountBehavior::class);
     }
 
     public function createdByUser(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'created_by_user_id');
+        return $this->belongsTo(\FireflyIII\User::class, 'created_by_user_id');
     }
 
     public function accounts(): HasMany
@@ -70,9 +73,9 @@ class AccountTemplate extends Model
     }
 
     /**
-     * Get the metadata preset as an array
+     * Get the metadata schema as an array
      */
-    public function getMetadataPresetAttribute($value): array
+    public function getMetadataSchemaAttribute($value): array
     {
         if (is_string($value)) {
             return json_decode($value, true) ?? [];
@@ -80,16 +83,6 @@ class AccountTemplate extends Model
         return $value ?? [];
     }
 
-    /**
-     * Get the suggested fields as an array
-     */
-    public function getSuggestedFieldsAttribute($value): array
-    {
-        if (is_string($value)) {
-            return json_decode($value, true) ?? [];
-        }
-        return $value ?? [];
-    }
 
     /**
      * Scope to get only system templates
@@ -108,11 +101,27 @@ class AccountTemplate extends Model
     }
 
     /**
-     * Scope to get templates for a specific account type
+     * Scope to get templates for a specific category
      */
-    public function scopeForAccountType($query, int $accountTypeId)
+    public function scopeForCategory($query, int $categoryId)
     {
-        return $query->where('account_type_id', $accountTypeId);
+        return $query->where('category_id', $categoryId);
+    }
+
+    /**
+     * Scope to get templates for a specific behavior
+     */
+    public function scopeForBehavior($query, int $behaviorId)
+    {
+        return $query->where('behavior_id', $behaviorId);
+    }
+
+    /**
+     * Scope to get templates for a specific category and behavior combination
+     */
+    public function scopeForCategoryAndBehavior($query, int $categoryId, int $behaviorId)
+    {
+        return $query->where('category_id', $categoryId)->where('behavior_id', $behaviorId);
     }
 
     /**

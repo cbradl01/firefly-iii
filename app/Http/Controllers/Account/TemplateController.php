@@ -43,7 +43,7 @@ class TemplateController extends Controller
      */
     public function index(Request $request): View
     {
-        $query = AccountTemplate::active()->with(['accountType.category', 'accountType.behavior']);
+        $query = AccountTemplate::active()->with(['category', 'behavior']);
         
         // Search functionality
         $search = $request->get('search');
@@ -54,18 +54,18 @@ class TemplateController extends Controller
             });
         }
         
-        // Filter by account type
-        $accountType = $request->get('account_type');
-        if ($accountType) {
-            $query->whereHas('accountType', function($q) use ($accountType) {
-                $q->where('name', $accountType);
+        // Filter by behavior (replaces account_type filter)
+        $behavior = $request->get('account_type');
+        if ($behavior) {
+            $query->whereHas('behavior', function($q) use ($behavior) {
+                $q->where('name', $behavior);
             });
         }
         
         // Filter by category
         $category = $request->get('category');
         if ($category) {
-            $query->whereHas('accountType.category', function($q) use ($category) {
+            $query->whereHas('category', function($q) use ($category) {
                 $q->where('name', $category);
             });
         }
@@ -76,14 +76,13 @@ class TemplateController extends Controller
         
         switch ($sort) {
             case 'category':
-                $query->join('account_types', 'account_templates.account_type_id', '=', 'account_types.id')
-                      ->join('account_categories', 'account_types.category_id', '=', 'account_categories.id')
+                $query->join('account_categories', 'account_templates.category_id', '=', 'account_categories.id')
                       ->orderBy('account_categories.name', $direction)
                       ->orderBy('account_templates.name', 'asc');
                 break;
             case 'type':
-                $query->join('account_types', 'account_templates.account_type_id', '=', 'account_types.id')
-                      ->orderBy('account_types.name', $direction)
+                $query->join('account_behaviors', 'account_templates.behavior_id', '=', 'account_behaviors.id')
+                      ->orderBy('account_behaviors.name', $direction)
                       ->orderBy('account_templates.name', 'asc');
                 break;
             default:
@@ -93,13 +92,13 @@ class TemplateController extends Controller
         $templates = $query->get();
         
         // Group by category for display
-        $templatesByCategory = $templates->groupBy('accountType.category.name');
+        $templatesByCategory = $templates->groupBy('category.name');
         
         // Get filter options
         $accountTypes = AccountTemplate::active()
-            ->with('accountType')
+            ->with('behavior')
             ->get()
-            ->pluck('accountType.name')
+            ->pluck('behavior.name')
             ->unique()
             ->sort()
             ->values();
@@ -110,7 +109,7 @@ class TemplateController extends Controller
             'templatesByCategory', 
             'templates', 
             'search', 
-            'accountType', 
+            'behavior', 
             'category', 
             'sort', 
             'direction',
@@ -129,24 +128,23 @@ class TemplateController extends Controller
         
         $template = AccountTemplate::where('name', $decodedTemplateName)
             ->where('active', true)
-            ->with(['accountType.category', 'accountType.behavior'])
+            ->with(['category', 'behavior'])
             ->firstOrFail();
 
-        // Get suggested fields from template
-        $suggestedFields = $template->suggested_fields ?? [];
+        // Get field configuration from template's metadata_schema
+        $metadataSchema = $template->metadata_schema ?? [];
+        $accountFields = $metadataSchema['account_fields'] ?? [];
         
-        // Get required fields from template's field_requirements
+        // Get required and optional fields
         $requiredFields = [];
-        if ($template->field_requirements) {
-            foreach ($template->field_requirements as $field => $requirements) {
-                if (isset($requirements['required']) && $requirements['required'] === true) {
-                    $requiredFields[] = $field;
-                }
+        $optionalFields = [];
+        foreach ($accountFields as $fieldName => $config) {
+            if (isset($config['required']) && $config['required'] === true) {
+                $requiredFields[] = $fieldName;
+            } else {
+                $optionalFields[] = $fieldName;
             }
         }
-        
-        // Get metadata preset from template
-        $metadataPreset = $template->metadata_preset ?? [];
 
         // Get user's default currency
         $defaultCurrency = Amount::getPrimaryCurrency();
@@ -157,17 +155,17 @@ class TemplateController extends Controller
         // Get current user's email (used as name)
         $userName = Auth::user()->email ?? '';
         
-        // Get field definitions from config for all suggested fields
+        // Get field definitions from config for all fields
         $fieldDefinitions = [];
-        foreach ($suggestedFields as $field) {
+        foreach (array_merge($requiredFields, $optionalFields) as $field) {
             $fieldDefinitions[$field] = config("account_fields.{$field}");
         }
 
         return view('accounts.templates.create', compact(
             'template', 
-            'suggestedFields', 
             'requiredFields',
-            'metadataPreset', 
+            'optionalFields',
+            'accountFields',
             'defaultCurrency', 
             'allCurrencies', 
             'userName', 
@@ -210,7 +208,8 @@ class TemplateController extends Controller
         ]);
         
         $data['template'] = $templateName;
-        $data['account_type_id'] = $template->account_type_id;
+        $data['category_id'] = $template->category_id;
+        $data['behavior_id'] = $template->behavior_id;
 
         // Create the account using AccountFactory
         $accountFactory = app(AccountFactory::class);
@@ -221,5 +220,91 @@ class TemplateController extends Controller
         session()->flash('success', 'Account "' . $account->name . '" created successfully from template "' . $templateName . '"');
         
         return redirect()->route('accounts.show', $account->id);
+    }
+
+    /**
+     * Get field definitions for the edit modal
+     */
+    public function getFieldDefinitions()
+    {
+        $fields = \Illuminate\Support\Facades\DB::table('account_field_definitions')
+            ->where('is_system_field', true)
+            ->orderBy('category')
+            ->orderBy('display_name')
+            ->get();
+
+        return response()->json($fields);
+    }
+
+    /**
+     * Get template data for editing
+     */
+    public function edit($id)
+    {
+        $template = AccountTemplate::where('id', $id)
+            ->where('active', true)
+            ->firstOrFail();
+
+        // Get account_fields from metadata_schema (already cast as array)
+        $metadataSchema = $template->metadata_schema ?? [];
+        
+        // Handle both old and new structure
+        if (isset($metadataSchema['account_fields'])) {
+            // New structure
+            $accountFields = $metadataSchema['account_fields'];
+        } else {
+            // Old structure - convert to new format
+            $accountFields = [];
+            if (isset($metadataSchema['required_fields'])) {
+                foreach ($metadataSchema['required_fields'] as $field) {
+                    $accountFields[$field] = ['required' => true, 'default' => ''];
+                }
+            }
+            if (isset($metadataSchema['optional_fields'])) {
+                foreach ($metadataSchema['optional_fields'] as $field) {
+                    $accountFields[$field] = ['required' => false, 'default' => ''];
+                }
+            }
+        }
+
+        return response()->json([
+            'id' => $template->id,
+            'name' => $template->name,
+            'label' => $template->label,
+            'description' => $template->description,
+            'account_fields' => $accountFields
+        ]);
+    }
+
+    /**
+     * Update template
+     */
+    public function update(Request $request, $id)
+    {
+        $template = AccountTemplate::where('id', $id)
+            ->where('active', true)
+            ->firstOrFail();
+
+        $request->validate([
+            'label' => 'required|string|max:100',
+            'description' => 'nullable|string',
+            'account_fields' => 'nullable|array'
+        ]);
+
+        // Update basic fields
+        $template->label = $request->input('label');
+        $template->description = $request->input('description');
+
+        // Update metadata_schema with new account_fields structure
+        $metadataSchema = $template->metadata_schema ?? [];
+        $metadataSchema['account_fields'] = $request->input('account_fields', []);
+        $template->metadata_schema = $metadataSchema;
+
+        $template->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Template updated successfully'
+        ]);
     }
 }

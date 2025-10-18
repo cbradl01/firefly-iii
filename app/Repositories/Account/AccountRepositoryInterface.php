@@ -79,6 +79,16 @@ interface AccountRepositoryInterface
      * Return account type or null if not found.
      */
     public function getAccountTypeByType(string $type): ?AccountType;
+    
+    /**
+     * Get all account types by category name
+     */
+    public function getAccountTypesByCategory(string $categoryName): \Illuminate\Database\Eloquent\Collection;
+    
+    /**
+     * Get all account types by behavior name
+     */
+    public function getAccountTypesByBehavior(string $behaviorName): \Illuminate\Database\Eloquent\Collection;
 
     public function getAccountsById(array $accountIds): Collection;
 

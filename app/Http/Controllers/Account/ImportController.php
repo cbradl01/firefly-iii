@@ -195,7 +195,7 @@ class ImportController extends Controller
                     $accountData = [
                         'name' => $accountName,
                         'active' => true,
-                        'currency_id' => $this->defaultCurrency->id,
+                        'currency_id' => Auth::user()->currency->id,
                         'virtual_balance' => '',
                         'iban' => ($ibanIndex !== false && isset($row[$ibanIndex])) ? trim($row[$ibanIndex]) : '',
                         'BIC' => '',
@@ -434,6 +434,31 @@ class ImportController extends Controller
                         // Don't unset account_type - let it be stored as metadata for display
                     }
                     
+        // Handle template_name field for account type mapping
+        if (isset($accountData['template_name']) && !empty($accountData['template_name'])) {
+            // Look up template by template_name in database
+            $template = \FireflyIII\Models\AccountTemplate::where('template_name', $accountData['template_name'])
+                ->where('active', true)
+                ->first();
+            
+            if ($template) {
+                $accountData['template'] = $template->name; // Use the display name for AccountFactory
+                unset($accountData['template_name']); // Remove template_name, keep template
+                
+                Log::info('Using template for account type mapping', [
+                    'template_name' => $accountData['template_name'],
+                    'template_display_name' => $template->name,
+                    'account_name' => $accountData['name'] ?? 'Unknown'
+                ]);
+            } else {
+                Log::warning('Template not found for account import', [
+                    'template_name' => $accountData['template_name'],
+                    'account_name' => $accountData['name'] ?? 'Unknown'
+                ]);
+                // Continue without template - will fall back to category/behavior mapping
+            }
+        }
+                    
                     // Debug currency information
                     Log::info('Currency debug', [
                         'currency_id' => $accountData['currency_id'] ?? 'NOT_SET',
@@ -445,7 +470,7 @@ class ImportController extends Controller
                     // Add default currency if not present or is 0
                     if ((!isset($accountData['currency_id']) || $accountData['currency_id'] == 0) && !isset($accountData['currency_code'])) {
                         // Get the user's primary currency
-                        $primaryCurrency = app('amount')->getPrimaryCurrencyByUserGroup(auth()->user()->userGroup);
+                        $primaryCurrency = app('amount')->getPrimaryCurrencyByUserGroup(Auth::user()->userGroup);
                         $accountData['currency_id'] = $primaryCurrency->id;
                         Log::info('Added default currency_id to account data', [
                             'currency_id' => $primaryCurrency->id,
@@ -504,7 +529,7 @@ class ImportController extends Controller
                     
                     // Use the account factory to create the account
                     $factory = app(\FireflyIII\Factory\AccountFactory::class);
-                    $factory->setUser(auth()->user());
+                    $factory->setUser(Auth::user());
                     $account = $factory->create($accountData);
                     
                     if (!$account) {
@@ -726,5 +751,6 @@ class ImportController extends Controller
             ]);
         }
     }
+
 
 }

@@ -183,6 +183,32 @@ class AccountRepository implements AccountRepositoryInterface, UserGroupInterfac
             ->first();
     }
     
+    /**
+     * Get all account types by category name
+     */
+    public function getAccountTypesByCategory(string $categoryName): \Illuminate\Database\Eloquent\Collection
+    {
+        return AccountType::whereHas('category', function ($query) use ($categoryName) {
+            $query->where('name', $categoryName);
+        })
+        ->where('active', true)
+        ->with(['category', 'behavior'])
+        ->get();
+    }
+    
+    /**
+     * Get all account types by behavior name
+     */
+    public function getAccountTypesByBehavior(string $behaviorName): \Illuminate\Database\Eloquent\Collection
+    {
+        return AccountType::whereHas('behavior', function ($query) use ($behaviorName) {
+            $query->where('name', $behaviorName);
+        })
+        ->where('active', true)
+        ->with(['category', 'behavior'])
+        ->get();
+    }
+    
 
     /**
      * Get account category by name

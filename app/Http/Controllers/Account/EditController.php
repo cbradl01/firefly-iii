@@ -90,6 +90,14 @@ class EditController extends Controller
             return $this->editFromTemplate($request, $account, $repository);
         }
 
+        // Ensure relationships are loaded
+        if (!$account->relationLoaded('accountType')) {
+            $account->load('accountType');
+        }
+        if (!$account->accountType->relationLoaded('category')) {
+            $account->accountType->load('category');
+        }
+        
         // Get the category name from the new account classification system
         $categoryName = $account->accountType->category->name;
         $objectType = strtolower($categoryName);
@@ -357,6 +365,14 @@ class EditController extends Controller
             return $this->editFromTemplateModal($request, $account, $repository);
         }
 
+        // Ensure relationships are loaded
+        if (!$account->relationLoaded('accountType')) {
+            $account->load('accountType');
+        }
+        if (!$account->accountType->relationLoaded('category')) {
+            $account->accountType->load('category');
+        }
+        
         // Get the category name from the new account classification system
         $categoryName = $account->accountType->category->name;
         $objectType = strtolower($categoryName);
@@ -399,10 +415,38 @@ class EditController extends Controller
 
         // Get currencies
         $currencies = TransactionCurrency::orderBy('code', 'ASC')->get();
-        $currency = $account->currency;
+        $currency = $account->currency ?: Auth::user()->currency;
 
         // Get CC types
         $ccTypes = config('firefly.ccTypes');
+
+        // Get field configurations for this account type
+        $fieldValidationService = app(\FireflyIII\Services\AccountFieldValidationService::class);
+        $fieldConfigurations = $fieldValidationService->getFieldConfigurations($account->accountType);
+
+        // Get field values from account metadata
+        $fieldValues = $this->getAccountFieldValues($account, $currency);
+
+        // Get all financial entities for owner dropdown
+        $user = Auth::user();
+        $financialEntities = \FireflyIII\Models\FinancialEntity::active()
+            ->whereHas('users', function ($query) use ($user) {
+                $query->where('user_id', $user->id);
+            })
+            ->orderBy('name')
+            ->get(['id', 'name', 'display_name', 'entity_type']);
+
+        // Create choices array for the dropdown
+        $ownerChoices = [];
+        foreach ($financialEntities as $entity) {
+            $displayName = $entity->display_name ?: $entity->name;
+            $ownerChoices[$entity->id] = $displayName;
+        }
+
+        // Populate owner choices in field configuration
+        if (isset($fieldConfigurations['owner'])) {
+            $fieldConfigurations['owner']['options']['choices'] = $ownerChoices;
+        }
 
         // Debug: Log that we're returning the modal view
         Log::info('Returning accounts.edit-modal view for account: ' . $account->id);
@@ -420,7 +464,12 @@ class EditController extends Controller
             'currencies',
             'currency',
             'canEditCurrency',
-            'ccTypes'
+            'ccTypes',
+            'locations',
+            'fieldConfigurations',
+            'fieldValues',
+            'financialEntities',
+            'ownerChoices'
         ));
     }
 
@@ -442,20 +491,52 @@ class EditController extends Controller
             return $this->updateFromTemplateModal($request, $account);
         }
 
-        // For regular updates, use AccountFormRequest validation
-        $accountFormRequest = new \FireflyIII\Http\Requests\AccountFormRequest();
-        $accountFormRequest->setContainer(app());
-        $accountFormRequest->setRedirector(app('redirect'));
-        $accountFormRequest->setRequest($request);
+        // For regular updates, validate the request data
+        $validator = validator($request->all(), [
+            'iban' => 'nullable|string|max:255',
+            'BIC' => 'nullable|string|max:11',
+            'account_number' => 'nullable|string|max:255',
+            'notes' => 'nullable|string',
+            'active' => 'boolean',
+            'include_net_worth' => 'boolean',
+            'currency_id' => 'required|integer|exists:transaction_currencies,id',
+        ]);
         
-        // Validate using AccountFormRequest rules
-        $validator = validator($request->all(), $accountFormRequest->rules());
         if ($validator->fails()) {
             return response()->json(['success' => false, 'errors' => $validator->errors()], 422);
         }
 
         try {
-            $data = $accountFormRequest->getAccountData();
+            // Prepare account data
+            $data = [
+                'iban' => $request->input('iban'),
+                'BIC' => $request->input('BIC'),
+                'account_number' => $request->input('account_number'),
+                'notes' => $request->input('notes'),
+                'active' => $request->boolean('active', true),
+                'include_net_worth' => $request->boolean('include_net_worth', false),
+                'currency_id' => $request->input('currency_id'),
+            ];
+            
+            // Handle owner field specially - map to entity_id
+            if ($request->has('owner') && !empty($request->input('owner'))) {
+                $data['entity_id'] = $request->input('owner');
+            }
+            
+            // Add custom fields from the dynamic form (excluding owner since it's handled above)
+            $customFields = [
+                'institution', 'product_name', 'routing_number',
+                'plan_administrator', 'beneficiaries', 'contribution_limit',
+                'current_contribution', 'employer_match', 'investment_style',
+                'trust_name', 'trustee_name', 'trust_type', 'custodian_name',
+                'minor_name', 'check_writing', 'debit_card', 'overdraft_protection'
+            ];
+            
+            foreach ($customFields as $field) {
+                if ($request->has($field)) {
+                    $data[$field] = $request->input($field);
+                }
+            }
             $this->repository->update($account, $data);
             Log::channel('audit')->info(sprintf('Updated account #%d.', $account->id), $data);
 
@@ -548,5 +629,41 @@ class EditController extends Controller
             Log::error('Error updating account from template: ' . $e->getMessage());
             return response()->json(['success' => false, 'message' => 'Error updating account'], 500);
         }
+    }
+
+    /**
+     * Get field values from account metadata
+     *
+     * @param Account $account
+     * @param TransactionCurrency|null $currency
+     * @return array
+     */
+    private function getAccountFieldValues(Account $account, ?TransactionCurrency $currency = null): array
+    {
+        $fieldValues = [];
+        
+        // Get values from account metadata
+        if ($account->accountMetadata) {
+            foreach ($account->accountMetadata as $metadata) {
+                $fieldValues[$metadata->name] = $metadata->data;
+            }
+        }
+        
+        // Add basic account fields
+        $fieldValues['name'] = $account->name;
+        $fieldValues['iban'] = $account->iban;
+        $fieldValues['BIC'] = $account->BIC;
+        $fieldValues['account_number'] = $account->account_number;
+        $fieldValues['active'] = $account->active;
+        $fieldValues['include_net_worth'] = $account->include_net_worth;
+        $fieldValues['notes'] = $account->notes;
+        $fieldValues['currency_id'] = $account->currency_id ?: ($currency ? $currency->id : null);
+        
+        // Add entity information if available
+        if ($account->entity) {
+            $fieldValues['owner'] = $account->entity->id; // Use entity ID for dropdown selection
+        }
+        
+        return $fieldValues;
     }
 }

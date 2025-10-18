@@ -236,6 +236,107 @@ class AccountFieldValidationService
     }
 
     /**
+     * Get detailed field configurations for rendering forms
+     *
+     * @param AccountType $accountType
+     * @param array $data
+     * @return array
+     */
+    public function getFieldConfigurations(AccountType $accountType, array $data = []): array
+    {
+        $requiredFields = $this->getRequiredFields($accountType, $data);
+        $optionalFields = $this->getOptionalFields($accountType, $data);
+        
+        $fieldConfigs = [];
+        
+        // Process required fields
+        foreach ($requiredFields as $fieldName) {
+            $fieldConfigs[$fieldName] = $this->getFieldConfiguration($fieldName, true);
+        }
+        
+        // Process optional fields
+        foreach ($optionalFields as $fieldName) {
+            $fieldConfigs[$fieldName] = $this->getFieldConfiguration($fieldName, false);
+        }
+        
+        return $fieldConfigs;
+    }
+
+    /**
+     * Get configuration for a specific field
+     *
+     * @param string $fieldName
+     * @param bool $required
+     * @return array
+     */
+    private function getFieldConfiguration(string $fieldName, bool $required): array
+    {
+        $config = [
+            'name' => $fieldName,
+            'required' => $required,
+            'type' => 'text',
+            'default' => '',
+            'options' => []
+        ];
+
+        // Define field-specific configurations
+        switch ($fieldName) {
+            case 'institution':
+            case 'product_name':
+            case 'routing_number':
+            case 'plan_administrator':
+            case 'investment_style':
+            case 'trust_name':
+            case 'trustee_name':
+            case 'trust_type':
+            case 'custodian_name':
+            case 'minor_name':
+                $config['type'] = 'text';
+                $config['default'] = '';
+                break;
+                
+            case 'beneficiaries':
+                $config['type'] = 'textarea';
+                $config['default'] = '';
+                $config['options']['helpText'] = 'List beneficiaries separated by commas';
+                break;
+                
+            case 'contribution_limit':
+            case 'current_contribution':
+                $config['type'] = 'amount';
+                $config['default'] = '';
+                break;
+                
+            case 'employer_match':
+                $config['type'] = 'percentage';
+                $config['default'] = '';
+                break;
+                
+            case 'check_writing':
+            case 'debit_card':
+            case 'overdraft_protection':
+            case 'active':
+                $config['type'] = 'checkbox';
+                $config['default'] = false;
+                break;
+                
+            case 'owner':
+                $config['type'] = 'select';
+                $config['default'] = '';
+                $config['options']['choices'] = []; // Will be populated by controller
+                break;
+                
+            case 'currency_id':
+                $config['type'] = 'currency';
+                $config['default'] = '';
+                $config['options']['helpText'] = 'account_default_currency';
+                break;
+        }
+
+        return $config;
+    }
+
+    /**
      * Check if a specific field is required for an account type
      *
      * @param string $fieldName

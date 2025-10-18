@@ -346,6 +346,9 @@ class Account extends Model
         
         if (!empty($accountTypeIds)) {
             $query->whereIn('accounts.account_type_id', $accountTypeIds);
+        } else {
+            // If no matching account types found, ensure no results
+            $query->whereRaw('1 = 0');
         }
     }
 
@@ -369,7 +372,7 @@ class Account extends Model
     {
         return Attribute::make(get: function () {
             $name = $this->name;
-            if (AccountTypeEnum::CASH->value === $this->accountType->type) {
+            if ($this->accountType && $this->accountType->name === 'Cash account') {
                 return '';
             }
 
