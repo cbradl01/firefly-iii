@@ -434,28 +434,28 @@ class ImportController extends Controller
                         // Don't unset account_type - let it be stored as metadata for display
                     }
                     
-        // Handle template_name field for account type mapping
+        // Handle template_name field for account type mapping (now using account types directly)
         if (isset($accountData['template_name']) && !empty($accountData['template_name'])) {
-            // Look up template by template_name in database
-            $template = \FireflyIII\Models\AccountTemplate::where('template_name', $accountData['template_name'])
+            // Look up account type by name in database
+            $accountType = \FireflyIII\Models\AccountType::where('name', $accountData['template_name'])
                 ->where('active', true)
                 ->first();
             
-            if ($template) {
-                $accountData['template'] = $template->name; // Use the display name for AccountFactory
+            if ($accountType) {
+                $accountData['template'] = $accountType->name; // Use the account type name for AccountFactory
                 unset($accountData['template_name']); // Remove template_name, keep template
                 
-                Log::info('Using template for account type mapping', [
+                Log::info('Using account type for mapping', [
                     'template_name' => $accountData['template_name'],
-                    'template_display_name' => $template->name,
+                    'account_type_name' => $accountType->name,
                     'account_name' => $accountData['name'] ?? 'Unknown'
                 ]);
             } else {
-                Log::warning('Template not found for account import', [
+                Log::warning('Account type not found for account import', [
                     'template_name' => $accountData['template_name'],
                     'account_name' => $accountData['name'] ?? 'Unknown'
                 ]);
-                // Continue without template - will fall back to category/behavior mapping
+                // Continue without account type - will fall back to category/behavior mapping
             }
         }
                     

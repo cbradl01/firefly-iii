@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace FireflyIII\Http\Requests;
 
-use FireflyIII\Models\AccountTemplate;
+use FireflyIII\Models\AccountType;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -25,7 +25,7 @@ class TemplateAccountFormRequest extends FormRequest
     {
         
         $templateName = $this->input('template');
-        $template = AccountTemplate::where('name', $templateName)->where('active', true)->first();
+        $template = AccountType::where('name', $templateName)->where('active', true)->first();
         
         $rules = [
             'template' => 'required|string',

@@ -27,7 +27,8 @@ use FireflyIII\Factory\AccountFactory;
 use FireflyIII\Http\Controllers\Controller;
 use FireflyIII\Http\Requests\TemplateAccountFormRequest;
 use FireflyIII\Models\AccountCategory;
-use FireflyIII\Models\AccountTemplate;
+use FireflyIII\Models\AccountType;
+use FireflyIII\FieldDefinitions\FieldDefinitions;
 use FireflyIII\Models\TransactionCurrency;
 use FireflyIII\Support\Facades\Amount;
 use FireflyIII\User;
@@ -43,7 +44,7 @@ class TemplateController extends Controller
      */
     public function index(Request $request): View
     {
-        $query = AccountTemplate::active()->with(['category', 'behavior']);
+        $query = AccountType::where('active', true)->with(['category', 'behavior']);
         
         // Search functionality
         $search = $request->get('search');
@@ -76,14 +77,14 @@ class TemplateController extends Controller
         
         switch ($sort) {
             case 'category':
-                $query->join('account_categories', 'account_templates.category_id', '=', 'account_categories.id')
+                $query->join('account_categories', 'account_types.category_id', '=', 'account_categories.id')
                       ->orderBy('account_categories.name', $direction)
-                      ->orderBy('account_templates.name', 'asc');
+                      ->orderBy('account_types.name', 'asc');
                 break;
             case 'type':
-                $query->join('account_behaviors', 'account_templates.behavior_id', '=', 'account_behaviors.id')
+                $query->join('account_behaviors', 'account_types.behavior_id', '=', 'account_behaviors.id')
                       ->orderBy('account_behaviors.name', $direction)
-                      ->orderBy('account_templates.name', 'asc');
+                      ->orderBy('account_types.name', 'asc');
                 break;
             default:
                 $query->orderBy('name', $direction);
@@ -95,7 +96,7 @@ class TemplateController extends Controller
         $templatesByCategory = $templates->groupBy('category.name');
         
         // Get filter options
-        $accountTypes = AccountTemplate::active()
+        $accountTypes = AccountType::where('active', true)
             ->with('behavior')
             ->get()
             ->pluck('behavior.name')
@@ -126,14 +127,14 @@ class TemplateController extends Controller
         // URL decode the template name to handle spaces and special characters
         $decodedTemplateName = urldecode($templateName);
         
-        $template = AccountTemplate::where('name', $decodedTemplateName)
+        $template = AccountType::where('name', $decodedTemplateName)
             ->where('active', true)
             ->with(['category', 'behavior'])
             ->firstOrFail();
 
-        // Get field configuration from template's metadata_schema
-        $metadataSchema = $template->metadata_schema ?? [];
-        $accountFields = $metadataSchema['account_fields'] ?? [];
+        // Get field configuration from template's firefly_mapping
+        $fireflyMapping = $template->firefly_mapping ?? [];
+        $accountFields = $fireflyMapping['account_fields'] ?? [];
         
         // Get required and optional fields
         $requiredFields = [];
@@ -180,7 +181,7 @@ class TemplateController extends Controller
     {
         // Get the template
         $templateName = $request->input('template');
-        $template = AccountTemplate::where('name', $templateName)
+        $template = AccountType::where('name', $templateName)
             ->where('active', true)
             ->firstOrFail();
 
@@ -227,13 +228,32 @@ class TemplateController extends Controller
      */
     public function getFieldDefinitions()
     {
-        $fields = \Illuminate\Support\Facades\DB::table('account_field_definitions')
-            ->where('is_system_field', true)
-            ->orderBy('category')
-            ->orderBy('display_name')
-            ->get();
+        $fields = FieldDefinitions::getFieldsWithTranslations('account');
+        
+        // Convert to the format expected by the frontend
+        $formattedFields = [];
+        foreach ($fields as $fieldName => $fieldData) {
+            $formattedFields[] = [
+                'field_name' => $fieldName,
+                'display_name' => $fieldData['display_name'],
+                'data_type' => $fieldData['data_type'],
+                'category' => $fieldData['category'],
+                'description' => $fieldData['description'],
+                'validation_rules' => json_encode(['required' => $fieldData['required'] ?? false]),
+                'is_system_field' => true,
+                'target_type' => 'account'
+            ];
+        }
+        
+        // Sort by category and display name
+        usort($formattedFields, function($a, $b) {
+            if ($a['category'] === $b['category']) {
+                return strcmp($a['display_name'], $b['display_name']);
+            }
+            return strcmp($a['category'], $b['category']);
+        });
 
-        return response()->json($fields);
+        return response()->json($formattedFields);
     }
 
     /**
@@ -241,36 +261,17 @@ class TemplateController extends Controller
      */
     public function edit($id)
     {
-        $template = AccountTemplate::where('id', $id)
+        $template = AccountType::where('id', $id)
             ->where('active', true)
             ->firstOrFail();
 
-        // Get account_fields from metadata_schema (already cast as array)
-        $metadataSchema = $template->metadata_schema ?? [];
-        
-        // Handle both old and new structure
-        if (isset($metadataSchema['account_fields'])) {
-            // New structure
-            $accountFields = $metadataSchema['account_fields'];
-        } else {
-            // Old structure - convert to new format
-            $accountFields = [];
-            if (isset($metadataSchema['required_fields'])) {
-                foreach ($metadataSchema['required_fields'] as $field) {
-                    $accountFields[$field] = ['required' => true, 'default' => ''];
-                }
-            }
-            if (isset($metadataSchema['optional_fields'])) {
-                foreach ($metadataSchema['optional_fields'] as $field) {
-                    $accountFields[$field] = ['required' => false, 'default' => ''];
-                }
-            }
-        }
+        // Get account_fields from firefly_mapping
+        $fireflyMapping = $template->firefly_mapping ?? [];
+        $accountFields = $fireflyMapping['account_fields'] ?? [];
 
         return response()->json([
             'id' => $template->id,
             'name' => $template->name,
-            'label' => $template->label,
             'description' => $template->description,
             'account_fields' => $accountFields
         ]);
@@ -281,25 +282,28 @@ class TemplateController extends Controller
      */
     public function update(Request $request, $id)
     {
-        $template = AccountTemplate::where('id', $id)
+        $template = AccountType::where('id', $id)
             ->where('active', true)
             ->firstOrFail();
+            
+        // Reload the model to ensure we have the latest data
+        $template->refresh();
 
         $request->validate([
-            'label' => 'required|string|max:100',
+            'name' => 'required|string|max:100',
             'description' => 'nullable|string',
             'account_fields' => 'nullable|array'
         ]);
 
         // Update basic fields
-        $template->label = $request->input('label');
+        $template->name = $request->input('name');
         $template->description = $request->input('description');
 
-        // Update metadata_schema with new account_fields structure
-        $metadataSchema = $template->metadata_schema ?? [];
-        $metadataSchema['account_fields'] = $request->input('account_fields', []);
-        $template->metadata_schema = $metadataSchema;
-
+        // Update firefly_mapping with new account_fields structure
+        $fireflyMapping = $template->firefly_mapping ?? [];
+        
+        $fireflyMapping['account_fields'] = $request->input('account_fields', []);
+        $template->firefly_mapping = $fireflyMapping;
         $template->save();
 
         return response()->json([
