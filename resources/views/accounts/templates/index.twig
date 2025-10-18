@@ -204,7 +204,7 @@
     <div class="modal-dialog" role="document" style="width: 95%; max-width: 1400px;">
         <div class="modal-content">
             <div class="modal-header">
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                <button type="button" class="close" data-dismiss="modal" aria-label="{{ ('close')|_ }}">
                     <span aria-hidden="true">&times;</span>
                 </button>
                 <h4 class="modal-title" id="editTemplateModalLabel">
@@ -300,7 +300,24 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ asset('js/field-input-renderer.js') }}" nonce="{{ JS_NONCE }}"></script>
 <script type="text/javascript" nonce="{{ JS_NONCE }}">
+// Make translations available to JavaScript
+window.translations = {
+    template_updated_successfully: "{{ ('template_updated_successfully')|_ }}",
+    error_updating_template: "{{ ('error_updating_template')|_ }}",
+    error_saving_template: "{{ ('error_saving_template')|_ }}",
+    loading_field_definitions: "{{ ('loading_field_definitions')|_ }}",
+    field_definitions_loaded: "{{ ('field_definitions_loaded')|_ }}",
+    error_loading_field_definitions: "{{ ('error_loading_field_definitions')|_ }}",
+    loading_template_data: "{{ ('loading_template_data')|_ }}",
+    template_data_loaded: "{{ ('template_data_loaded')|_ }}",
+    error_loading_template_data: "{{ ('error_loading_template_data')|_ }}",
+    field_definitions_not_loaded: "{{ ('field_definitions_not_loaded')|_ }}",
+    failed_to_load_field_definitions: "{{ ('failed_to_load_field_definitions')|_ }}",
+    failed_to_load_field_definitions_message: "{{ ('failed_to_load_field_definitions_message')|_ }}"
+};
+
 document.addEventListener('DOMContentLoaded', function() {
     // Add click handlers to template cards
     document.querySelectorAll('.template-card').forEach(function(card) {
@@ -413,26 +430,27 @@ document.addEventListener('DOMContentLoaded', function() {
         filterFields();
     });
     
-    // Function to update button states
-    function updateButtonStates() {
-        var saveBtn = document.getElementById('saveTemplateBtn');
-        
-        // Check if there are any changes
-        hasChanges = JSON.stringify(configuredFields) !== JSON.stringify(originalConfiguredFields);
-        
-        // Enable/disable Save button based on changes
-        saveBtn.disabled = !hasChanges;
-        
-        // Update Save button appearance
-        if (hasChanges) {
-            saveBtn.classList.remove('btn-primary');
-            saveBtn.classList.add('btn-warning');
-        } else {
-            saveBtn.classList.remove('btn-warning');
-            saveBtn.classList.add('btn-primary');
-        }
-    }
 });
+
+// Function to update button states
+function updateButtonStates() {
+    var saveBtn = document.getElementById('saveTemplateBtn');
+    
+    // Check if there are any changes
+    hasChanges = JSON.stringify(configuredFields) !== JSON.stringify(originalConfiguredFields);
+    
+    // Enable/disable Save button based on changes
+    saveBtn.disabled = !hasChanges;
+    
+    // Update Save button appearance
+    if (hasChanges) {
+        saveBtn.classList.remove('btn-primary');
+        saveBtn.classList.add('btn-warning');
+    } else {
+        saveBtn.classList.remove('btn-warning');
+        saveBtn.classList.add('btn-primary');
+    }
+}
 
 // Function to open edit modal
 function openEditModal(templateId, templateName) {
@@ -448,7 +466,7 @@ function openEditModal(templateId, templateName) {
 
 // Function to load field definitions
 function loadFieldDefinitions() {
-    console.log('Loading field definitions...');
+    console.log(window.translations.loading_field_definitions);
     fetch('/accounts/templates/field-definitions')
         .then(response => {
             console.log('Field definitions response status:', response.status);
@@ -459,10 +477,10 @@ function loadFieldDefinitions() {
         })
         .then(data => {
             fieldDefinitions = data;
-            console.log('Field definitions loaded:', fieldDefinitions);
+            console.log(window.translations.field_definitions_loaded + ':', fieldDefinitions);
         })
         .catch(error => {
-            console.error('Error loading field definitions:', error);
+            console.error(window.translations.error_loading_field_definitions + ':', error);
             // Try to load a fallback or show error
             fieldDefinitions = null;
         });
@@ -470,7 +488,7 @@ function loadFieldDefinitions() {
 
 // Function to load template data
 function loadTemplateData(templateId) {
-    console.log('Loading template data for ID:', templateId);
+    console.log(window.translations.loading_template_data.replace(':id', templateId));
     fetch('/accounts/templates/' + templateId + '/edit')
         .then(response => {
             console.log('Template data response status:', response.status);
@@ -480,7 +498,7 @@ function loadTemplateData(templateId) {
             return response.json();
         })
         .then(data => {
-            console.log('Template data loaded:', data);
+            console.log(window.translations.template_data_loaded + ':', data);
             currentTemplate = data;
             
             // Populate basic info
@@ -491,17 +509,17 @@ function loadTemplateData(templateId) {
             populateFieldConfiguration(data);
         })
         .catch(error => {
-            console.error('Error loading template data:', error);
+            console.error(window.translations.error_loading_template_data + ':', error);
             // Show error in modal
             document.getElementById('fieldCategoryContent').innerHTML = 
-                '<div class="alert alert-danger">Error loading template data: ' + error.message + '</div>';
+                '<div class="alert alert-danger">' + window.translations.error_loading_template_data + ': ' + error.message + '</div>';
         });
 }
 
 // Function to populate field configuration
 function populateFieldConfiguration(template) {
     if (!fieldDefinitions) {
-        console.error('Field definitions not loaded yet, retrying...');
+        console.error(window.translations.field_definitions_not_loaded);
         // Retry loading field definitions
         loadFieldDefinitions();
         // Try again after a short delay
@@ -509,10 +527,10 @@ function populateFieldConfiguration(template) {
             if (fieldDefinitions) {
                 populateFieldConfiguration(template);
             } else {
-                console.error('Failed to load field definitions');
+                console.error(window.translations.failed_to_load_field_definitions);
                 // Show a message in the modal
                 document.getElementById('configuredFieldsTableBody').innerHTML = 
-                    '<tr><td colspan="5" class="text-center"><div class="alert alert-warning">Failed to load field definitions. Please refresh the page and try again.</div></td></tr>';
+                    '<tr><td colspan="5" class="text-center"><div class="alert alert-warning">' + window.translations.failed_to_load_field_definitions_message + '</div></td></tr>';
             }
         }, 1000);
         return;
@@ -582,7 +600,10 @@ function populateFieldsTable() {
         // Default value (only show if active)
         tableRowsHtml += '<td>';
         if (isActive) {
-            tableRowsHtml += getInputFieldForDataType(field.data_type, field.field_name, fieldConfig.default || '');
+            tableRowsHtml += FieldInputRenderer.generateInput(field, field.field_name, fieldConfig.default || '', {
+                namePrefix: 'field_default_',
+                cssClass: 'form-control input-sm'
+            });
         } else {
             tableRowsHtml += '-';
         }
@@ -595,6 +616,9 @@ function populateFieldsTable() {
     
     // Add event listeners
     addFieldEventListeners();
+    
+    // Load financial entities for dropdowns
+    FieldInputRenderer.loadFinancialEntitiesForDropdowns();
 }
 
 // Function to get input field preview
@@ -704,59 +728,6 @@ function filterFields() {
     });
 }
 
-// Function to get appropriate input field based on data type
-function getInputFieldForDataType(dataType, fieldName, defaultValue) {
-    var inputHtml = '';
-    
-    switch (dataType.toLowerCase()) {
-        case 'boolean':
-        case 'bool':
-            var isChecked = defaultValue === '1' || defaultValue === 'true' || defaultValue === true;
-            inputHtml = '<input type="checkbox" name="field_default_' + fieldName + '" ' + (isChecked ? 'checked' : '') + '>';
-            break;
-            
-        case 'date':
-            inputHtml = '<input type="date" class="form-control input-sm" name="field_default_' + fieldName + '" value="' + defaultValue + '">';
-            break;
-            
-        case 'datetime':
-        case 'timestamp':
-            inputHtml = '<input type="datetime-local" class="form-control input-sm" name="field_default_' + fieldName + '" value="' + defaultValue + '">';
-            break;
-            
-        case 'integer':
-        case 'int':
-            inputHtml = '<input type="number" class="form-control input-sm" name="field_default_' + fieldName + '" value="' + defaultValue + '" step="1">';
-            break;
-            
-        case 'decimal':
-        case 'float':
-        case 'double':
-            inputHtml = '<input type="number" class="form-control input-sm" name="field_default_' + fieldName + '" value="' + defaultValue + '" step="0.01">';
-            break;
-            
-        case 'email':
-            inputHtml = '<input type="email" class="form-control input-sm" name="field_default_' + fieldName + '" value="' + defaultValue + '">';
-            break;
-            
-        case 'url':
-            inputHtml = '<input type="url" class="form-control input-sm" name="field_default_' + fieldName + '" value="' + defaultValue + '">';
-            break;
-            
-        case 'tel':
-        case 'phone':
-            inputHtml = '<input type="tel" class="form-control input-sm" name="field_default_' + fieldName + '" value="' + defaultValue + '">';
-            break;
-            
-        case 'textarea':
-        case 'text':
-        default:
-            inputHtml = '<input type="text" class="form-control input-sm" name="field_default_' + fieldName + '" value="' + defaultValue + '" placeholder="Default value">';
-            break;
-    }
-    
-    return inputHtml;
-}
 
 // Function to save template
 function saveTemplate() {
@@ -817,7 +788,7 @@ function saveTemplate() {
     .then(data => {
         if (data.success) {
             // Show success message
-            alert('Template updated successfully!');
+                        alert(window.translations.template_updated_successfully);
             
             // Reset change tracking
             originalConfiguredFields = JSON.parse(JSON.stringify(configuredFields));
@@ -828,12 +799,12 @@ function saveTemplate() {
             // Reload page to show changes
             window.location.reload();
         } else {
-            alert('Error updating template: ' + (data.message || 'Unknown error'));
+                        alert(window.translations.error_updating_template.replace(':message', data.message || 'Unknown error'));
         }
     })
     .catch(error => {
         console.error('Error saving template:', error);
-        alert('Error saving template. Please try again.');
+        alert(window.translations.error_saving_template);
     })
     .finally(function() {
         // Restore button state
