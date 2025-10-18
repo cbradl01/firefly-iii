@@ -81,10 +81,13 @@ class FieldDefinitions
         ],
         'account_holder' => [
             'data_type' => 'string',
-            'input_type' => 'text',
+            'input_type' => 'financial_entity_select',
             'category' => 'basic_info',
             'required' => true,
-            'validation' => 'required|string|max:255'
+            'validation' => 'required|string|max:255',
+            'options' => [
+                'exclude_entity_types' => ['institution']
+            ]
         ],
         'account_status' => [
             'data_type' => 'string',
@@ -729,4 +732,5 @@ class FieldDefinitions
         
         return $grouped;
     }
+
 }
