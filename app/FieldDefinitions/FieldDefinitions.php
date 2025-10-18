@@ -68,100 +68,320 @@ class FieldDefinitions
     ];
 
     /**
-     * Account-specific fields
+     * Account-specific fields (streamlined)
      */
     public const ACCOUNT_FIELDS = [
-        // Basic Information
-        'name' => [
+        // Core Required Fields
+        'institution' => [
             'data_type' => 'string',
             'input_type' => 'text',
             'category' => 'basic_info',
             'required' => true,
-            'validation' => 'required|string|max:255'],
-        'display_name' => [
+            'validation' => 'required|string|max:255'
+        ],
+        'account_holder' => [
             'data_type' => 'string',
             'input_type' => 'text',
             'category' => 'basic_info',
             'required' => true,
-            'validation' => 'string|max:255'],
+            'validation' => 'required|string|max:255'
+        ],
+        'account_status' => [
+            'data_type' => 'string',
+            'input_type' => 'select',
+            'category' => 'basic_info',
+            'required' => true,
+            'validation' => 'required|in:active,inactive,closed,suspended',
+            'options' => [
+                'active' => 'Active',
+                'inactive' => 'Inactive',
+                'closed' => 'Closed',
+                'suspended' => 'Suspended'
+            ]
+        ],
+
+        // Core Optional Fields
         'description' => [
             'data_type' => 'string',
             'input_type' => 'textarea',
             'category' => 'basic_info',
-            'validation' => 'string|max:1000'],
+            'validation' => 'string|max:1000'
+        ],
         'account_number' => [
             'data_type' => 'string',
             'input_type' => 'text',
             'category' => 'basic_info',
-            'validation' => ['string', 'max:50']
+            'validation' => 'string|max:50'
         ],
         'routing_number' => [
             'data_type' => 'string',
             'input_type' => 'text',
             'category' => 'basic_info',
-            'validation' => ['string', 'size:9']
+            'validation' => 'string|size:9'
         ],
-        'iban' => [
-            'data_type' => 'string',
-            'input_type' => 'text',
-            'category' => 'basic_info',
-            'validation' => ['string', 'max:34']
-        ],
-        'swift_code' => [
-            'data_type' => 'string',
-            'input_type' => 'text',
-            'category' => 'basic_info',
-            'validation' => ['string', 'size:8,11']
-        ],
-        'account_holder_type' => ['data_type' => 'string',
-            'input_type' => 'select',
-            'category' => 'basic_info','options' => [
-                'individual' => 'Individual',
-                'joint' => 'Joint',
-                'business' => 'Business',
-                'trust' => 'Trust',
-                'custodial' => 'Custodial',
-                'other' => 'Other']],
-        'account_status' => ['data_type' => 'string',
-            'input_type' => 'select',
-            'category' => 'basic_info','options' => [
-                'active' => 'Active',
-                'inactive' => 'Inactive',
-                'closed' => 'Closed',
-                'suspended' => 'Suspended']],
-        'opening_date' => ['data_type' => 'date',
+        'opening_date' => [
+            'data_type' => 'date',
             'input_type' => 'date',
-            'category' => 'basic_info','validation' => ['date']],
-        'closing_date' => ['data_type' => 'date',
+            'category' => 'basic_info',
+            'validation' => 'date'
+        ],
+        'closing_date' => [
+            'data_type' => 'date',
             'input_type' => 'date',
-            'category' => 'basic_info','validation' => ['date', 'after:opening_date']],
-
-        // Legal
-        'power_of_attorney' => ['data_type' => 'string',
+            'category' => 'basic_info',
+            'validation' => 'date|after:opening_date'
+        ],
+        'notes' => [
+            'data_type' => 'string',
             'input_type' => 'textarea',
-            'category' => 'legal','validation' => 'string|max:1000'],
+            'category' => 'basic_info',
+            'validation' => 'string|max:1000'
+        ],
 
-        // Financial
-        'interest_rate' => ['data_type' => 'decimal',
+        // Financial Fields
+        'current_balance' => [
+            'data_type' => 'decimal',
             'input_type' => 'number',
-            'category' => 'financial','validation' => ['numeric', 'min:0', 'max:100']],
-        'minimum_balance' => ['data_type' => 'decimal',
+            'category' => 'financial',
+            'validation' => 'numeric'
+        ],
+        'interest_rate' => [
+            'data_type' => 'decimal',
             'input_type' => 'number',
-            'category' => 'financial','validation' => ['numeric', 'min:0']],
-        'credit_limit' => ['data_type' => 'decimal',
+            'category' => 'financial',
+            'validation' => 'numeric|min:0|max:100'
+        ],
+        'minimum_balance' => [
+            'data_type' => 'decimal',
             'input_type' => 'number',
-            'category' => 'financial','validation' => ['numeric', 'min:0']],
+            'category' => 'financial',
+            'validation' => 'numeric|min:0'
+        ],
+        'credit_limit' => [
+            'data_type' => 'decimal',
+            'input_type' => 'number',
+            'category' => 'financial',
+            'validation' => 'numeric|min:0'
+        ],
+        'available_credit' => [
+            'data_type' => 'decimal',
+            'input_type' => 'number',
+            'category' => 'financial',
+            'validation' => 'numeric|min:0'
+        ],
+        'minimum_payment' => [
+            'data_type' => 'decimal',
+            'input_type' => 'number',
+            'category' => 'financial',
+            'validation' => 'numeric|min:0'
+        ],
+        'payment_due_date' => [
+            'data_type' => 'date',
+            'input_type' => 'date',
+            'category' => 'financial',
+            'validation' => 'date'
+        ],
+        'payment_frequency' => [
+            'data_type' => 'string',
+            'input_type' => 'select',
+            'category' => 'financial',
+            'validation' => 'in:weekly,biweekly,monthly,quarterly,annually',
+            'options' => [
+                'weekly' => 'Weekly',
+                'biweekly' => 'Bi-weekly',
+                'monthly' => 'Monthly',
+                'quarterly' => 'Quarterly',
+                'annually' => 'Annually'
+            ]
+        ],
 
-        // Features
-        'check_writing' => ['data_type' => 'boolean',
+        // Feature Flags
+        'check_writing' => [
+            'data_type' => 'boolean',
             'input_type' => 'checkbox',
-            'category' => 'features'],
-        'debit_card' => ['data_type' => 'boolean',
+            'category' => 'features'
+        ],
+        'debit_card' => [
+            'data_type' => 'boolean',
             'input_type' => 'checkbox',
-            'category' => 'features'],
-        'online_banking' => ['data_type' => 'boolean',
+            'category' => 'features'
+        ],
+        'credit_card' => [
+            'data_type' => 'boolean',
             'input_type' => 'checkbox',
-            'category' => 'features']];
+            'category' => 'features'
+        ],
+        'online_banking' => [
+            'data_type' => 'boolean',
+            'input_type' => 'checkbox',
+            'category' => 'features'
+        ],
+        'mobile_banking' => [
+            'data_type' => 'boolean',
+            'input_type' => 'checkbox',
+            'category' => 'features'
+        ],
+        'atm_access' => [
+            'data_type' => 'boolean',
+            'input_type' => 'checkbox',
+            'category' => 'features'
+        ],
+        'wire_transfer' => [
+            'data_type' => 'boolean',
+            'input_type' => 'checkbox',
+            'category' => 'features'
+        ],
+        'ach_transfer' => [
+            'data_type' => 'boolean',
+            'input_type' => 'checkbox',
+            'category' => 'features'
+        ],
+        'bill_pay' => [
+            'data_type' => 'boolean',
+            'input_type' => 'checkbox',
+            'category' => 'features'
+        ],
+        'direct_deposit' => [
+            'data_type' => 'boolean',
+            'input_type' => 'checkbox',
+            'category' => 'features'
+        ],
+        'automatic_payments' => [
+            'data_type' => 'boolean',
+            'input_type' => 'checkbox',
+            'category' => 'features'
+        ],
+        'overdraft_protection' => [
+            'data_type' => 'boolean',
+            'input_type' => 'checkbox',
+            'category' => 'features'
+        ],
+
+        // Investment Fields
+        'contribution_limit' => [
+            'data_type' => 'decimal',
+            'input_type' => 'number',
+            'category' => 'investment',
+            'validation' => 'numeric|min:0'
+        ],
+        'current_contribution' => [
+            'data_type' => 'decimal',
+            'input_type' => 'number',
+            'category' => 'investment',
+            'validation' => 'numeric|min:0'
+        ],
+        'employer_match' => [
+            'data_type' => 'decimal',
+            'input_type' => 'number',
+            'category' => 'investment',
+            'validation' => 'numeric|min:0|max:100'
+        ],
+        'vesting_schedule' => [
+            'data_type' => 'string',
+            'input_type' => 'text',
+            'category' => 'investment',
+            'validation' => 'string|max:255'
+        ],
+        'withdrawal_penalties' => [
+            'data_type' => 'decimal',
+            'input_type' => 'number',
+            'category' => 'investment',
+            'validation' => 'numeric|min:0'
+        ],
+        'required_minimum_distribution' => [
+            'data_type' => 'decimal',
+            'input_type' => 'number',
+            'category' => 'investment',
+            'validation' => 'numeric|min:0'
+        ],
+        'investment_style' => [
+            'data_type' => 'string',
+            'input_type' => 'select',
+            'category' => 'investment',
+            'validation' => 'in:conservative,moderate,aggressive',
+            'options' => [
+                'conservative' => 'Conservative',
+                'moderate' => 'Moderate',
+                'aggressive' => 'Aggressive'
+            ]
+        ],
+
+        // Digital/Crypto Fields
+        'wallet_address' => [
+            'data_type' => 'string',
+            'input_type' => 'text',
+            'category' => 'digital',
+            'validation' => 'string|max:255'
+        ],
+        'wallet_type' => [
+            'data_type' => 'string',
+            'input_type' => 'text',
+            'category' => 'digital',
+            'validation' => 'string|max:100'
+        ],
+        'crypto_type' => [
+            'data_type' => 'string',
+            'input_type' => 'text',
+            'category' => 'digital',
+            'validation' => 'string|max:100'
+        ],
+        'processor_type' => [
+            'data_type' => 'string',
+            'input_type' => 'text',
+            'category' => 'digital',
+            'validation' => 'string|max:100'
+        ],
+        'api_key' => [
+            'data_type' => 'string',
+            'input_type' => 'text',
+            'category' => 'digital',
+            'validation' => 'string|max:255'
+        ],
+        'webhook_url' => [
+            'data_type' => 'string',
+            'input_type' => 'url',
+            'category' => 'digital',
+            'validation' => 'url|max:255'
+        ],
+        'integration_status' => [
+            'data_type' => 'string',
+            'input_type' => 'text',
+            'category' => 'digital',
+            'validation' => 'string|max:100'
+        ],
+
+        // Fee Fields
+        'monthly_fee' => [
+            'data_type' => 'decimal',
+            'input_type' => 'number',
+            'category' => 'fees',
+            'validation' => 'numeric|min:0'
+        ],
+        'annual_fee' => [
+            'data_type' => 'decimal',
+            'input_type' => 'number',
+            'category' => 'fees',
+            'validation' => 'numeric|min:0'
+        ],
+        'transaction_fee' => [
+            'data_type' => 'decimal',
+            'input_type' => 'number',
+            'category' => 'fees',
+            'validation' => 'numeric|min:0'
+        ],
+        'late_payment_fee' => [
+            'data_type' => 'decimal',
+            'input_type' => 'number',
+            'category' => 'fees',
+            'validation' => 'numeric|min:0'
+        ],
+        'overdraft_fee' => [
+            'data_type' => 'decimal',
+            'input_type' => 'number',
+            'category' => 'fees',
+            'validation' => 'numeric|min:0'
+        ]
+    ];
 
     /**
      * Institution-specific fields
