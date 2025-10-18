@@ -75,22 +75,17 @@ trait ModelInformation
     protected function getLiabilityTypes(): array
     {
         /** @var AccountRepositoryInterface $repository */
-        $repository     = app(AccountRepositoryInterface::class);
-
-        // types of liability:
-        /** @var AccountType $debt */
-        $debt           = $repository->getAccountTypeByType(AccountTypeEnum::DEBT->value);
-
-        /** @var AccountType $loan */
-        $loan           = $repository->getAccountTypeByType(AccountTypeEnum::LOAN->value);
-
-        /** @var AccountType $mortgage */
-        $mortgage       = $repository->getAccountTypeByType(AccountTypeEnum::MORTGAGE->value);
-        $liabilityTypes = [
-            $debt->id     => (string)trans(sprintf('firefly.account_type_%s', AccountTypeEnum::DEBT->value)),
-            $loan->id     => (string)trans(sprintf('firefly.account_type_%s', AccountTypeEnum::LOAN->value)),
-            $mortgage->id => (string)trans(sprintf('firefly.account_type_%s', AccountTypeEnum::MORTGAGE->value)),
-        ];
+        $repository = app(AccountRepositoryInterface::class);
+        
+        // Get all account types that belong to the 'Liability' category
+        $liabilityAccountTypes = $repository->getAccountTypesByCategory('Liability');
+        
+        $liabilityTypes = $liabilityAccountTypes->mapWithKeys(function ($accountType) {
+            // Use the account type name for translation key
+            $translationKey = 'firefly.account_type_' . strtolower(str_replace(' ', '_', $accountType->name));
+            return [$accountType->id => (string)trans($translationKey)];
+        })->toArray();
+        
         asort($liabilityTypes);
 
         return $liabilityTypes;

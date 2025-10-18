@@ -224,7 +224,12 @@ class General extends AbstractExtension
     {
         return new TwigFilter(
             'filesize',
-            static function (int $size): string {
+            static function (?int $size): string {
+                // Handle null or zero size
+                if ($size === null || $size === 0) {
+                    return '0 B';
+                }
+                
                 // less than one GB, more than one MB
                 if ($size < (1024 * 1024 * 2014) && $size >= (1024 * 1024)) {
                     return round($size / (1024 * 1024), 2).' MB';

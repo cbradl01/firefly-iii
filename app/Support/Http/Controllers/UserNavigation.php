@@ -60,19 +60,37 @@ trait UserNavigation
      */
     final protected function isEditableAccount(Account $account): bool
     {
+        // Ensure the accountType relationship is loaded
+        if (!$account->relationLoaded('accountType')) {
+            $account->load('accountType');
+        }
+        
+        // Check if accountType exists
+        if (!$account->accountType) {
+            app('log')->warning(sprintf('Account #%d has no account type. Cannot determine if editable.', $account->id));
+            return false;
+        }
+        
+        // Ensure the behavior relationship is loaded
+        if (!$account->accountType->relationLoaded('behavior')) {
+            $account->accountType->load('behavior');
+        }
+        
         // Get the account type name
         $accountTypeName = $account->accountType->name;
         
-        // Define non-editable account types (system accounts)
-        $nonEditable = [
-            'Initial balance account',
-            'Reconciliation account',
-            'Import account',
-            'Liability credit account'
-        ];
+        // Check if this is a system account type (non-editable)
+        // System accounts are typically those with specific behaviors or marked as system accounts
+        $isSystemAccount = ($account->accountType->behavior && $account->accountType->behavior->calculation_method === 'system') ||
+                          in_array($accountTypeName, [
+                              'Initial balance account',
+                              'Reconciliation account', 
+                              'Import account',
+                              'Liability credit account'
+                          ], true);
         
-        // If it's in the non-editable list, return false
-        if (in_array($accountTypeName, $nonEditable, true)) {
+        // If it's a system account, return false
+        if ($isSystemAccount) {
             return false;
         }
         
@@ -98,8 +116,19 @@ trait UserNavigation
      */
     final protected function redirectAccountToAccount(Account $account)
     {
-        $type = $account->accountType->type;
-        if (AccountTypeEnum::RECONCILIATION->value === $type || AccountTypeEnum::INITIAL_BALANCE->value === $type || AccountTypeEnum::LIABILITY_CREDIT->value === $type) {
+        // Ensure the accountType relationship is loaded
+        if (!$account->relationLoaded('accountType')) {
+            $account->load('accountType');
+        }
+        
+        // Check if accountType exists
+        if (!$account->accountType) {
+            app('log')->error(sprintf('Account #%d has no account type. Cannot redirect.', $account->id));
+            return redirect(route('index'));
+        }
+        
+        $type = $account->accountType->name;
+        if (in_array($type, ['Reconciliation account', 'Initial balance account', 'Liability credit account'], true)) {
             // reconciliation must be stored somewhere in this account's transactions.
 
             /** @var null|Transaction $transaction */
