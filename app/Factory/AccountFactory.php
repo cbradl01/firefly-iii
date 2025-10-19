@@ -107,11 +107,11 @@ class AccountFactory
         $type         = $this->getAccountType($data);
         $data['iban'] = $this->filterIban($data['iban'] ?? null);
 
-        // Validate required fields for this account type
-        $this->fieldValidationService->validateRequiredFields($data, $type);
+        // Validate all fields for this account type
+        $this->fieldValidationService->validateFields($data, $type);
 
         // account may exist already:
-        $return       = $this->find($data['name'], $type->type);
+        $return = $this->findExistingAccount($data, $type);
 
         if ($return instanceof Account) {
             return $return;
@@ -206,6 +206,53 @@ class AccountFactory
             ->first();
     }
 
+    /**
+     * Find existing account based on required identifying fields
+     * Uses institution, account_holder, and product_name for uniqueness
+     */
+    private function findExistingAccount(array $data, AccountType $type): ?Account
+    {
+        Log::debug('Now in AccountFactory::findExistingAccount()', [
+            'institution' => $data['institution'] ?? 'NOT_SET',
+            'account_holder' => $data['account_holder'] ?? 'NOT_SET', 
+            'product_name' => $data['product_name'] ?? 'NOT_SET'
+        ]);
+
+        // All accounts are required to have institution, account_holder, and product_name
+        $institution = $data['institution'] ?? null;
+        $accountHolder = $data['account_holder'] ?? null;
+        $productName = $data['product_name'] ?? null;
+
+        if (!$institution || !$accountHolder || !$productName) {
+            Log::debug('Missing required identifying fields for account search', [
+                'has_institution' => !empty($institution),
+                'has_account_holder' => !empty($accountHolder),
+                'has_product_name' => !empty($productName)
+            ]);
+            return null;
+        }
+
+        // Query accounts that have the same account_type_id and matching metadata
+        // We need to find accounts that have ALL three metadata fields matching
+        $query = $this->user->accounts()
+            ->where('account_type_id', $type->id)
+            ->whereHas('accountMeta', function ($q) use ($institution) {
+                $q->where('name', 'institution')->where('data', $institution);
+            })
+            ->whereHas('accountMeta', function ($q) use ($accountHolder) {
+                $q->where('name', 'account_holder')->where('data', $accountHolder);
+            })
+            ->whereHas('accountMeta', function ($q) use ($productName) {
+                $q->where('name', 'product_name')->where('data', $productName);
+            });
+
+        /** @var null|Account */
+        return $query->first();
+    }
+
+    /**
+     * @deprecated Use findExistingAccount instead
+     */
     public function find(string $accountName, string $accountType): ?Account
     {
         Log::debug(sprintf('Now in AccountFactory::find("%s", "%s")', $accountName, $accountType));
@@ -226,13 +273,27 @@ class AccountFactory
         $virtualBalance = array_key_exists('virtual_balance', $data) ? $data['virtual_balance'] : null;
         $active         = array_key_exists('active', $data) ? $data['active'] : true;
         
+        // Generate a meaningful name from the identifying fields
+        $institution = $data['institution'] ?? 'Unknown Institution';
+        $productName = $data['product_name'] ?? 'Unknown Product';
+        $accountHolder = $data['account_holder'] ?? 'Unknown Holder';
+        $generatedName = "{$institution} - {$productName} ({$accountHolder})";
+        
+        Log::debug('AccountFactory::createAccount - Name generation', [
+            'institution' => $institution,
+            'product_name' => $productName,
+            'account_holder' => $accountHolder,
+            'generated_name' => $generatedName,
+            'data_keys' => array_keys($data)
+        ]);
+
         $databaseData   = [
             'user_id'         => $this->user->id,
             'user_group_id'   => $this->user->user_group_id,
             'account_type_id' => $type->id,
             'template_id'     => null, // No longer using templates
             'entity_id'       => $data['entity_id'] ?? null,
-            'name'            => $data['name'],
+            'name'            => $generatedName,
             'order'           => 25000,
             'virtual_balance' => $virtualBalance,
             'active'          => $active,
@@ -246,6 +307,12 @@ class AccountFactory
         if (!in_array($type->type, $this->canHaveVirtual, true)) {
             $databaseData['virtual_balance'] = null;
         }
+        // Debug: Log the data being sent to Account::create
+        Log::debug('AccountFactory::createAccount - About to create account', [
+            'database_data' => $databaseData,
+            'name_value' => $databaseData['name'] ?? 'NOT_SET'
+        ]);
+        
         // create account!
         $account        = Account::create($databaseData);
         Log::channel('audit')->info(sprintf('Account #%d ("%s") has been created.', $account->id, $account->name));

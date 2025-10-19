@@ -52,7 +52,30 @@ class Account extends Model
     use ReturnsIntegerUserIdTrait;
     use SoftDeletes;
 
-    protected $fillable              = ['user_id', 'user_group_id', 'account_type_id', 'template_id', 'entity_id', 'name', 'active', 'virtual_balance', 'iban', 'native_virtual_balance'];
+    protected $fillable = [];
+
+    /**
+     * Get system fields that are not user-facing but needed for model operations
+     */
+    protected function getSystemFields(): array
+    {
+        return [
+            'user_id', 'user_group_id', 'account_type_id', 'template_id', 'entity_id', 
+            'native_virtual_balance', 'name', 'active', 'iban', 'order', 'virtual_balance'
+        ];
+    }
+
+    /**
+     * Get fillable fields dynamically from FieldDefinitions + system fields
+     */
+    public function getFillable()
+    {
+        $systemFields = $this->getSystemFields();
+        $accountFields = \FireflyIII\FieldDefinitions\FieldDefinitions::getFieldsForTargetType('account');
+        $fieldNames = array_keys($accountFields);
+        
+        return array_merge($systemFields, $fieldNames);
+    }
 
     protected $hidden                = ['encrypted'];
     private bool $joinedAccountTypes = false;
@@ -355,12 +378,8 @@ class Account extends Model
         return [
             'created_at'             => 'datetime',
             'updated_at'             => 'datetime',
-            'user_id'                => 'integer',
-            'user_group_id'          => 'integer',
             'deleted_at'             => 'datetime',
-            'active'                 => 'boolean',
             'encrypted'              => 'boolean',
-            'virtual_balance'        => 'string',
             'native_virtual_balance' => 'string',
         ];
     }
@@ -380,7 +399,8 @@ class Account extends Model
     protected function iban(): Attribute
     {
         return Attribute::make(
-            get: static fn ($value) => null === $value ? null : trim(str_replace(' ', '', (string)$value)),
+            get: fn () => $this->account_number ? trim(str_replace(' ', '', (string)$this->account_number)) : null,
+            set: fn ($value) => $this->attributes['account_number'] = $value,
         );
     }
 
@@ -397,9 +417,12 @@ class Account extends Model
     protected function virtualBalance(): Attribute
     {
         return Attribute::make(
-            get: static fn ($value) => (string)$value,
+            get: fn () => $this->virtual_balance,
+            set: fn ($value) => $this->attributes['virtual_balance'] = $value,
         );
     }
+
+
 
     public function primaryPeriodStatistics(): MorphMany
     {
