@@ -279,3 +279,4 @@ window.TableSorting.debug = true;
 - Advanced filtering integration
 - Export functionality
 - Virtual scrolling for large datasets
+
