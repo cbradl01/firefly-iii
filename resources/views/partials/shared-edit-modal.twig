@@ -38,6 +38,35 @@ Usage:
                     <input type="hidden" name="_method" value="PUT" id="formMethod">
                     <input type="hidden" name="id" id="entityId" value="{{ entityId }}">
                     
+                    <!-- Template Summary Section -->
+                    <div id="{{ modalId }}_templateSummary" style="display: none; margin-bottom: 20px;">
+                        <div class="card mb-4">
+                            <div class="card-header bg-dark text-white">
+                                <h4 class="mb-0 font-weight-bold text-uppercase">
+                                    Template Info
+                                </h4>
+                            </div>
+                            <div class="card-body" style="padding: 10px;">
+                                <table class="table table-sm table-borderless" style="margin-bottom: 0;">
+                                    <tbody>
+                                        <tr>
+                                            <td style="width: 20%; padding: 2px 8px;"><strong>Name:</strong></td>
+                                            <td style="padding: 2px 8px;" id="{{ modalId }}_templateName">-</td>
+                                        </tr>
+                                        <tr>
+                                            <td style="padding: 2px 8px;"><strong>Category:</strong></td>
+                                            <td style="padding: 2px 8px;" id="{{ modalId }}_templateCategory">-</td>
+                                        </tr>
+                                        <tr>
+                                            <td style="padding: 2px 8px;"><strong>Behavior:</strong></td>
+                                            <td style="padding: 2px 8px;" id="{{ modalId }}_templateBehavior">-</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <!-- Dynamic Fields Container -->
                     <div id="dynamicFieldsContainer">
                         <div class="text-center text-muted">
@@ -60,6 +89,32 @@ Usage:
 
 <!-- Include the centralized field input renderer -->
 <script src="{{ asset('js/field-input-renderer.js') }}" nonce="{{ JS_NONCE }}"></script>
+
+<!-- CSS for dropdown placeholder styling -->
+<style>
+/* Style the "Nothing selected" option to appear grayed out */
+select option[value=""] {
+    color: #999 !important;
+    font-style: italic !important;
+}
+
+/* When the select has the placeholder selected, make the select itself appear grayed out */
+select:invalid {
+    color: #999;
+}
+
+/* For browsers that support :has() selector */
+select:has(option[value=""]:checked) {
+    color: #999;
+    font-style: italic;
+}
+
+/* Fallback for browsers that don't support :has() - use JavaScript */
+select.placeholder-selected {
+    color: #999;
+    font-style: italic;
+}
+</style>
 
 <script type="text/javascript" nonce="{{ JS_NONCE }}">
 // Configuration for this modal instance
@@ -178,6 +233,10 @@ function loadEntityData(entityId) {
 
 function renderEntityFields(fields, entityData) {
     console.log('renderEntityFields called with:', { fields, entityData }); // Debug logging
+    
+    // Update template summary if this is an account modal
+    updateTemplateSummary(entityData);
+    
     const container = document.getElementById('dynamicFieldsContainer');
     let html = '';
     
@@ -248,6 +307,12 @@ function renderEntityFields(fields, entityData) {
     
     // Load financial entities for dropdowns after fields are rendered
     FieldInputRenderer.loadFinancialEntitiesForDropdowns();
+    
+    // Load currencies for dropdowns after fields are rendered
+    FieldInputRenderer.loadCurrenciesForDropdowns();
+    
+    // Add placeholder styling for dropdowns
+    updateDropdownPlaceholderStyling();
 }
 
 function generateFieldHTML(fieldName, fieldData, currentValue = '') {
@@ -300,6 +365,69 @@ function updateModalTitle(entityData) {
     document.getElementById('modalTitle').textContent = `${action} ${window.modalConfig.entityType.replace('_', ' ')}${isCreate ? '' : ': ' + title}`;
 }
 
+function updateTemplateSummary(entityData) {
+    // Only show template summary for account modals
+    if (window.modalConfig.entityType !== 'account') {
+        return;
+    }
+    
+    const modalId = window.modalConfig.modalId;
+    const summaryDiv = document.getElementById(modalId + '_templateSummary');
+    if (!summaryDiv) {
+        return;
+    }
+    
+    // Check if we already have valid data to prevent overwriting
+    const templateNameEl = document.getElementById(modalId + '_templateName');
+    if (templateNameEl && templateNameEl.textContent && templateNameEl.textContent !== '-') {
+        return;
+    }
+    
+    // Update template information
+    const templateName = entityData.account_type_name || '-';
+    const templateCategory = entityData.account_category || '-';
+    const templateBehavior = entityData.account_behavior || '-';
+    
+    const templateCategoryEl = document.getElementById(modalId + '_templateCategory');
+    const templateBehaviorEl = document.getElementById(modalId + '_templateBehavior');
+    
+    if (templateNameEl) {
+        templateNameEl.textContent = templateName;
+    }
+    
+    if (templateCategoryEl) {
+        templateCategoryEl.textContent = templateCategory;
+    }
+    
+    if (templateBehaviorEl) {
+        templateBehaviorEl.textContent = templateBehavior;
+    }
+    
+    // Show the summary section
+    summaryDiv.style.display = 'block';
+}
+
+function updateDropdownPlaceholderStyling() {
+    // Find all select elements in the modal
+    const selects = document.querySelectorAll('#' + window.modalConfig.modalId + ' select');
+    
+    selects.forEach(select => {
+        // Add event listener for change events
+        select.addEventListener('change', function() {
+            if (this.value === '') {
+                this.classList.add('placeholder-selected');
+            } else {
+                this.classList.remove('placeholder-selected');
+            }
+        });
+        
+        // Set initial state
+        if (select.value === '') {
+            select.classList.add('placeholder-selected');
+        }
+    });
+}
+
 function saveEntity() {
     const form = document.getElementById(window.modalConfig.formId);
     const formData = new FormData(form);
@@ -320,6 +448,14 @@ function saveEntity() {
             }
         }
     });
+    
+    // Add special fields from modal config
+    if (window.modalConfig.specialFields) {
+        Object.keys(window.modalConfig.specialFields).forEach(function(fieldName) {
+            const fieldValue = window.modalConfig.specialFields[fieldName];
+            formData.set(fieldName, fieldValue);
+        });
+    }
     
     // Add CSRF token and method
     formData.set('_token', document.querySelector('meta[name="csrf-token"]').getAttribute('content'));
@@ -347,15 +483,19 @@ function saveEntity() {
     .then(function(response) { return response.json(); })
     .then(function(data) {
         if (data.success) {
-            // Show success message
-            const action = isCreate ? 'created' : 'updated';
-            showSuccessMessage(`Entity ${action} successfully!`);
-            
-            // Close modal
+            // Close modal first
             $('#' + window.modalConfig.modalId).modal('hide');
             
-            // Reload page or update table
-            location.reload();
+            // Handle account creation differently
+            if (isCreate && window.modalConfig.entityType === 'account' && data.account) {
+                // For account creation, redirect to the account show page
+                window.location.href = '/accounts/show/' + data.account.id;
+            } else {
+                // For other entities or updates, show success message and reload
+                const action = isCreate ? 'created' : 'updated';
+                showSuccessMessage(`Entity ${action} successfully!`);
+                location.reload();
+            }
         } else {
             // Show validation errors
             showValidationErrors(data.errors || {});
