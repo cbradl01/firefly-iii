@@ -32,6 +32,7 @@ use FireflyIII\FieldDefinitions\FieldDefinitions;
 use FireflyIII\Models\TransactionCurrency;
 use FireflyIII\Support\Facades\Amount;
 use FireflyIII\User;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -173,6 +174,68 @@ class TemplateController extends Controller
             'fieldDefinitions'
         ));
     }
+
+    /**
+     * Show the create account modal
+     */
+    public function createModal(Request $request, string $templateName): View
+    {
+        // URL decode the template name to handle spaces and special characters
+        $decodedTemplateName = urldecode($templateName);
+        
+        $template = AccountType::where('name', $decodedTemplateName)
+            ->where('active', true)
+            ->with(['category', 'behavior'])
+            ->firstOrFail();
+
+        // Get user's default currency
+        $defaultCurrency = Amount::getPrimaryCurrency();
+        
+        // Get current user's email (used as name)
+        $userName = Auth::user()->email ?? '';
+
+        // Create default account data based on template
+        $accountData = [
+            'id' => null, // New account
+            'name' => '',
+            'account_type_id' => $template->id,
+            'account_type_name' => $template->name,
+            'account_type_fields' => $template->firefly_mapping['account_fields'] ?? [],
+            'currency_id' => $defaultCurrency->id,
+            'currency_code' => $defaultCurrency->code,
+            'account_holder' => $userName,
+            'institution' => '',
+            'account_status' => 'active',
+            'description' => '',
+            'account_number' => '',
+            'opening_date' => date('Y-m-d'),
+            'closing_date' => null,
+            'notes' => '',
+            'current_balance' => '0.00',
+            'online_banking' => false,
+            'mobile_banking' => false,
+            'wire_transfer' => false,
+            'monthly_fee' => '0.00',
+            'transaction_fee' => '0.00',
+            'routing_number' => '',
+            'metadata' => []
+        ];
+
+        return view('accounts.account-modal', [
+            'modalId' => 'createAccountModal',
+            'modalTitle' => 'Create Account',
+            'formId' => 'createAccountForm',
+            'entityId' => null,
+            'dataEndpoint' => '/accounts/create-data/' . urlencode($template->name),
+            'updateEndpoint' => '/accounts/templates/store',
+            'specialFields' => [
+                'template' => $template->name,
+                'account_type_id' => $template->id
+            ],
+            'accountData' => $accountData
+        ]);
+    }
+
 
     /**
      * Store the new account from template

@@ -436,6 +436,104 @@ class FinancialEntityController extends Controller
     }
 
     /**
+     * Show the new centralized modal template
+     *
+     * @return View
+     */
+    public function editModalNew()
+    {
+        return view('financial-entities.edit-modal-new');
+    }
+
+    /**
+     * Get all financial entity field definitions for the shared modal
+     */
+    public function getAllEntityFields(): JsonResponse
+    {
+        try {
+            $fieldDefinitions = app(\FireflyIII\Services\FieldDefinitionService::class);
+            
+            // Get fields for all entity types
+            $allFields = [];
+            $entityTypes = [
+                FinancialEntity::TYPE_INDIVIDUAL,
+                FinancialEntity::TYPE_TRUST,
+                FinancialEntity::TYPE_BUSINESS,
+                FinancialEntity::TYPE_ADVISOR,
+                FinancialEntity::TYPE_CUSTODIAN,
+                FinancialEntity::TYPE_INSTITUTION,
+            ];
+            
+            foreach ($entityTypes as $entityType) {
+                $fields = $fieldDefinitions->getFieldsWithTranslations($entityType);
+                $allFields = array_merge($allFields, $fields);
+            }
+            
+            // Remove duplicates based on field name
+            $uniqueFields = [];
+            foreach ($allFields as $fieldName => $fieldData) {
+                if (!isset($uniqueFields[$fieldName])) {
+                    $uniqueFields[$fieldName] = $fieldData;
+                }
+            }
+            
+            return response()->json([
+                'success' => true,
+                'fields' => $uniqueFields
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error loading financial entity fields: ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => 'Error loading field definitions'], 500);
+        }
+    }
+
+    /**
+     * Get financial entity data for the shared modal
+     */
+    public function getEntityData($id): JsonResponse
+    {
+        $user = Auth::user();
+        
+        // Find the entity and check if user has permission
+        $financialEntity = FinancialEntity::whereHas('users', function ($query) use ($user) {
+            $query->where('user_id', $user->id);
+        })->find($id);
+        
+        if (!$financialEntity) {
+            return response()->json(['success' => false, 'message' => 'Financial entity not found'], 404);
+        }
+
+        try {
+            // Start with basic entity attributes
+            $entityData = $financialEntity->toArray();
+            
+            // Add any computed fields
+            $entityData['entity_status'] = $financialEntity->is_active ? 'active' : 'inactive';
+            
+            // Parse metadata if it exists
+            if ($financialEntity->metadata) {
+                $metadata = is_string($financialEntity->metadata) ? 
+                    json_decode($financialEntity->metadata, true) : 
+                    $financialEntity->metadata;
+                
+                if ($metadata && is_array($metadata)) {
+                    $entityData = array_merge($entityData, $metadata);
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'entity' => $entityData
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error loading financial entity data: ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => 'Error loading entity data'], 500);
+        }
+    }
+
+    /**
      * Get financial entities for beneficiaries dropdown (excluding institutions and selected trustee)
      */
     public function getBeneficiaryEntities(Request $request): JsonResponse

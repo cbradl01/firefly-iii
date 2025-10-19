@@ -28,6 +28,7 @@ use FireflyIII\Helpers\Attachments\AttachmentHelperInterface;
 use FireflyIII\Http\Controllers\Controller;
 use FireflyIII\Http\Requests\AccountFormRequest;
 use FireflyIII\Models\Account;
+use Illuminate\Support\Facades\Log;
 use FireflyIII\Models\Location;
 use FireflyIII\Models\TransactionCurrency;
 use FireflyIII\Repositories\Account\AccountRepositoryInterface;
@@ -38,7 +39,6 @@ use Illuminate\Contracts\View\Factory;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Redirector;
-use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
 
 /**
@@ -474,6 +474,88 @@ class EditController extends Controller
     }
 
     /**
+     * Show the new centralized modal template
+     *
+     * @return View
+     */
+    public function editModalNew()
+    {
+        return view('accounts.edit-modal-new');
+    }
+
+    /**
+     * Get account data for the new centralized modal
+     *
+     * @param Account $account
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getAccountData(Account $account)
+    {
+        if (!$this->isEditableAccount($account)) {
+            return response()->json(['success' => false, 'message' => 'Account is not editable'], 403);
+        }
+
+        try {
+            // Load account with all necessary relationships
+            $account->load(['accountType', 'accountType.category', 'accountMetadata']);
+            
+            // Start with basic account attributes
+            $accountData = $account->toArray();
+            
+            // Add metadata fields directly
+            foreach ($account->accountMetadata as $meta) {
+                $accountData[$meta->name] = $meta->parsed_value;
+            }
+            
+            // Add any computed fields
+            $accountData['account_status'] = $account->active ? 'active' : 'inactive';
+            $accountData['account_number'] = $account->account_number ?? '';
+            
+            // Add entity_id as account_holder for the form
+            if ($account->entity_id) {
+                $accountData['account_holder'] = $account->entity_id;
+            }
+            
+            // Add account type information for field filtering
+            if ($account->accountType) {
+                $accountData['account_type_id'] = $account->accountType->id;
+                $accountData['account_type_name'] = $account->accountType->name;
+                $accountData['account_type_fields'] = $account->accountType->firefly_mapping['account_fields'] ?? [];
+            }
+
+            return response()->json([
+                'success' => true,
+                'account' => $accountData
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error loading account data: ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => 'Error loading account data'], 500);
+        }
+    }
+
+    /**
+     * Get account field definitions for the new centralized modal
+     *
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getAccountFields()
+    {
+        try {
+            $fields = \FireflyIII\FieldDefinitions\FieldDefinitions::getFieldsWithTranslations('account');
+            
+            return response()->json([
+                'success' => true,
+                'fields' => $fields
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error loading account fields: ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => 'Error loading field definitions'], 500);
+        }
+    }
+
+    /**
      * Update the account via modal
      *
      * @param Request $request
@@ -491,50 +573,63 @@ class EditController extends Controller
             return $this->updateFromTemplateModal($request, $account);
         }
 
-        // For regular updates, validate the request data
-        $validator = validator($request->all(), [
-            'iban' => 'nullable|string|max:255',
-            'BIC' => 'nullable|string|max:11',
-            'account_number' => 'nullable|string|max:255',
-            'notes' => 'nullable|string',
-            'active' => 'boolean',
-            'include_net_worth' => 'boolean',
-            'currency_id' => 'required|integer|exists:transaction_currencies,id',
-        ]);
+        // Get validation rules from field definitions
+        $validationRules = \FireflyIII\FieldDefinitions\FieldDefinitions::getValidationRules('account');
+        
+        // Filter rules to only include fields present in the request
+        $requestData = $request->all();
+        $filteredRules = [];
+        foreach ($validationRules as $field => $rule) {
+            if (array_key_exists($field, $requestData)) {
+                $filteredRules[$field] = $rule;
+            }
+        }
+
+        // Validate the request data
+        $validator = validator($request->all(), $filteredRules);
         
         if ($validator->fails()) {
             return response()->json(['success' => false, 'errors' => $validator->errors()], 422);
         }
 
         try {
-            // Prepare account data
+            // Prepare account data - start with basic fields
             $data = [
-                'iban' => $request->input('iban'),
-                'BIC' => $request->input('BIC'),
+                'name' => $request->input('name'),
+                'active' => $request->boolean('account_status') === true || $request->input('account_status') === 'active',
                 'account_number' => $request->input('account_number'),
                 'notes' => $request->input('notes'),
-                'active' => $request->boolean('active', true),
-                'include_net_worth' => $request->boolean('include_net_worth', false),
-                'currency_id' => $request->input('currency_id'),
             ];
             
-            // Handle owner field specially - map to entity_id
-            if ($request->has('owner') && !empty($request->input('owner'))) {
-                $data['entity_id'] = $request->input('owner');
+            // Handle account_holder field specially - map to entity_id
+            if ($request->has('account_holder') && !empty($request->input('account_holder'))) {
+                $data['entity_id'] = $request->input('account_holder');
             }
             
-            // Add custom fields from the dynamic form (excluding owner since it's handled above)
-            $customFields = [
-                'institution', 'product_name', 'routing_number',
-                'plan_administrator', 'beneficiaries', 'contribution_limit',
-                'current_contribution', 'employer_match', 'investment_style',
-                'trust_name', 'trustee_name', 'trust_type', 'custodian_name',
-                'minor_name', 'check_writing', 'debit_card', 'overdraft_protection'
-            ];
+            // Get all account fields from field definitions
+            $accountFields = \FireflyIII\FieldDefinitions\FieldDefinitions::getFieldsForTargetType('account');
             
-            foreach ($customFields as $field) {
-                if ($request->has($field)) {
-                    $data[$field] = $request->input($field);
+            // Add all metadata fields
+            foreach ($accountFields as $fieldName => $fieldData) {
+                if ($request->has($fieldName)) {
+                    $value = $request->input($fieldName);
+                    
+                    // Handle boolean fields
+                    if ($fieldData['data_type'] === 'boolean') {
+                        $value = $request->boolean($fieldName);
+                    }
+                    
+                    // Handle decimal fields
+                    if ($fieldData['data_type'] === 'decimal' && $value !== '') {
+                        $value = (float) $value;
+                    }
+                    
+                    // Handle date fields
+                    if ($fieldData['data_type'] === 'date' && $value !== '') {
+                        $value = $value; // Keep as string for now
+                    }
+                    
+                    $data[$fieldName] = $value;
                 }
             }
             $this->repository->update($account, $data);
