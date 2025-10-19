@@ -420,33 +420,8 @@ class EditController extends Controller
         // Get CC types
         $ccTypes = config('firefly.ccTypes');
 
-        // Get field configurations for this account type
-        $fieldValidationService = app(\FireflyIII\Services\AccountFieldValidationService::class);
-        $fieldConfigurations = $fieldValidationService->getFieldConfigurations($account->accountType);
-
-        // Get field values from account metadata
-        $fieldValues = $this->getAccountFieldValues($account, $currency);
-
-        // Get all financial entities for owner dropdown
-        $user = Auth::user();
-        $financialEntities = \FireflyIII\Models\FinancialEntity::active()
-            ->whereHas('users', function ($query) use ($user) {
-                $query->where('user_id', $user->id);
-            })
-            ->orderBy('name')
-            ->get(['id', 'name', 'display_name', 'entity_type']);
-
-        // Create choices array for the dropdown
-        $ownerChoices = [];
-        foreach ($financialEntities as $entity) {
-            $displayName = $entity->display_name ?: $entity->name;
-            $ownerChoices[$entity->id] = $displayName;
-        }
-
-        // Populate owner choices in field configuration
-        if (isset($fieldConfigurations['owner'])) {
-            $fieldConfigurations['owner']['options']['choices'] = $ownerChoices;
-        }
+        // Note: Field configurations and data loading are now handled by the new centralized modal system
+        // This method is kept for backward compatibility but should be migrated to use editModalNew
 
         // Debug: Log that we're returning the modal view
         Log::info('Returning accounts.edit-modal view for account: ' . $account->id);
@@ -465,11 +440,7 @@ class EditController extends Controller
             'currency',
             'canEditCurrency',
             'ccTypes',
-            'locations',
-            'fieldConfigurations',
-            'fieldValues',
-            'financialEntities',
-            'ownerChoices'
+            'locations'
         ));
     }
 
@@ -521,6 +492,8 @@ class EditController extends Controller
                 $accountData['account_type_id'] = $account->accountType->id;
                 $accountData['account_type_name'] = $account->accountType->name;
                 $accountData['account_type_fields'] = $account->accountType->firefly_mapping['account_fields'] ?? [];
+                $accountData['account_category'] = $account->accountType->category->name ?? '';
+                $accountData['account_behavior'] = $account->accountType->behavior->name ?? '';
             }
 
             return response()->json([

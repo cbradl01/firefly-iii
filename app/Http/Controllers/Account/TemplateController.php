@@ -201,6 +201,8 @@ class TemplateController extends Controller
             'account_type_id' => $template->id,
             'account_type_name' => $template->name,
             'account_type_fields' => $template->firefly_mapping['account_fields'] ?? [],
+            'account_category' => $template->category->name ?? '',
+            'account_behavior' => $template->behavior->name ?? '',
             'currency_id' => $defaultCurrency->id,
             'currency_code' => $defaultCurrency->code,
             'account_holder' => $userName,
@@ -248,42 +250,95 @@ class TemplateController extends Controller
             ->where('active', true)
             ->firstOrFail();
 
-        // Validate the request
-        $request->validate([
-            'template' => 'required|string',
-            'name' => 'required|string|max:255',
-            'currency_id' => 'required|integer|exists:transaction_currencies,id',
-            'institution' => 'required|string|max:255',
-            'owner' => 'required|string|max:255',
-            'product_name' => 'required|string|max:255',
-            'active' => 'boolean',
-            'virtual_balance' => 'nullable|numeric',
-            'iban' => 'nullable|string|max:255',
-        ], [
-            'institution.required' => 'The institution field is required.',
-            'owner.required' => 'The owner field is required.',
-            'product_name.required' => 'The product name field is required.',
-        ]);
+        // Clean up the request data before validation
+        $this->cleanRequestData($request);
 
-        // Get the validated data
-        $data = $request->only([
-            'name', 'currency_id', 'institution', 'owner', 'product_name', 
-            'active', 'virtual_balance', 'iban'
-        ]);
+        // Get all account fields from FieldDefinitions - single source of truth
+        $accountFields = FieldDefinitions::getFieldsForTargetType('account');
+        $fieldNames = array_keys($accountFields);
         
+        // Get form data for all account fields
+        $data = $request->only($fieldNames);
+        
+        // Add system fields that come from the template (not user input)
         $data['template'] = $templateName;
         $data['category_id'] = $template->category_id;
         $data['behavior_id'] = $template->behavior_id;
-
-        // Create the account using AccountFactory
-        $accountFactory = app(AccountFactory::class);
-        $accountFactory->setUser(Auth::user());
-        $account = $accountFactory->create($data);
-
-        // Flash success message and redirect
-        session()->flash('success', 'Account "' . $account->name . '" created successfully from template "' . $templateName . '"');
         
-        return redirect()->route('accounts.show', $account->id);
+        // Add fallback for currency_id if not provided
+        if (empty($data['currency_id'])) {
+            $data['currency_id'] = Amount::getPrimaryCurrency()->id;
+        }
+
+
+        try {
+            // Create the account using AccountFactory
+            $accountFactory = app(AccountFactory::class);
+            $accountFactory->setUser(Auth::user());
+            $account = $accountFactory->create($data);
+
+            // Return JSON response for AJAX requests
+            if ($request->ajax()) {
+                // Flash success message for the redirect
+                session()->flash('success', 'Account "' . $account->name . '" created successfully from template "' . $templateName . '"');
+                
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Account "' . $account->name . '" created successfully from template "' . $templateName . '"',
+                    'account' => [
+                        'id' => $account->id,
+                        'name' => $account->name
+                    ]
+                ]);
+            }
+
+            // Flash success message and redirect for non-AJAX requests
+            session()->flash('success', 'Account "' . $account->name . '" created successfully from template "' . $templateName . '"');
+            return redirect()->route('accounts.show', $account->id);
+            
+        } catch (\Exception $e) {
+            // Handle errors
+            if ($request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Error creating account: ' . $e->getMessage(),
+                    'errors' => []
+                ], 422);
+            }
+            
+            return redirect()->back()->withErrors(['error' => 'Error creating account: ' . $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Clean request data using FieldDefinitions hierarchical defaults
+     */
+    private function cleanRequestData(Request $request): void
+    {
+        // Get template-specific overrides if available
+        $templateName = $request->input('template');
+        $templateOverrides = null;
+        
+        if ($templateName) {
+            $template = AccountType::where('name', $templateName)->first();
+            if ($template && $template->firefly_mapping) {
+                $templateOverrides = $template->firefly_mapping['account_fields'] ?? null;
+            }
+        }
+        
+        $accountFields = FieldDefinitions::getFieldsForTargetType('account');
+        
+        foreach ($accountFields as $fieldName => $fieldConfig) {
+            if ($request->has($fieldName)) {
+                $value = $request->input($fieldName);
+                
+                // Handle empty values using hierarchical defaults
+                if (empty($value) || trim($value) === '' || $value === 'mm/dd/yyyy') {
+                    $defaultValue = FieldDefinitions::getFieldDefault($fieldName, 'account', $templateOverrides);
+                    $request->merge([$fieldName => $defaultValue]);
+                }
+            }
+        }
     }
 
     /**
