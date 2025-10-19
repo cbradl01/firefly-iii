@@ -36,6 +36,10 @@ window.FieldInputRenderer = {
                 inputHtml = this.generateFinancialEntitySelect(fieldName, defaultValue, fieldOptions, requiredAttr, nameAttr, idAttr, cssClass);
                 break;
                 
+            case 'currency_select':
+                inputHtml = this.generateCurrencySelect(fieldName, defaultValue, fieldOptions, requiredAttr, nameAttr, idAttr, cssClass);
+                break;
+                
             case 'select':
                 inputHtml = this.generateSelectInput(fieldName, defaultValue, fieldOptions, requiredAttr, nameAttr, idAttr, cssClass);
                 break;
@@ -109,7 +113,22 @@ window.FieldInputRenderer = {
         const excludeTypesJson = JSON.stringify(excludeTypes);
         
         let html = `<select class="${cssClass} financial-entity-select" ${nameAttr} ${idAttr} ${requiredAttr} data-exclude-types='${excludeTypesJson}'>`;
-        html += `<option value="">${this.getTranslation('select_financial_entity')}</option>`;
+        html += `<option value="">Nothing selected</option>`;
+        
+        if (defaultValue) {
+            html += `<option value="${this.escapeHtml(defaultValue)}" selected>${this.escapeHtml(defaultValue)}</option>`;
+        }
+        
+        html += '</select>';
+        return html;
+    },
+
+    /**
+     * Generate a currency select dropdown
+     */
+    generateCurrencySelect: function(fieldName, defaultValue, fieldOptions, requiredAttr, nameAttr, idAttr, cssClass) {
+        let html = `<select class="${cssClass} currency-select" ${nameAttr} ${idAttr} ${requiredAttr}>`;
+        html += `<option value="">Nothing selected</option>`;
         
         if (defaultValue) {
             html += `<option value="${this.escapeHtml(defaultValue)}" selected>${this.escapeHtml(defaultValue)}</option>`;
@@ -124,7 +143,7 @@ window.FieldInputRenderer = {
      */
     generateSelectInput: function(fieldName, defaultValue, fieldOptions, requiredAttr, nameAttr, idAttr, cssClass) {
         let html = `<select class="${cssClass}" ${nameAttr} ${idAttr} ${requiredAttr}>`;
-        html += `<option value="">${this.getTranslation('select_option')}</option>`;
+        html += `<option value="">Nothing selected</option>`;
         
         // Handle both simple arrays and key-value objects
         if (Array.isArray(fieldOptions)) {
@@ -246,6 +265,17 @@ window.FieldInputRenderer = {
     },
 
     /**
+     * Load currencies for dropdowns
+     */
+    loadCurrenciesForDropdowns: function(container = document) {
+        const currencySelects = container.querySelectorAll('.currency-select');
+        
+        currencySelects.forEach(select => {
+            this.loadCurrenciesForSelect(select);
+        });
+    },
+
+    /**
      * Load financial entities for a specific select
      */
     loadFinancialEntitiesForSelect: function(selectElement, excludeTypes) {
@@ -268,9 +298,46 @@ window.FieldInputRenderer = {
                     option.textContent = entity.display_name || entity.name;
                     selectElement.appendChild(option);
                 });
+                
+                // Update placeholder styling after loading options
+                if (typeof updateDropdownPlaceholderStyling === 'function') {
+                    updateDropdownPlaceholderStyling();
+                }
             })
             .catch(error => {
                 console.error('Error loading financial entities:', error);
+            });
+    },
+
+    /**
+     * Load currencies for a specific select
+     */
+    loadCurrenciesForSelect: function(selectElement) {
+        fetch('/currencies')
+            .then(response => response.json())
+            .then(currencies => {
+                // Clear existing options except the first one
+                const firstOption = selectElement.querySelector('option[value=""]');
+                selectElement.innerHTML = '';
+                if (firstOption) {
+                    selectElement.appendChild(firstOption);
+                }
+                
+                // Add currency options
+                currencies.forEach(currency => {
+                    const option = document.createElement('option');
+                    option.value = currency.id;
+                    option.textContent = `${currency.code} - ${currency.name}`;
+                    selectElement.appendChild(option);
+                });
+                
+                // Update placeholder styling after loading options
+                if (typeof updateDropdownPlaceholderStyling === 'function') {
+                    updateDropdownPlaceholderStyling();
+                }
+            })
+            .catch(error => {
+                console.error('Error loading currencies:', error);
             });
     },
 
