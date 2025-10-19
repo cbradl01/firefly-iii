@@ -7,6 +7,21 @@ namespace FireflyIII\FieldDefinitions;
 class FieldDefinitions
 {
     /**
+     * Baseline default values by data type
+     * These are used when no field-specific or template-specific default is defined
+     */
+    public const DATA_TYPE_DEFAULTS = [
+        'string' => '',
+        'text' => '',
+        'decimal' => null,
+        'integer' => null,
+        'boolean' => false,
+        'date' => null,
+        'json' => null,
+        'array' => null,
+    ];
+
+    /**
      * Fields that apply to all entity types (inheritance)
      */
     public const ENTITY_FIELDS = [
@@ -72,13 +87,6 @@ class FieldDefinitions
      */
     public const ACCOUNT_FIELDS = [
         // Core Required Fields
-        'institution' => [
-            'data_type' => 'string',
-            'input_type' => 'text',
-            'category' => 'basic_info',
-            'required' => true,
-            'validation' => 'required|string|max:255'
-        ],
         'account_holder' => [
             'data_type' => 'string',
             'input_type' => 'financial_entity_select',
@@ -88,6 +96,20 @@ class FieldDefinitions
             'options' => [
                 'exclude_entity_types' => ['institution']
             ]
+        ],
+        'institution' => [
+            'data_type' => 'string',
+            'input_type' => 'text',
+            'category' => 'basic_info',
+            'required' => true,
+            'validation' => 'required|string|max:255'
+        ],
+        'product_name' => [
+            'data_type' => 'string',
+            'input_type' => 'text',
+            'category' => 'basic_info',
+            'required' => true,
+            'validation' => 'required|string|max:255'
         ],
         'account_status' => [
             'data_type' => 'string',
@@ -101,6 +123,13 @@ class FieldDefinitions
                 'closed' => 'Closed',
                 'suspended' => 'Suspended'
             ]
+        ],
+        'currency_id' => [
+            'data_type' => 'integer',
+            'input_type' => 'currency_select',
+            'category' => 'basic_info',
+            'required' => false,
+            'validation' => 'nullable|integer|exists:transaction_currencies,id'
         ],
 
         // Core Optional Fields
@@ -143,6 +172,12 @@ class FieldDefinitions
 
         // Financial Fields
         'current_balance' => [
+            'data_type' => 'decimal',
+            'input_type' => 'number',
+            'category' => 'financial',
+            'validation' => 'numeric'
+        ],
+        'virtual_balance' => [
             'data_type' => 'decimal',
             'input_type' => 'number',
             'category' => 'financial',
@@ -217,7 +252,8 @@ class FieldDefinitions
         'online_banking' => [
             'data_type' => 'boolean',
             'input_type' => 'checkbox',
-            'category' => 'features'
+            'category' => 'features',
+            'default' => true  // Override baseline boolean default of false
         ],
         'mobile_banking' => [
             'data_type' => 'boolean',
@@ -665,7 +701,17 @@ class FieldDefinitions
         
         foreach ($fields as $fieldName => $fieldData) {
             if (isset($fieldData['validation'])) {
-                $rules[$fieldName] = $fieldData['validation'];
+                $validation = $fieldData['validation'];
+                
+                // If field is not required, add nullable to the validation rules
+                if (!isset($fieldData['required']) || $fieldData['required'] !== true) {
+                    // Check if nullable is already in the validation string
+                    if (strpos($validation, 'nullable') === false) {
+                        $validation = 'nullable|' . $validation;
+                    }
+                }
+                
+                $rules[$fieldName] = $validation;
             }
         }
         
@@ -731,6 +777,61 @@ class FieldDefinitions
         }
         
         return $grouped;
+    }
+
+    /**
+     * Get field default value with hierarchical override support
+     * 
+     * Priority order:
+     * 1. Template-specific default (highest priority)
+     * 2. Field-specific default (from FieldDefinitions)
+     * 3. Data-type baseline default (lowest priority)
+     * 
+     * @param string $fieldName
+     * @param string $targetType
+     * @param array|null $templateOverrides Template-specific field overrides
+     * @return mixed
+     */
+    public static function getFieldDefault(string $fieldName, string $targetType, ?array $templateOverrides = null): mixed
+    {
+        $field = self::getField($fieldName, $targetType);
+        
+        if (!$field) {
+            return null;
+        }
+        
+        // Priority 1: Template-specific default (highest priority)
+        if ($templateOverrides && isset($templateOverrides[$fieldName]['default'])) {
+            return $templateOverrides[$fieldName]['default'];
+        }
+        
+        // Priority 2: Field-specific default from FieldDefinitions
+        if (isset($field['default'])) {
+            return $field['default'];
+        }
+        
+        // Priority 3: Data-type baseline default (lowest priority)
+        $dataType = $field['data_type'] ?? 'string';
+        return self::DATA_TYPE_DEFAULTS[$dataType] ?? null;
+    }
+
+    /**
+     * Get all field defaults for a target type with template overrides
+     * 
+     * @param string $targetType
+     * @param array|null $templateOverrides Template-specific field overrides
+     * @return array
+     */
+    public static function getFieldDefaults(string $targetType, ?array $templateOverrides = null): array
+    {
+        $fields = self::getFieldsForTargetType($targetType);
+        $defaults = [];
+        
+        foreach ($fields as $fieldName => $fieldData) {
+            $defaults[$fieldName] = self::getFieldDefault($fieldName, $targetType, $templateOverrides);
+        }
+        
+        return $defaults;
     }
 
 }
