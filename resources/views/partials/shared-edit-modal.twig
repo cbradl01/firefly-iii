@@ -1,0 +1,416 @@
+{# Shared Edit Modal Component #}
+{# 
+This component provides a reusable modal for editing entities with field definitions.
+It can be used for financial entities, accounts, or any other entity type.
+
+Usage:
+{% include 'partials.shared-edit-modal' with {
+    'modalId': 'editEntityModal',
+    'modalTitle': 'Edit Entity',
+    'formId': 'editEntityForm',
+    'formAction': route('financial-entities.update', entity.id),
+    'entityType': 'financial_entity',
+    'entityId': entity.id,
+    'dataEndpoint': route('financial-entities.data', entity.id),
+    'fieldsEndpoint': route('financial-entities.fields'),
+    'updateEndpoint': route('financial-entities.update.modal', entity.id),
+    'categoryOrder': ['legal', 'tax', 'address', 'beneficiary'],
+    'specialFields': ['beneficiaries'],
+    'customFields': {}
+} %}
+#}
+
+<div class="modal fade" id="{{ modalId }}" tabindex="-1" role="dialog" aria-labelledby="{{ modalId }}Label">
+    <div class="modal-dialog modal-xl" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="{{ modalId }}Label">
+                    <i class="fa fa-edit"></i>
+                    <span id="modalTitle">{{ modalTitle }}</span>
+                </h4>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form id="{{ formId }}" method="POST" action="{{ formAction }}" accept-charset="UTF-8" enctype="multipart/form-data">
+                <div class="modal-body">
+                    <input type="hidden" name="_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="_method" value="PUT" id="formMethod">
+                    <input type="hidden" name="id" id="entityId" value="{{ entityId }}">
+                    
+                    <!-- Dynamic Fields Container -->
+                    <div id="dynamicFieldsContainer">
+                        <div class="text-center text-muted">
+                            <i class="fa fa-spinner fa-spin"></i> Loading fields...
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-default" data-dismiss="modal">
+                        <i class="fa fa-times"></i> Cancel
+                    </button>
+                    <button type="submit" class="btn btn-primary" id="saveEntityBtn">
+                        <i class="fa fa-save"></i> Save Changes
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Include the centralized field input renderer -->
+<script src="{{ asset('js/field-input-renderer.js') }}" nonce="{{ JS_NONCE }}"></script>
+
+<script type="text/javascript" nonce="{{ JS_NONCE }}">
+// Configuration for this modal instance
+window.modalConfig = {
+    modalId: '{{ modalId }}',
+    formId: '{{ formId }}',
+    entityType: '{{ entityType }}',
+    entityId: '{{ entityId }}',
+    dataEndpoint: '{{ dataEndpoint }}',
+    fieldsEndpoint: '{{ fieldsEndpoint }}',
+    updateEndpoint: '{{ updateEndpoint }}',
+    categoryOrder: {{ categoryOrder|json_encode|raw }},
+    specialFields: {{ specialFields|json_encode|raw }},
+    customFields: {{ customFields|json_encode|raw }},
+    fieldFilterFunction: null, // Will be set by individual modals
+    preloadedData: {{ accountData|default(null)|json_encode|raw }} // Pre-loaded data for create scenarios
+};
+
+// Make translations available to JavaScript
+window.translations = {
+    select_option: '{{ trans('firefly.select_option') }}',
+    select_entity: '{{ trans('firefly.select_entity') }}',
+    role: '{{ trans('firefly.role') }}',
+    percentage: '{{ trans('firefly.percentage') }}',
+    required: '{{ trans('firefly.required') }}',
+    optional: '{{ trans('firefly.optional') }}'
+};
+
+// Global variables for current entity data
+var currentEntityData = {};
+
+// Function to be called from parent page to load data into this modal
+function loadEntityEditModal(entityId) {
+    // Clear previous errors
+    showValidationErrors({});
+    
+    // Reset form and loading state
+    document.getElementById(window.modalConfig.formId).reset();
+    document.getElementById('entityId').value = entityId;
+    document.getElementById('dynamicFieldsContainer').innerHTML = '<div class="text-center text-muted"><i class="fa fa-spinner fa-spin"></i> Loading fields...</div>';
+    
+    // Check if we have pre-loaded data (for create scenarios)
+    if (window.modalConfig.preloadedData) {
+        // Use pre-loaded data
+        Promise.all([
+            Promise.resolve(window.modalConfig.preloadedData),
+            loadEntityFields()
+        ]).then(function([entityData, fieldsData]) {
+            currentEntityData = entityData;
+            renderEntityFields(fieldsData, entityData);
+            updateModalTitle(entityData);
+            
+            // Show the modal after data is loaded
+            $('#' + window.modalConfig.modalId).modal('show');
+        }).catch(function(error) {
+            console.error('Error loading entity data:', error);
+            $('#dynamicFieldsContainer').html('<div class="alert alert-danger">Error loading entity data. Please try again.</div>');
+        });
+    } else {
+        // Load entity data and fields from API
+        Promise.all([
+            loadEntityData(entityId),
+            loadEntityFields()
+        ]).then(function([entityData, fieldsData]) {
+            currentEntityData = entityData;
+            renderEntityFields(fieldsData, entityData);
+            updateModalTitle(entityData);
+            
+            // Show the modal after data is loaded
+            $('#' + window.modalConfig.modalId).modal('show');
+        }).catch(function(error) {
+            console.error('Error loading entity data:', error);
+            $('#dynamicFieldsContainer').html('<div class="alert alert-danger">Error loading entity data. Please try again.</div>');
+        });
+    }
+}
+
+function loadEntityData(entityId) {
+    const url = window.location.origin + window.modalConfig.dataEndpoint.replace('{account}', entityId).replace('{id}', entityId);
+    return fetch(url, {
+        credentials: 'same-origin',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'Accept': 'application/json'
+        }
+    })
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+            if (data.success) {
+                return data.entity || data.account; // Handle different response structures
+            } else {
+                throw new Error(data.message || 'Failed to load entity data');
+            }
+        });
+}
+
+            function loadEntityFields() {
+                const url = window.location.origin + window.modalConfig.fieldsEndpoint;
+                return fetch(url, {
+                    credentials: 'same-origin',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json'
+                    }
+                })
+                    .then(function(response) { return response.json(); })
+                    .then(function(data) {
+                        console.log('Fields response:', data); // Debug logging
+                        if (data.success) {
+                            return data.fields;
+                        } else {
+                            throw new Error(data.message || 'Failed to load field definitions');
+                        }
+                    });
+            }
+
+function renderEntityFields(fields, entityData) {
+    console.log('renderEntityFields called with:', { fields, entityData }); // Debug logging
+    const container = document.getElementById('dynamicFieldsContainer');
+    let html = '';
+    
+    // Check if fields is valid
+    if (!fields || typeof fields !== 'object') {
+        console.error('Invalid fields data:', fields);
+        container.innerHTML = '<div class="alert alert-danger">Error: Invalid field definitions received</div>';
+        return;
+    }
+    
+    // Apply field filtering if a filter function is configured
+    let filteredFields = fields;
+    if (window.modalConfig.fieldFilterFunction && typeof window.modalConfig.fieldFilterFunction === 'function') {
+        filteredFields = window.modalConfig.fieldFilterFunction(fields, entityData);
+    }
+    
+    // Group fields by category
+    const categories = {};
+    Object.entries(filteredFields).forEach(function([fieldName, fieldData]) {
+        const category = fieldData.category || 'basic_info';
+        if (!categories[category]) {
+            categories[category] = [];
+        }
+        categories[category].push({ fieldName, fieldData });
+    });
+    
+    // Sort categories using the configured order
+    const sortedCategories = window.modalConfig.categoryOrder.filter(function(cat) { 
+        return categories[cat]; 
+    }).concat(
+        Object.keys(categories).filter(function(cat) { 
+            return !window.modalConfig.categoryOrder.includes(cat); 
+        })
+    );
+    
+    // Render each category using card layout
+    sortedCategories.forEach(function(category) {
+        const categoryFields = categories[category];
+        const categoryTitle = category.replace(/_/g, ' ').replace(/\b\w/g, function(l) { return l.toUpperCase(); });
+        
+        html += `<div class="card mb-4">
+            <div class="card-header bg-dark text-white">
+                <h4 class="mb-0 font-weight-bold text-uppercase">
+                    ${categoryTitle}
+                </h4>
+            </div>
+            <div class="card-body">`;
+        
+        // Group fields in rows of 2 for better layout
+        const fieldsPerRow = 2;
+        for (let i = 0; i < categoryFields.length; i += fieldsPerRow) {
+            html += '<div class="row">';
+            for (let j = 0; j < fieldsPerRow && i + j < categoryFields.length; j++) {
+                const { fieldName, fieldData } = categoryFields[i + j];
+                const currentValue = entityData[fieldName] || '';
+                html += `<div class="col-md-6">${generateFieldHTML(fieldName, fieldData, currentValue)}</div>`;
+            }
+            html += '</div>';
+        }
+        
+        html += '</div></div>';
+    });
+    
+    container.innerHTML = html;
+    
+    // Initialize tooltips for the new fields
+    $('[data-toggle="tooltip"]').tooltip();
+    
+    // Load financial entities for dropdowns after fields are rendered
+    FieldInputRenderer.loadFinancialEntitiesForDropdowns();
+}
+
+function generateFieldHTML(fieldName, fieldData, currentValue = '') {
+    // Create tooltip for description if it exists and show_help is explicitly true
+    const tooltipHTML = (fieldData.description && fieldData.show_help === true) ? 
+        ` <i class="fa fa-question-circle text-muted" data-toggle="tooltip" data-placement="top" title="${fieldData.description}"></i>` : '';
+    
+    let html = '';
+    
+    // Check if this is a special field
+    const isSpecialField = window.modalConfig.specialFields && Object.keys(window.modalConfig.specialFields).includes(fieldName);
+    
+    // Don't generate label for special fields since they use category headers
+    if (!isSpecialField) {
+        html += `<div class="form-group">
+            <label for="${fieldName}">${fieldData.display_name}${tooltipHTML}${fieldData.required ? ' <span class="text-danger">*</span>' : ''}</label>`;
+    }
+    
+    // Use the centralized field input renderer
+    if (isSpecialField) {
+        // Special handling for special fields (like beneficiaries)
+        html += `<div class="form-group">
+            <div id="${fieldName}_container">
+                <div class="beneficiaries-list mb-2"></div>
+                <input type="hidden" id="${fieldName}" name="${fieldName}" value="${typeof currentValue === 'object' ? JSON.stringify(currentValue) : (currentValue || '[]')}">
+            </div>
+        </div>`;
+    } else {
+        // Use centralized renderer for all other input types
+        html += FieldInputRenderer.generateInput(fieldData, fieldName, currentValue, {
+            cssClass: 'form-control',
+            id: fieldName
+        });
+    }
+    
+    html += `<div class="text-danger" id="${fieldName}_error" style="display: none;"></div>`;
+    
+    // Close form-group wrapper only if it was opened (for non-special fields)
+    if (!isSpecialField) {
+        html += `</div>`;
+    }
+    
+    return html;
+}
+
+function updateModalTitle(entityData) {
+    const isCreate = !entityData.id;
+    const action = isCreate ? 'Create' : 'Edit';
+    const title = entityData.name || entityData.display_name || 'Entity';
+    document.getElementById('modalTitle').textContent = `${action} ${window.modalConfig.entityType.replace('_', ' ')}${isCreate ? '' : ': ' + title}`;
+}
+
+function saveEntity() {
+    const form = document.getElementById(window.modalConfig.formId);
+    const formData = new FormData(form);
+    
+    // Get the entity ID from the form
+    const entityId = document.getElementById('entityId').value;
+    const isCreate = !entityId || entityId === 'null';
+    
+    // Collect all form fields including empty ones
+    const allFields = Object.keys(currentEntityData);
+    allFields.forEach(function(fieldName) {
+        const fieldElement = document.getElementById(fieldName);
+        if (fieldElement) {
+            if (fieldElement.type === 'checkbox') {
+                formData.set(fieldName, fieldElement.checked ? '1' : '0');
+            } else {
+                formData.set(fieldName, fieldElement.value || '');
+            }
+        }
+    });
+    
+    // Add CSRF token and method
+    formData.set('_token', document.querySelector('meta[name="csrf-token"]').getAttribute('content'));
+    formData.set('_method', isCreate ? 'POST' : 'PUT');
+    
+    const saveBtn = document.getElementById('saveEntityBtn');
+    const originalText = saveBtn.innerHTML;
+    saveBtn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Saving...';
+    saveBtn.disabled = true;
+    
+    // Submit form
+    let submitUrl;
+    if (isCreate) {
+        submitUrl = window.location.origin + window.modalConfig.updateEndpoint;
+    } else {
+        submitUrl = window.location.origin + window.modalConfig.updateEndpoint.replace('{account}', entityId).replace('{id}', entityId);
+    }
+    fetch(submitUrl, {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(function(response) { return response.json(); })
+    .then(function(data) {
+        if (data.success) {
+            // Show success message
+            const action = isCreate ? 'created' : 'updated';
+            showSuccessMessage(`Entity ${action} successfully!`);
+            
+            // Close modal
+            $('#' + window.modalConfig.modalId).modal('hide');
+            
+            // Reload page or update table
+            location.reload();
+        } else {
+            // Show validation errors
+            showValidationErrors(data.errors || {});
+        }
+    })
+    .catch(function(error) {
+        console.error('Error saving entity:', error);
+        showErrorMessage('Error saving entity. Please try again.');
+    })
+    .finally(function() {
+        // Reset button state
+        saveBtn.innerHTML = originalText;
+        saveBtn.disabled = false;
+    });
+}
+
+function showValidationErrors(errors) {
+    // Clear previous errors
+    document.querySelectorAll('.text-danger[id$="_error"]').forEach(function(el) {
+        el.style.display = 'none';
+        el.textContent = '';
+    });
+    
+    // Show new errors
+    Object.entries(errors).forEach(function([field, messages]) {
+        const errorElement = document.getElementById(field + '_error');
+        if (errorElement) {
+            errorElement.textContent = Array.isArray(messages) ? messages[0] : messages;
+            errorElement.style.display = 'block';
+        }
+    });
+}
+
+function showSuccessMessage(message) {
+    // You can implement a toast notification or alert here
+    alert(message); // Simple implementation
+}
+
+function showErrorMessage(message) {
+    // You can implement a toast notification or alert here
+    alert(message); // Simple implementation
+}
+
+// Initialize form submission handler
+$(document).ready(function() {
+    // Handle form submission
+    $('#' + window.modalConfig.formId).on('submit', function(e) {
+        e.preventDefault();
+        saveEntity();
+    });
+    
+    // Auto-initialize if we have pre-loaded data (for create scenarios)
+    if (window.modalConfig.preloadedData) {
+        // Initialize the modal with pre-loaded data
+        loadEntityEditModal(null);
+    }
+});
+</script>

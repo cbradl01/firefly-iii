@@ -1,0 +1,55 @@
+{# Unified modal for both creating and editing accounts #}
+{% include 'partials.shared-edit-modal' with {
+    'modalId': modalId|default('accountModal'),
+    'modalTitle': modalTitle|default('Account'),
+    'formId': formId|default('accountForm'),
+    'formAction': '',
+    'entityType': 'account',
+    'entityId': entityId|default(''),
+    'dataEndpoint': dataEndpoint|default('/accounts/{account}/data'),
+    'fieldsEndpoint': '/accounts/fields',
+    'updateEndpoint': updateEndpoint|default('/accounts/update/{account}/modal'),
+    'categoryOrder': ['basic_info', 'financial', 'features', 'investment', 'digital', 'fees'],
+    'specialFields': specialFields|default({}),
+    'customFields': {}
+} %}
+
+<!-- Override the shared modal's loadEntityEditModal to add account-specific logic -->
+<script type="text/javascript" nonce="{{ JS_NONCE }}">
+// Set up field filtering function for accounts
+window.modalConfig.fieldFilterFunction = function(allFields, accountData) {
+    // For accounts, we need to filter fields based on the account type's firefly_mapping
+    const accountTypeFields = accountData.account_type_fields || {};
+    const allowedFields = Object.keys(accountTypeFields);
+    
+    // If no account type fields are defined, show all fields
+    if (allowedFields.length === 0) {
+        return allFields;
+    }
+    
+    // Filter fields to only show those defined in the account type
+    const filteredFields = {};
+    Object.entries(allFields).forEach(function([fieldName, fieldData]) {
+        if (allowedFields.includes(fieldName)) {
+            filteredFields[fieldName] = fieldData;
+        }
+    });
+    
+    return filteredFields;
+};
+
+// Override the shared modal's loadEntityEditModal to add account-specific logic
+var originalLoadEntityEditModal = loadEntityEditModal;
+loadEntityEditModal = function(accountId) {
+    // Call the original function
+    originalLoadEntityEditModal(accountId);
+    
+    // Add account-specific initialization
+    initializeAccountSpecificFields();
+};
+
+function initializeAccountSpecificFields() {
+    // Account-specific initialization can go here
+    console.log('Account-specific fields initialized');
+}
+</script>

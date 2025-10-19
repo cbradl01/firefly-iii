@@ -1,0 +1,63 @@
+{# Use the shared modal component #}
+{% include 'partials.shared-edit-modal' with {
+    'modalId': 'editEntityModal',
+    'modalTitle': 'Edit Financial Entity',
+    'formId': 'editEntityForm',
+    'formAction': '',
+    'entityType': 'financial_entity',
+    'entityId': '',
+    'dataEndpoint': '/financial-entities/{id}/data',
+    'fieldsEndpoint': '/financial-entities/all-fields',
+    'updateEndpoint': '/financial-entities/update/{id}/modal',
+    'categoryOrder': ['basic_info', 'personal', 'tax', 'address', 'trust', 'business', 'institution'],
+    'specialFields': ['trust_beneficiaries'],
+    'customFields': {}
+} %}
+
+<!-- Override the shared modal's loadEntityEditModal to add entity-specific logic -->
+<script type="text/javascript" nonce="{{ JS_NONCE }}">
+// Set up field filtering function for financial entities
+window.modalConfig.fieldFilterFunction = function(allFields, entityData) {
+    // Define which fields should be shown for each entity type
+    const entityTypeFields = {
+        'individual': ['name', 'display_name', 'date_of_birth', 'marital_status', 'citizenship', 'tax_id_type', 'tax_id_number', 'address', 'city', 'state', 'country', 'postal_code'],
+        'trust': ['name', 'display_name', 'trust_beneficiaries', 'trustee_id', 'tax_id_type', 'tax_id_number', 'address', 'city', 'state', 'country', 'postal_code'],
+        'business': ['name', 'display_name', 'business_type', 'tax_id_type', 'tax_id_number', 'address', 'city', 'state', 'country', 'postal_code', 'phone_number', 'email', 'website'],
+        'advisor': ['name', 'display_name', 'license_number', 'tax_id_type', 'tax_id_number', 'address', 'city', 'state', 'country', 'postal_code', 'phone_number', 'email', 'website'],
+        'custodian': ['name', 'display_name', 'license_number', 'tax_id_type', 'tax_id_number', 'address', 'city', 'state', 'country', 'postal_code', 'phone_number', 'email', 'website'],
+        'institution': ['name', 'display_name', 'institution_type', 'routing_number', 'tax_id_type', 'tax_id_number', 'address', 'city', 'state', 'country', 'postal_code', 'phone_number', 'email', 'website', 'customer_service_phone']
+    };
+    
+    const entityType = entityData.entity_type;
+    const allowedFields = entityTypeFields[entityType] || [];
+    const filteredFields = {};
+    
+    Object.entries(allFields).forEach(function([fieldName, fieldData]) {
+        if (allowedFields.includes(fieldName)) {
+            filteredFields[fieldName] = fieldData;
+        }
+    });
+    
+    return filteredFields;
+};
+
+// Override the shared modal's loadEntityEditModal to add entity-specific logic
+var originalLoadEntityEditModal = loadEntityEditModal;
+loadEntityEditModal = function(entityId) {
+    // Call the original function
+    originalLoadEntityEditModal(entityId);
+    
+    // Add entity-specific initialization
+    initializeEntitySpecificFields();
+};
+
+function initializeEntitySpecificFields() {
+    // Entity-specific initialization can go here
+    console.log('Entity-specific fields initialized');
+    
+    // Load financial entities for dropdowns after fields are rendered
+    if (typeof FieldInputRenderer !== 'undefined') {
+        FieldInputRenderer.loadFinancialEntitiesForDropdowns();
+    }
+}
+</script>

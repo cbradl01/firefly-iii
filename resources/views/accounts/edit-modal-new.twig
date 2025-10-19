@@ -1,0 +1,10 @@
+{# Use the unified account modal component #}
+{% include 'accounts.account-modal' with {
+    'modalId': 'editAccountModal',
+    'modalTitle': 'Edit Account',
+    'formId': 'editAccountForm',
+    'entityId': '',
+    'dataEndpoint': '/accounts/{account}/data',
+    'updateEndpoint': '/accounts/update/{account}/modal',
+    'specialFields': []
+} %}
