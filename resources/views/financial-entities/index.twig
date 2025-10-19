@@ -243,17 +243,21 @@
 
             // Load edit modal content
             function loadEditModal(entityId) {
-                $.get('{{ route("financial-entities.edit.modal", ":id") }}'.replace(':id', entityId))
-                    .done(function(data) {
-                        $('#editModalContainer').html(data);
-                        $('#editEntityModal').modal('show');
-                        
-                        // Initialize trustee selection after modal is loaded
-                        initializeTrusteeSelection();
-                    })
-                    .fail(function() {
-                        alert('Error loading edit form. Please try again.');
-                    });
+                // Load modal once if not already loaded
+                if ($('#editEntityModal').length === 0) {
+                    $.get('{{ route('financial-entities.edit.modal.new') }}')
+                        .done(function(data) {
+                            $('#editModalContainer').html(data);
+                            // Now load the entity data
+                            loadEntityEditModal(entityId);
+                        })
+                        .fail(function() {
+                            alert('Error loading edit form. Please try again.');
+                        });
+                } else {
+                    // Modal already loaded, just load the entity data
+                    loadEntityEditModal(entityId);
+                }
             }
             
             // Initialize trustee selection functionality
@@ -286,93 +290,7 @@
                 entityTypeSelect.addEventListener('change', toggleTrusteeSelection);
             }
 
-            // Handle form submission
-            $(document).on('submit', '#editEntityForm', function(e) {
-                e.preventDefault();
-                
-                var form = $(this);
-                var entityId = form.find('input[name="entity_id"]').val();
-                
-                // Collect all form data using the same field definitions used to create the form
-                var formData = {};
-                
-                // Always include these fields
-                formData.entity_type = form.find('#entity_type').val() || '';
-                formData.trustee_id = form.find('#trustee_id').val() || null;
-                
-                // Include CSRF token and method for Laravel
-                formData._token = form.find('input[name="_token"]').val();
-                formData._method = form.find('input[name="_method"]').val();
-                
-                // Get the current entity type to determine which fields to collect
-                var entityType = formData.entity_type;
-                
-                if (entityType && window.currentFields && window.currentFields[entityType]) {
-                    var fields = window.currentFields[entityType];
-                    
-                    // Collect data for all fields defined for this entity type
-                    Object.keys(fields).forEach(function(fieldName) {
-                        var fieldElement = form.find('[name="' + fieldName + '"]');
-                        if (fieldElement.length > 0) {
-                            if (fieldElement.attr('type') === 'checkbox') {
-                                formData[fieldName] = fieldElement.is(':checked');
-                            } else {
-                                formData[fieldName] = fieldElement.val() || '';
-                            }
-                        } else {
-                            // Field not found in form, set to empty
-                            formData[fieldName] = '';
-                        }
-                    });
-                }
-                
-                // Disable submit button
-                $('#saveEntityBtn').prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Saving...');
-                
-                // Determine if this is create or update
-                var isCreate = !entityId || entityId === '';
-                var url = isCreate ? '{{ route("financial-entities.store.modal") }}' : '{{ route("financial-entities.update.modal", ":id") }}'.replace(':id', entityId);
-                var method = isCreate ? 'POST' : 'PUT';
-                
-                $.ajax({
-                    url: url,
-                    type: method,
-                    data: formData,
-                    contentType: 'application/x-www-form-urlencoded; charset=UTF-8'
-                })
-                    .done(function(response) {
-                        if (response.success) {
-                            if (isCreate) {
-                                // For create, reload the page to show the new entity
-                                window.location.reload();
-                            } else {
-                                // For update, update the table row with new data
-                                updateEntityRow(response.entity);
-                            }
-                            
-                            // Close modal
-                            $('#editEntityModal').modal('hide');
-                            
-                            // Show success message
-                            showAlert('success', response.message);
-                        } else {
-                            showAlert('error', response.message || 'An error occurred while saving.');
-                        }
-                    })
-                    .fail(function(xhr) {
-                        var response = xhr.responseJSON;
-                        if (response && response.errors) {
-                            // Display validation errors
-                            displayValidationErrors(response.errors);
-                        } else {
-                            showAlert('error', 'An error occurred while saving. Please try again.');
-                        }
-                    })
-                    .always(function() {
-                        // Re-enable submit button
-                        $('#saveEntityBtn').prop('disabled', false).html('<i class="fa fa-save"></i> {{ "save_changes"|_ }}');
-                    });
-            });
+            // Form submission is now handled by the shared modal component
 
             // Update entity row with new data
             function updateEntityRow(entity) {
@@ -439,35 +357,7 @@
                 }
             }
 
-            // Display validation errors
-            function displayValidationErrors(errors) {
-                // Clear previous errors
-                $('.text-danger').hide().text('');
-                
-                // Display new errors
-                $.each(errors, function(field, messages) {
-                    var errorElement = $('#' + field.replace('.', '_') + '_error');
-                    if (errorElement.length) {
-                        errorElement.text(messages[0]).show();
-                    }
-                });
-            }
-
-            // Show alert message
-            function showAlert(type, message) {
-                var alertClass = type === 'success' ? 'alert-success' : 'alert-danger';
-                var alertHtml = '<div class="alert ' + alertClass + ' alert-dismissible" style="margin-top: 20px;">' +
-                               '<button type="button" class="close" data-dismiss="alert">&times;</button>' +
-                               message +
-                               '</div>';
-                
-                $('.box-body').prepend(alertHtml);
-                
-                // Auto-dismiss after 5 seconds
-                setTimeout(function() {
-                    $('.alert').fadeOut();
-                }, 5000);
-            }
+            // Error display functions are now handled by the shared modal component
 
             // Clear modal when hidden
             $(document).on('hidden.bs.modal', '#editEntityModal', function() {

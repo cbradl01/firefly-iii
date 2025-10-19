@@ -11,176 +11,181 @@
                         <i class="fa {{ subTitleIcon }}"></i>
                         {{ subTitle }}
                     </h3>
-                </div>
-                <div class="box-body no-padding">
-                    <div class="panel-group" id="accountsAccordion" role="tablist" aria-multiselectable="true">
-                        {% for typeKey, typeData in accountTypes %}
-                            <div class="panel panel-default">
-                                <div class="panel-heading" role="tab" id="heading{{ typeKey|title }}">
-                                    <h4 class="panel-title">
-                                        <a role="button" data-toggle="collapse" data-parent="#accountsAccordion" 
-                                           href="#collapse{{ typeKey|title }}" aria-expanded="{% if typeKey == 'asset' %}true{% else %}false{% endif %}" 
-                                           aria-controls="collapse{{ typeKey|title }}">
-                                            <i class="fa {{ typeData.icon }}"></i>
-                                            {{ typeData.title }}
-                                            <span class="badge pull-right">{{ typeData.accounts.count() }}</span>
-                                        </a>
-                                    </h4>
-                                    <div class="panel-tools pull-right" style="margin-top: -25px;">
-                                        {% if typeKey == 'asset' or typeKey == 'liabilities' %}
-                                        <button type="button" class="btn btn-warning btn-xs sync-all-accounts-btn" 
-                                                title="Sync All {{ typeData.title }}" data-account-type="{{ typeKey }}">
-                                            <span class="fa fa-refresh"></span> Sync All
-                                        </button>
-                                        {% if typeKey == 'asset' %}
-                                        <button type="button" class="btn btn-outline-primary btn-xs match-unknown-btn" 
-                                                title="Match UNKNOWN counterparties" style="margin-left:6px;">
-                                            <span class="fa fa-link"></span> Match UNKNOWN
-                                        </button>
-                                        {% endif %}
-                                        {% endif %}
-                                    </div>
-                                </div>
-                                <div id="collapse{{ typeKey|title }}" class="panel-collapse collapse {% if typeKey == 'asset' %}in{% endif %}" 
-                                     role="tabpanel" aria-labelledby="heading{{ typeKey|title }}">
-                                    <div class="panel-body no-padding">
-                                        {% if typeData.accounts.count() > 0 %}
-                                            <table class="table sortable table-responsive table-hover" id="accounts-table-{{ typeKey }}">
-                                                    <thead>
-                                                        <tr>
-                                                            <!-- <th>Name</th> -->
-                                                            <th data-defaultsign="az">Type</th>
-                                                            <th data-defaultsign="az">Institution</th>
-                                                            <th data-defaultsign="az">Owner</th>
-                                                            <th data-defaultsign="az">Product Name</th>
-                                                            <th data-defaultsign="az">Account Number</th>
-                                                            <th data-defaultsign="_19">Beneficiaries</th>
-                                                            <th data-defaultsign="_19">Balance</th>
-                                                            <th data-defaultsign="az">Active</th>
-                                                            <th data-defaultsort="disabled">Actions</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        {% for account in typeData.accounts %}
-                                                            <tr>
-                                                                <!-- <td>
-                                                                    <a href="{{ route('accounts.show', account.id) }}">
-                                                                        {{ account.name }}
-                                                                    </a>
-                                                                </td> -->
-                                                                <td>
-                                                                    <span class="label label-info">
-                                                                        {% set accountType = accountGetMetaField(account, 'account_type') %}
-                                                                        {% if accountType %}
-                                                                            {{ accountType }}
-                                                                        {% else %}
-                                                                            {{ account.accountType.type }}
-                                                                        {% endif %}
-                                                                    </span>
-                                                                </td>
-                                                                <td>
-                                                                    {% set institution = accountGetMetaField(account, 'institution') %}
-                                                                    {% if institution %}
-                                                                        {{ institution }}
-                                                                    {% else %}
-                                                                        <span class="text-muted">-</span>
-                                                                    {% endif %}
-                                                                </td>
-                                                                <td>
-                                                                    {% set owner = accountGetMetaField(account, 'owner') %}
-                                                                    {% if owner %}
-                                                                        {{ owner }}
-                                                                    {% else %}
-                                                                        <span class="text-muted">-</span>
-                                                                    {% endif %}
-                                                                </td>
-                                                                <td>
-                                                                    {% set productName = accountGetMetaField(account, 'product_name') %}
-                                                                    {% if productName %}
-                                                                        {{ productName }}
-                                                                    {% else %}
-                                                                        <span class="text-muted">-</span>
-                                                                    {% endif %}
-                                                                </td>
-                                                                <td>
-                                                                    {% if account.account_number %}
-                                                                        {{ account.account_number }}
-                                                                    {% else %}
-                                                                        <span class="text-muted">-</span>
-                                                                    {% endif %}
-                                                                </td>
-                                                                <td>
-                                                                    {% set beneficiaries = accountGetBeneficiaries(account) %}
-                                                                    {% if beneficiaries %}
-                                                                        {% set totalBeneficiaries = 0 %}
-                                                                        {% for priority, beneficiaryList in beneficiaries %}
-                                                                            {% set totalBeneficiaries = totalBeneficiaries + beneficiaryList|length %}
-                                                                        {% endfor %}
-                                                                        <span class="label label-info" title="View details for beneficiary information">
-                                                                            <i class="fa fa-users"></i> {{ totalBeneficiaries }} beneficiary{{ totalBeneficiaries != 1 ? 'ies' : '' }}
-                                                                        </span>
-                                                                    {% else %}
-                                                                        <span class="text-muted">-</span>
-                                                                    {% endif %}
-                                                                </td>
-                                                                <td>
-                                                                    {% if account.current_balance is not null %}
-                                                                        {% if account.accountType.type in ['Asset account', 'Default account', 'Brokerage account', 'Holding account'] %}
-                                                                            <span class="text-success">
-                                                                                {{ formatAmountBySymbol(account.current_balance, account.currency_symbol, account.currency_decimal_places) }}
-                                                                            </span>
-                                                                        {% elseif account.accountType.type in ['Loan', 'Debt', 'Mortgage', 'Credit card'] %}
-                                                                            <span class="text-danger">
-                                                                                {{ formatAmountBySymbol(account.current_balance, account.currency_symbol, account.currency_decimal_places) }}
-                                                                            </span>
-                                                                        {% else %}
-                                                                            {{ formatAmountBySymbol(account.current_balance, account.currency_symbol, account.currency_decimal_places) }}
-                                                                        {% endif %}
-                                                                    {% else %}
-                                                                        <span class="text-muted">-</span>
-                                                                    {% endif %}
-                                                                </td>
-                                                                <td>
-                                                                    {% if account.active %}
-                                                                        <span class="label label-success">Active</span>
-                                                                    {% else %}
-                                                                        <span class="label label-default">Inactive</span>
-                                                                    {% endif %}
-                                                                </td>
-                                                                <td>
-                                                                    <div class="btn-group btn-group-xs">
-                                                                        <a href="{{ route('accounts.show', account.id) }}" class="btn btn-default btn-xs" title="View">
-                                                                            <i class="fa fa-eye"></i>
-                                                                        </a>
-                                                                        <button type="button" class="btn btn-primary btn-xs edit-account-btn" data-account-id="{{ account.id }}" title="Edit">
-                                                                            <i class="fa fa-pencil"></i>
-                                                                        </button>
-                                                                        {% if account.accountType.type in ['Asset account', 'Default account', 'Brokerage account', 'Holding account', 'Credit card', 'Loan', 'Debt', 'Mortgage'] %}
-                                                                        <button type="button" class="btn btn-warning btn-xs sync-account-btn" 
-                                                                                title="Sync Account" data-account-id="{{ account.id }}" data-account-name="{{ account.name }}">
-                                                                            <i class="fa fa-refresh"></i>
-                                                                        </button>
-                                                                        {% endif %}
-                                                                        <a href="{{ route('accounts.delete', account.id) }}" class="btn btn-danger btn-xs" title="Delete">
-                                                                            <i class="fa fa-trash"></i>
-                                                                        </a>
-                                                                    </div>
-                                                                </td>
-                                                            </tr>
-                                                        {% endfor %}
-                                                    </tbody>
-                                                </table>
-                                        {% else %}
-                                            <div class="alert alert-info">
-                                                <i class="fa fa-info-circle"></i>
-                                                No {{ typeData.title|lower }} found.
-                                            </div>
-                                        {% endif %}
-                                    </div>
-                                </div>
-                            </div>
-                        {% endfor %}
+                    <div class="box-tools pull-right">
+                        <button type="button" class="btn btn-warning btn-sm sync-all-accounts-btn" 
+                                title="Sync All Accounts" data-account-type="all">
+                            <span class="fa fa-refresh"></span> Sync All
+                        </button>
+                        <button type="button" class="btn btn-outline-primary btn-sm match-unknown-btn" 
+                                title="Match UNKNOWN counterparties" style="margin-left:6px;">
+                            <span class="fa fa-link"></span> Match UNKNOWN
+                        </button>
                     </div>
+                </div>
+                <div class="box-body">
+                    <!-- Search and Filter Controls -->
+                    <div class="row" style="margin-bottom: 20px;">
+                        <div class="col-md-4">
+                            <div class="input-group">
+                                <span class="input-group-addon"><i class="fa fa-search"></i></span>
+                                <input type="text" class="form-control" id="accountSearch" placeholder="Search accounts...">
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <select class="form-control" id="accountTypeFilter">
+                                <option value="">All Types</option>
+                                {% for typeKey, typeData in accountTypes %}
+                                    <option value="{{ typeKey }}">{{ typeData.title }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <select class="form-control" id="institutionFilter">
+                                <option value="">All Institutions</option>
+                                <!-- Will be populated by JavaScript -->
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <select class="form-control" id="statusFilter">
+                                <option value="">All Status</option>
+                                <option value="active">Active</option>
+                                <option value="inactive">Inactive</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <button type="button" class="btn btn-default btn-block" id="clearFilters">
+                                <i class="fa fa-times"></i> Clear Filters
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Results Summary -->
+                    <div class="row" style="margin-bottom: 15px;">
+                        <div class="col-md-12">
+                            <p class="text-muted">
+                                Showing <span id="visibleCount">0</span> of <span id="totalCount">0</span> accounts
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <!-- Accounts Table -->
+                    <div class="table-responsive">
+                        <table class="table sortable table-striped table-hover" id="accounts-table">
+                            <thead>
+                                <tr>
+                                    <th data-defaultsign="az">Type</th>
+                                    <th data-defaultsign="az">Institution</th>
+                                    <th data-defaultsign="az">Owner</th>
+                                    <th data-defaultsign="az">Product Name</th>
+                                    <th data-defaultsign="az">Account Number</th>
+                                    <th data-defaultsign="_19">Beneficiaries</th>
+                                    <th data-defaultsign="_19">Balance</th>
+                                    <th data-defaultsign="az">Active</th>
+                                    <th data-defaultsort="disabled">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="accountsTableBody">
+                                {% for typeKey, typeData in accountTypes %}
+                                    {% for account in typeData.accounts %}
+                                        <tr data-account-type="{{ typeKey }}" 
+                                            data-institution="{% set institution = accountGetMetaField(account, 'institution') %}{% if institution %}{{ institution|lower }}{% endif %}"
+                                            data-status="{% if account.active %}active{% else %}inactive{% endif %}">
+                                            <td data-value="{% set accountType = accountGetMetaField(account, 'account_type') %}{% if accountType %}{{ accountType|lower }}{% else %}{{ account.accountType.type|lower }}{% endif %}">
+                                                {% if accountType %}
+                                                    {{ accountType }}
+                                                {% else %}
+                                                    {{ account.accountType.type }}
+                                                {% endif %}
+                                            </td>
+                                            <td data-value="{% set institution = accountGetMetaField(account, 'institution') %}{% if institution %}{{ institution|lower }}{% else %}{% endif %}">
+                                                {% if institution %}
+                                                    {{ institution }}
+                                                {% else %}
+                                                    <span class="text-muted">-</span>
+                                                {% endif %}
+                                            </td>
+                                            <td data-value="{% set owner = accountGetMetaField(account, 'account_holder') %}{% if owner %}{{ owner|lower }}{% else %}{% endif %}">
+                                                {% if owner %}
+                                                    {{ owner }}
+                                                {% else %}
+                                                    <span class="text-muted">-</span>
+                                                {% endif %}
+                                            </td>
+                                            <td data-value="{% set productName = accountGetMetaField(account, 'product_name') %}{% if productName %}{{ productName|lower }}{% else %}{% endif %}">
+                                                {% if productName %}
+                                                    {{ productName }}
+                                                {% else %}
+                                                    <span class="text-muted">-</span>
+                                                {% endif %}
+                                            </td>
+                                            <td data-value="{% if account.account_number %}{{ account.account_number|lower }}{% else %}{% endif %}">
+                                                {% if account.account_number %}
+                                                    {{ account.account_number }}
+                                                {% else %}
+                                                    <span class="text-muted">-</span>
+                                                {% endif %}
+                                            </td>
+                                            <td data-value="{% set beneficiaries = accountGetBeneficiaries(account) %}{% if beneficiaries %}{% set totalBeneficiaries = 0 %}{% for priority, beneficiaryList in beneficiaries %}{% set totalBeneficiaries = totalBeneficiaries + beneficiaryList|length %}{% endfor %}{{ totalBeneficiaries }}{% else %}0{% endif %}">
+                                                {% if beneficiaries %}
+                                                    {% set totalBeneficiaries = 0 %}
+                                                    {% for priority, beneficiaryList in beneficiaries %}
+                                                        {% set totalBeneficiaries = totalBeneficiaries + beneficiaryList|length %}
+                                                    {% endfor %}
+                                                    <span class="label label-info" title="View details for beneficiary information">
+                                                        <i class="fa fa-users"></i> {{ totalBeneficiaries }} beneficiary{{ totalBeneficiaries != 1 ? 'ies' : '' }}
+                                                    </span>
+                                                {% else %}
+                                                    <span class="text-muted">-</span>
+                                                {% endif %}
+                                            </td>
+                                            <td data-value="{{ account.current_balance }}" style="text-align: right;">
+                                                {% if account.current_balance is not null %}
+                                                    {% if account.accountType.type in ['Asset account', 'Default account', 'Brokerage account', 'Holding account'] %}
+                                                        <span class="text-success">
+                                                            {{ formatAmountBySymbol(account.current_balance, account.currency_symbol, account.currency_decimal_places) }}
+                                                        </span>
+                                                    {% elseif account.accountType.type in ['Loan', 'Debt', 'Mortgage', 'Credit card'] %}
+                                                        <span class="text-danger">
+                                                            {{ formatAmountBySymbol(account.current_balance, account.currency_symbol, account.currency_decimal_places) }}
+                                                        </span>
+                                                    {% else %}
+                                                        {{ formatAmountBySymbol(account.current_balance, account.currency_symbol, account.currency_decimal_places) }}
+                                                    {% endif %}
+                                                {% else %}
+                                                    <span class="text-muted">-</span>
+                                                {% endif %}
+                                            </td>
+                                            <td data-value="{% if account.active %}active{% else %}inactive{% endif %}">
+                                                {% if account.active %}
+                                                    <span class="label label-success">Active</span>
+                                                {% else %}
+                                                    <span class="label label-default">Inactive</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                <div class="btn-group btn-group-xs">
+                                                    <a href="{{ route('accounts.show', account.id) }}" class="btn btn-default btn-xs" title="View">
+                                                        <i class="fa fa-eye"></i>
+                                                    </a>
+                                                    <button type="button" class="btn btn-primary btn-xs edit-account-btn" data-account-id="{{ account.id }}" title="Edit">
+                                                        <i class="fa fa-pencil"></i>
+                                                    </button>
+                                                    {% if account.accountType.type in ['Asset account', 'Default account', 'Brokerage account', 'Holding account', 'Credit card', 'Loan', 'Debt', 'Mortgage'] %}
+                                                    <button type="button" class="btn btn-warning btn-xs sync-account-btn" 
+                                                            title="Sync Account" data-account-id="{{ account.id }}" data-account-name="{{ account.name }}">
+                                                        <i class="fa fa-refresh"></i>
+                                                    </button>
+                                                    {% endif %}
+                                                    <a href="{{ route('accounts.delete', account.id) }}" class="btn btn-danger btn-xs" title="Delete">
+                                                        <i class="fa fa-trash"></i>
+                                                    </a>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                {% endfor %}
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
@@ -190,40 +195,15 @@
     <!-- Account Edit Modal Container -->
     <div id="editModalContainer"></div>
 
-    <style>
-        /* Make panels inherit styling from existing Firefly III box classes */
-        .panel-group .panel {
-            margin-bottom: 10px;
-        }
-        
-        .panel-heading .badge {
-            margin-left: 10px;
-        }
-        
-        /* Inherit from .box styles */
-        .panel-default {
-            background-color: inherit;
-            border-color: red;
-        }
-        
-        .panel-default > .panel-heading {
-            background-color: inherit;
-            color: inherit;
-        }
-        
-        .panel-default > .panel-heading + .panel-collapse > .panel-body {
-            background-color: inherit;
-            border-top-color: inherit;
-        }
-        
-        /* Let Firefly III handle table styling - remove overrides that break hover */
-    </style>
 
 {% endblock %}
 
 {% block scripts %}
     <script type="text/javascript" nonce="{{ JS_NONCE }}">
         $(document).ready(function() {
+            // Initialize filtering system
+            initializeAccountFiltering();
+            
             // Handle sync all accounts buttons
             $('.sync-all-accounts-btn').on('click', function() {
                 var btn = $(this);
@@ -370,70 +350,26 @@
             
             // Load edit modal content
             function loadEditModal(accountId) {
-                $.get('/accounts/edit/' + accountId + '/modal')
-                    .done(function(data) {
-                        $('#editModalContainer').html(data);
-                        $('#editAccountModal').modal('show');
-                    })
-                    .fail(function() {
-                        showErrorAlert('Error loading edit form');
-                    });
+                // Load modal once if not already loaded
+                if ($('#editAccountModal').length === 0) {
+                    $.get('{{ route('accounts.edit.modal.new') }}')
+                        .done(function(data) {
+                            $('#editModalContainer').html(data);
+                            // Now load the account data
+                            loadEntityEditModal(accountId);
+                        })
+                        .fail(function() {
+                            showErrorAlert('Error loading edit form');
+                        });
+                } else {
+                    // Modal already loaded, just load the account data
+                    loadEntityEditModal(accountId);
+                }
             }
             
-            // Handle form submission via AJAX
-            $(document).on('submit', '#editAccountForm', function(e) {
-                e.preventDefault();
-                
-                var form = $(this);
-                var formData = form.serialize();
-                
-                // Disable submit button
-                $('#saveAccountBtn').prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> {{ "saving"|_ }}...');
-                
-                $.ajax({
-                    url: form.attr('action'),
-                    type: 'POST',
-                    data: formData,
-                    success: function(response) {
-                        if (response.success) {
-                            // Show success message
-                            showSuccessAlert(response.message || '{{ "account_updated_successfully"|_ }}');
-                            
-                            // Close modal
-                            $('#editAccountModal').modal('hide');
-                            
-                            // Reload the page to show updated data
-                            setTimeout(function() {
-                                window.location.reload();
-                            }, 1000);
-                        } else {
-                            showErrorAlert(response.message || '{{ "error_updating_account"|_ }}');
-                        }
-                    },
-                    error: function(xhr) {
-                        var errorMessage = '{{ "error_updating_account"|_ }}';
-                        
-                        if (xhr.responseJSON && xhr.responseJSON.message) {
-                            errorMessage = xhr.responseJSON.message;
-                        } else if (xhr.responseJSON && xhr.responseJSON.errors) {
-                            // Handle validation errors
-                            var errors = [];
-                            $.each(xhr.responseJSON.errors, function(field, messages) {
-                                errors.push(messages.join(', '));
-                            });
-                            errorMessage = errors.join('; ');
-                        }
-                        
-                        showErrorAlert(errorMessage);
-                    },
-                    complete: function() {
-                        // Re-enable submit button
-                        $('#saveAccountBtn').prop('disabled', false).html('<i class="fa fa-save"></i> {{ "save_changes"|_ }}');
-                    }
-                });
-            });
+            // Form submission is now handled by the shared modal component
             
-            // Show success alert
+            // Alert functions for sync operations
             function showSuccessAlert(message) {
                 var alert = '<div class="alert alert-success alert-dismissible fade in" role="alert">' +
                             '<button type="button" class="close" data-dismiss="alert">&times;</button>' +
@@ -447,7 +383,6 @@
                 }, 5000);
             }
             
-            // Show error alert
             function showErrorAlert(message) {
                 var alert = '<div class="alert alert-danger alert-dismissible fade in" role="alert">' +
                             '<button type="button" class="close" data-dismiss="alert">&times;</button>' +
@@ -457,6 +392,111 @@
                 $('.content-wrapper .content').prepend(alert);
             }
         });
+        
+        // Account filtering functions
+        function initializeAccountFiltering() {
+            // Populate institution filter
+            populateInstitutionFilter();
+            
+            // Set up event listeners
+            document.getElementById('accountSearch').addEventListener('input', filterAccounts);
+            document.getElementById('accountTypeFilter').addEventListener('change', filterAccounts);
+            document.getElementById('institutionFilter').addEventListener('change', filterAccounts);
+            document.getElementById('statusFilter').addEventListener('change', filterAccounts);
+            document.getElementById('clearFilters').addEventListener('click', clearAllFilters);
+            
+            // Initial count update
+            updateAccountCounts();
+        }
+        
+        function populateInstitutionFilter() {
+            var institutions = new Set();
+            var rows = document.querySelectorAll('#accountsTableBody tr');
+            
+            rows.forEach(function(row) {
+                var institution = row.getAttribute('data-institution');
+                if (institution && institution.trim() !== '') {
+                    institutions.add(institution);
+                }
+            });
+            
+            var institutionFilter = document.getElementById('institutionFilter');
+            var options = Array.from(institutions).sort();
+            
+            // Clear existing options except "All Institutions"
+            institutionFilter.innerHTML = '<option value="">All Institutions</option>';
+            
+            options.forEach(function(institution) {
+                var option = document.createElement('option');
+                option.value = institution;
+                option.textContent = institution.charAt(0).toUpperCase() + institution.slice(1);
+                institutionFilter.appendChild(option);
+            });
+        }
+        
+        function filterAccounts() {
+            var searchTerm = document.getElementById('accountSearch').value.toLowerCase();
+            var typeFilter = document.getElementById('accountTypeFilter').value;
+            var institutionFilter = document.getElementById('institutionFilter').value;
+            var statusFilter = document.getElementById('statusFilter').value;
+            
+            var rows = document.querySelectorAll('#accountsTableBody tr');
+            var visibleCount = 0;
+            
+            rows.forEach(function(row) {
+                var shouldShow = true;
+                
+                // Search filter
+                if (searchTerm) {
+                    var searchableText = row.textContent.toLowerCase();
+                    if (!searchableText.includes(searchTerm)) {
+                        shouldShow = false;
+                    }
+                }
+                
+                // Type filter
+                if (typeFilter && row.getAttribute('data-account-type') !== typeFilter) {
+                    shouldShow = false;
+                }
+                
+                // Institution filter
+                if (institutionFilter && row.getAttribute('data-institution') !== institutionFilter) {
+                    shouldShow = false;
+                }
+                
+                // Status filter
+                if (statusFilter && row.getAttribute('data-status') !== statusFilter) {
+                    shouldShow = false;
+                }
+                
+                // Show/hide row
+                if (shouldShow) {
+                    row.style.display = '';
+                    visibleCount++;
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+            
+            // Update counts
+            document.getElementById('visibleCount').textContent = visibleCount;
+        }
+        
+        function clearAllFilters() {
+            document.getElementById('accountSearch').value = '';
+            document.getElementById('accountTypeFilter').value = '';
+            document.getElementById('institutionFilter').value = '';
+            document.getElementById('statusFilter').value = '';
+            filterAccounts();
+        }
+        
+        function updateAccountCounts() {
+            var totalRows = document.querySelectorAll('#accountsTableBody tr').length;
+            var visibleRows = document.querySelectorAll('#accountsTableBody tr:not([style*="display: none"])').length;
+            
+            document.getElementById('totalCount').textContent = totalRows;
+            document.getElementById('visibleCount').textContent = visibleRows;
+        }
     </script>
     
     <!-- Table Sorting Assets -->

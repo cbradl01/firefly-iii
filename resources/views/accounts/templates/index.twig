@@ -341,8 +341,7 @@ document.addEventListener('DOMContentLoaded', function() {
             } else {
                 // Handle create button
                 var templateName = this.getAttribute('data-template-name');
-                var baseUrl = "/accounts/templates/create/" + encodeURIComponent(templateName);
-                window.location.href = baseUrl;
+                openCreateModal(templateName);
             }
         });
     });
@@ -462,6 +461,25 @@ function openEditModal(templateId, templateName) {
     
     // Load template data after modal is shown
     loadTemplateData(templateId);
+}
+
+// Function to open create modal
+function openCreateModal(templateName) {
+    // Load modal once if not already loaded
+    if ($('#createAccountModal').length === 0) {
+        $.get('/accounts/templates/create-modal/' + encodeURIComponent(templateName))
+            .done(function(data) {
+                $('body').append(data);
+                // Initialize the modal with null ID (for create scenario)
+                loadEntityEditModal(null);
+            })
+            .fail(function() {
+                alert('Error loading create modal. Please try again.');
+            });
+    } else {
+        // Modal already exists, just initialize it
+        loadEntityEditModal(null);
+    }
 }
 
 // Function to load field definitions
