@@ -173,6 +173,11 @@ Route::group(
         Route::get('edit/{account}/modal', ['uses' => 'Account\EditController@editModal', 'as' => 'edit.modal']);
         Route::put('update/{account}/modal', ['uses' => 'Account\EditController@updateModal', 'as' => 'update.modal']);
         
+        // centralized modal routes
+        Route::get('edit-modal-new', ['uses' => 'Account\EditController@editModalNew', 'as' => 'edit.modal.new']);
+        Route::get('{account}/data', ['uses' => 'Account\EditController@getAccountData', 'as' => 'data']);
+        Route::get('fields', ['uses' => 'Account\EditController@getAccountFields', 'as' => 'fields']);
+        
         // show all accounts:
         Route::get('all', ['uses' => 'Account\IndexController@all', 'as' => 'all']);
         
@@ -212,6 +217,7 @@ Route::group(
         // template routes
         Route::get('templates', ['uses' => 'Account\TemplateController@index', 'as' => 'templates.index']);
         Route::get('templates/create/{templateName}', ['uses' => 'Account\TemplateController@create', 'as' => 'templates.create']);
+        Route::get('templates/create-modal/{templateName}', ['uses' => 'Account\TemplateController@createModal', 'as' => 'templates.create.modal']);
         Route::post('templates/store', ['uses' => 'Account\TemplateController@store', 'as' => 'templates.store']);
         Route::get('templates/field-definitions', ['uses' => 'Account\TemplateController@getFieldDefinitions', 'as' => 'templates.field-definitions']);
         Route::get('templates/{id}/edit', ['uses' => 'Account\TemplateController@edit', 'as' => 'templates.edit']);
@@ -255,12 +261,15 @@ Route::group(
         Route::get('edit/{id}', ['uses' => 'FinancialEntityController@edit', 'as' => 'edit']);
         Route::put('update/{id}', ['uses' => 'FinancialEntityController@update', 'as' => 'update']);
         Route::get('edit/{id}/modal', ['uses' => 'FinancialEntityController@editModal', 'as' => 'edit.modal']);
+        Route::get('edit-modal-new', ['uses' => 'FinancialEntityController@editModalNew', 'as' => 'edit.modal.new']);
         Route::put('update/{id}/modal', ['uses' => 'FinancialEntityController@updateModal', 'as' => 'update.modal']);
         Route::delete('destroy/{id}', ['uses' => 'FinancialEntityController@destroy', 'as' => 'destroy']);
         
         // API routes - put these before the wildcard routes
         Route::get('autocomplete', ['uses' => 'FinancialEntityController@autocomplete', 'as' => 'autocomplete']);
         Route::get('fields', ['uses' => 'FinancialEntityController@getFieldsForEntityType', 'as' => 'fields']);
+        Route::get('all-fields', ['uses' => 'FinancialEntityController@getAllEntityFields', 'as' => 'all-fields']);
+        Route::get('{id}/data', ['uses' => 'FinancialEntityController@getEntityData', 'as' => 'data']);
         Route::get('beneficiary-entities', ['uses' => 'FinancialEntityController@getBeneficiaryEntities', 'as' => 'beneficiary-entities']);
         
         // Wildcard routes - these must come last to avoid conflicts
