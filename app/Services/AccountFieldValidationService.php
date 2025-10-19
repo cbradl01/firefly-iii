@@ -35,40 +35,40 @@ use Illuminate\Support\Facades\Log;
 class AccountFieldValidationService
 {
     /**
-     * Validate that all required fields are present for the given account type
+     * Validate all fields (required and optional) for the given account type
      *
      * @param array $data Account data to validate
      * @param AccountType $accountType The account type
-     * @throws FireflyException If required fields are missing
+     * @throws FireflyException If validation fails
      */
-    public function validateRequiredFields(array $data, AccountType $accountType): void
+    public function validateFields(array $data, AccountType $accountType): void
     {
-        $requiredFields = $this->getRequiredFields($accountType, $data);
-        $missingFields = [];
-
-        // Check all required fields
-        foreach ($requiredFields as $field) {
-            if (!$this->hasValidValue($data, $field)) {
-                $missingFields[] = $field;
-            }
-        }
-
-        if (!empty($missingFields)) {
+        // Get validation rules from FieldDefinitions
+        $validationRules = \FireflyIII\FieldDefinitions\FieldDefinitions::getValidationRules('account');
+        
+        // Create a validator instance
+        $validator = \Illuminate\Support\Facades\Validator::make($data, $validationRules);
+        
+        if ($validator->fails()) {
+            $errors = $validator->errors()->toArray();
             $message = sprintf(
-                'Account type "%s" requires the following fields: %s',
-                $accountType->type,
-                implode(', ', $missingFields)
+                'Account validation failed for type "%s": %s',
+                $accountType->name,
+                implode(', ', array_map(function($field, $fieldErrors) {
+                    return $field . ': ' . implode(', ', $fieldErrors);
+                }, array_keys($errors), $errors))
             );
             
             Log::error('Account field validation failed', [
-                'account_type' => $accountType->type,
-                'missing_fields' => $missingFields,
+                'account_type' => $accountType->name,
+                'validation_errors' => $errors,
                 'provided_data' => array_keys($data)
             ]);
             
             throw new FireflyException($message);
         }
     }
+
 
     /**
      * Get all valid fields (required + optional) for an account type
@@ -80,261 +80,39 @@ class AccountFieldValidationService
     public function getValidFields(AccountType $accountType, array $data = []): array
     {
         $requirements = $this->getFieldRequirements($accountType);
-        $validFields = [];
-
-        // Add shared fields (with safety check)
-        if (isset($requirements['shared'])) {
-            $validFields = array_merge(
-                $validFields,
-                $requirements['shared']['required'] ?? [],
-                $requirements['shared']['optional'] ?? []
-            );
-        }
-
-        // Add type-specific fields from metadata schema
-        if (isset($requirements['type_specific'])) {
-            $validFields = array_merge(
-                $validFields,
-                $requirements['type_specific']['required'] ?? [],
-                $requirements['type_specific']['optional'] ?? []
-            );
-        }
-
-        // All field requirements now come from metadata_schema
-        // No fallback to old config-based approach needed
-
-        return array_unique($validFields);
+        return array_keys($requirements);
     }
 
     /**
      * Get field requirements for an account type
      *
      * @param AccountType $accountType
-     * @return array Field requirements structure
+     * @return array Array of field configurations with 'required' and 'default' properties
      */
     public function getFieldRequirements(AccountType $accountType): array
     {
-        // Get requirements from the account type's metadata schema
-        $metadataSchema = $accountType->metadata_schema;
-        if ($metadataSchema) {
-            $schema = is_string($metadataSchema) ? json_decode($metadataSchema, true) : $metadataSchema;
-            
-            if ($schema && isset($schema['required_fields']) && isset($schema['optional_fields'])) {
-                return [
-                    'shared' => [
-                        'required' => ['name', 'active', 'currency_id', 'institution', 'owner', 'product_name'],
-                        'optional' => ['account_number', 'BIC', 'include_net_worth', 'notes', 'iban', 'category', 'behavior', 'account_type']
-                    ],
-                    'type_specific' => [
-                        'required' => $schema['required_fields'] ?? [],
-                        'optional' => $schema['optional_fields'] ?? []
-                    ]
-                ];
-            }
+        // Get requirements from the account type's firefly_mapping
+        $fireflyMapping = $accountType->firefly_mapping;
+        
+        if (!$fireflyMapping || !isset($fireflyMapping['account_fields'])) {
+            throw new FireflyException(
+                sprintf(
+                    'Account type "%s" (ID: %d) has no firefly_mapping data. This indicates a data integrity issue.',
+                    $accountType->name,
+                    $accountType->id
+                )
+            );
         }
         
-        // No fallback - all requirements should come from metadata_schema
-        return [
-            'shared' => [
-                'required' => ['name', 'active', 'currency_id', 'institution', 'owner', 'product_name'],
-                'optional' => ['account_number', 'BIC', 'include_net_worth', 'notes', 'iban', 'category', 'behavior', 'account_type']
-            ],
-            'type_specific' => [
-                'required' => [],
-                'optional' => []
-            ]
-        ];
-    }
-
-    /**
-     * Get required fields for an account type
-     *
-     * @param AccountType $accountType
-     * @param array $data Account data (needed to determine credit card assets)
-     * @return array Array of required field names
-     */
-    public function getRequiredFields(AccountType $accountType, array $data = []): array
-    {
-        $requirements = $this->getFieldRequirements($accountType);
-        $requiredFields = [];
-
-        // Add shared required fields (with safety check)
-        if (isset($requirements['shared'])) {
-            $requiredFields = array_merge($requiredFields, $requirements['shared']['required'] ?? []);
-        }
-
-        // Add type-specific required fields from metadata_schema
-        if (isset($requirements['type_specific'])) {
-            $requiredFields = array_merge($requiredFields, $requirements['type_specific']['required'] ?? []);
-        }
-
-        return array_unique($requiredFields);
-    }
-
-    /**
-     * Get optional fields for an account type
-     *
-     * @param AccountType $accountType
-     * @param array $data Account data (needed to determine credit card assets)
-     * @return array Array of optional field names
-     */
-    public function getOptionalFields(AccountType $accountType, array $data = []): array
-    {
-        $requirements = $this->getFieldRequirements($accountType);
-        $optionalFields = [];
-
-        // Add shared optional fields (with safety check)
-        if (isset($requirements['shared'])) {
-            $optionalFields = array_merge($optionalFields, $requirements['shared']['optional'] ?? []);
-        }
-
-        // Add type-specific optional fields from metadata_schema
-        if (isset($requirements['type_specific'])) {
-            $optionalFields = array_merge($optionalFields, $requirements['type_specific']['optional'] ?? []);
-        }
-
-        return array_unique($optionalFields);
-    }
-
-    /**
-     * Check if a field has a valid (non-empty) value
-     *
-     * @param array $data
-     * @param string $field
-     * @return bool
-     */
-    private function hasValidValue(array $data, string $field): bool
-    {
-        if (!array_key_exists($field, $data)) {
-            return false;
-        }
-
-        $value = $data[$field];
+        $accountFields = $fireflyMapping['account_fields'];
         
-        // Consider null, empty string, and empty array as invalid
-        if (is_null($value) || $value === '' || (is_array($value) && empty($value))) {
-            return false;
-        }
-
-        return true;
+        // Add system fields that are always required
+        # TODO: add this field to the FieldDefinitions class
+        $accountFields['currency_id'] = ['required' => true, 'default' => null];
+        
+        return $accountFields;
     }
 
-
-    /**
-     * Get field requirements summary for an account type (useful for UI/documentation)
-     *
-     * @param AccountType $accountType
-     * @param array $data Account data (needed to determine credit card assets)
-     * @return array Array with 'required' and 'optional' field arrays
-     */
-    public function getFieldRequirementsSummary(AccountType $accountType, array $data = []): array
-    {
-        return [
-            'required' => $this->getRequiredFields($accountType, $data),
-            'optional' => $this->getOptionalFields($accountType, $data)
-        ];
-    }
-
-    /**
-     * Get detailed field configurations for rendering forms
-     *
-     * @param AccountType $accountType
-     * @param array $data
-     * @return array
-     */
-    public function getFieldConfigurations(AccountType $accountType, array $data = []): array
-    {
-        $requiredFields = $this->getRequiredFields($accountType, $data);
-        $optionalFields = $this->getOptionalFields($accountType, $data);
-        
-        $fieldConfigs = [];
-        
-        // Process required fields
-        foreach ($requiredFields as $fieldName) {
-            $fieldConfigs[$fieldName] = $this->getFieldConfiguration($fieldName, true);
-        }
-        
-        // Process optional fields
-        foreach ($optionalFields as $fieldName) {
-            $fieldConfigs[$fieldName] = $this->getFieldConfiguration($fieldName, false);
-        }
-        
-        return $fieldConfigs;
-    }
-
-    /**
-     * Get configuration for a specific field
-     *
-     * @param string $fieldName
-     * @param bool $required
-     * @return array
-     */
-    private function getFieldConfiguration(string $fieldName, bool $required): array
-    {
-        $config = [
-            'name' => $fieldName,
-            'required' => $required,
-            'type' => 'text',
-            'default' => '',
-            'options' => []
-        ];
-
-        // Define field-specific configurations
-        switch ($fieldName) {
-            case 'institution':
-            case 'product_name':
-            case 'routing_number':
-            case 'plan_administrator':
-            case 'investment_style':
-            case 'trust_name':
-            case 'trustee_name':
-            case 'trust_type':
-            case 'custodian_name':
-            case 'minor_name':
-                $config['type'] = 'text';
-                $config['default'] = '';
-                break;
-                
-            case 'beneficiaries':
-                $config['type'] = 'textarea';
-                $config['default'] = '';
-                $config['options']['helpText'] = 'List beneficiaries separated by commas';
-                break;
-                
-            case 'contribution_limit':
-            case 'current_contribution':
-                $config['type'] = 'amount';
-                $config['default'] = '';
-                break;
-                
-            case 'employer_match':
-                $config['type'] = 'percentage';
-                $config['default'] = '';
-                break;
-                
-            case 'check_writing':
-            case 'debit_card':
-            case 'overdraft_protection':
-            case 'active':
-                $config['type'] = 'checkbox';
-                $config['default'] = false;
-                break;
-                
-            case 'owner':
-                $config['type'] = 'select';
-                $config['default'] = '';
-                $config['options']['choices'] = []; // Will be populated by controller
-                break;
-                
-            case 'currency_id':
-                $config['type'] = 'currency';
-                $config['default'] = '';
-                $config['options']['helpText'] = 'account_default_currency';
-                break;
-        }
-
-        return $config;
-    }
 
     /**
      * Check if a specific field is required for an account type
@@ -346,47 +124,10 @@ class AccountFieldValidationService
      */
     public function isFieldRequired(string $fieldName, AccountType $accountType, array $data = []): bool
     {
-        $requiredFields = $this->getRequiredFields($accountType, $data);
-        return in_array($fieldName, $requiredFields, true);
+        $requirements = $this->getFieldRequirements($accountType);
+        return isset($requirements[$fieldName]['required']) && $requirements[$fieldName]['required'] === true;
     }
 
-    /**
-     * Check if a specific field is valid for an account type
-     *
-     * @param string $fieldName
-     * @param AccountType $accountType
-     * @param array $data Account data (needed to determine credit card assets)
-     * @return bool
-     */
-    public function isFieldValid(string $fieldName, AccountType $accountType, array $data = []): bool
-    {
-        $validFields = $this->getValidFields($accountType, $data);
-        return in_array($fieldName, $validFields, true);
-    }
-
-    /**
-     * Get all available account types and their field requirements (useful for documentation)
-     *
-     * @return array
-     */
-    public function getAllAccountTypeRequirements(): array
-    {
-        $requirements = $this->getFieldRequirements(new AccountType());
-        $result = [];
-
-        foreach ($requirements as $typeKey => $typeRequirements) {
-            if ($typeKey === 'shared') {
-                continue; // Skip shared, it's included in all types
-            }
-
-            $result[$typeKey] = [
-                'required' => array_merge($requirements['shared']['required'] ?? [], $typeRequirements['required']),
-                'optional' => array_merge($requirements['shared']['optional'] ?? [], $typeRequirements['optional'])
-            ];
-        }
-
-        return $result;
-    }
 
     /**
      * Check if this is a credit card asset account
