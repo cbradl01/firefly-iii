@@ -131,12 +131,10 @@ class UniqueAccountNumber implements ValidationRule
 
     private function countHits(string $type, string $accountNumber): int
     {
-        $query = AccountMeta::leftJoin('accounts', 'accounts.id', '=', 'account_meta.account_id')
-            ->leftJoin('account_types', 'account_types.id', '=', 'accounts.account_type_id')
+        $query = Account::leftJoin('account_types', 'account_types.id', '=', 'accounts.account_type_id')
             ->where('accounts.user_id', auth()->user()->id)
             ->where('account_types.name', $type)
-            ->where('account_meta.name', '=', 'account_number')
-            ->where('account_meta.data', json_encode($accountNumber))
+            ->where('accounts.account_number', $accountNumber)
         ;
 
         if ($this->account instanceof Account) {
