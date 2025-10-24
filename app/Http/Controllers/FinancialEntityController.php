@@ -669,20 +669,22 @@ class FinancialEntityController extends Controller
     {
         try {
             $user = Auth::user();
-            $financialEntity = FinancialEntity::whereHas('users', function ($query) use ($user) {
-                $query->where('user_id', $user->id);
-            })->find($id);
+            // Use the same method as the index to get user-manageable entities
+            $userManageableEntities = $this->userEntityService->getUserManageableEntities($user);
+            $financialEntity = $userManageableEntities->find($id);
 
             if (!$financialEntity) {
                 return redirect()->route('financial-entities.index')
                     ->with('error', 'Financial entity not found or you do not have permission to delete it.');
             }
 
-            // Check if entity has any accounts
-            $entityStats = $this->entityService->getEntityStatistics($financialEntity);
-            if ($entityStats['owned_accounts_count'] > 0 || $entityStats['beneficiary_accounts_count'] > 0) {
+            // Check if entity has any accounts - use direct database queries for more reliable checking
+            $accountHolderCount = \FireflyIII\Models\Account::where('account_holder_id', $financialEntity->id)->count();
+            $institutionCount = \FireflyIII\Models\Account::where('institution_id', $financialEntity->id)->count();
+            
+            if ($accountHolderCount > 0 || $institutionCount > 0) {
                 return redirect()->route('financial-entities.index')
-                    ->with('error', 'Cannot delete financial entity that has associated accounts. Please remove or reassign accounts first.');
+                    ->with('error', "Cannot delete '{$financialEntity->display_name}' - it is referenced by {$accountHolderCount} account(s) as account holder and {$institutionCount} account(s) as institution. Please remove or reassign accounts first.");
             }
 
             // Get entity name before deletion
@@ -709,7 +711,7 @@ class FinancialEntityController extends Controller
                 ->with('success', "Financial entity '{$entityName}' has been deleted successfully.");
                 
         } catch (\Exception $e) {
-            \Log::error('Failed to delete financial entity: ' . $e->getMessage());
+            Log::error('Failed to delete financial entity: ' . $e->getMessage());
             return redirect()->route('financial-entities.index')
                 ->with('error', 'An error occurred while deleting the financial entity. Please try again.');
         }
@@ -735,6 +737,104 @@ class FinancialEntityController extends Controller
             ->get(['id', 'name', 'display_name', 'entity_type']);
 
         return response()->json($entities);
+    }
+
+    /**
+     * Bulk delete multiple financial entities
+     */
+    public function bulkDestroy(Request $request)
+    {
+        try {
+            $user = Auth::user();
+            $entityIds = $request->input('entity_ids', []);
+            
+            if (empty($entityIds) || !is_array($entityIds)) {
+                if ($request->ajax()) {
+                    return response()->json(['success' => false, 'message' => 'No entities selected for deletion.'], 400);
+                }
+                return redirect()->route('financial-entities.index')
+                    ->with('error', 'No entities selected for deletion.');
+            }
+            
+            // Validate that all entities exist and user has permission
+            // Use the same method as the index to get user-manageable entities
+            $userManageableEntities = $this->userEntityService->getUserManageableEntities($user);
+            $entities = $userManageableEntities->whereIn('id', $entityIds);
+            
+            if ($entities->count() !== count($entityIds)) {
+                if ($request->ajax()) {
+                    return response()->json(['success' => false, 'message' => 'Some selected entities were not found or you do not have permission to delete them.'], 403);
+                }
+                return redirect()->route('financial-entities.index')
+                    ->with('error', 'Some selected entities were not found or you do not have permission to delete them.');
+            }
+            
+            $deletedCount = 0;
+            $errors = [];
+            
+            foreach ($entities as $entity) {
+                try {
+                    // Check if entity has any accounts - use direct database queries for more reliable checking
+                    $accountHolderCount = \FireflyIII\Models\Account::where('account_holder_id', $entity->id)->count();
+                    $institutionCount = \FireflyIII\Models\Account::where('institution_id', $entity->id)->count();
+                    
+                    if ($accountHolderCount > 0 || $institutionCount > 0) {
+                        $errors[] = "Cannot delete '{$entity->display_name}' - it is referenced by {$accountHolderCount} account(s) as account holder and {$institutionCount} account(s) as institution.";
+                        continue;
+                    }
+                    
+                    // Delete related records first to avoid foreign key constraints
+                    $entity->accountRoles()->delete();
+                    $entity->relationships()->delete();
+                    $entity->relatedRelationships()->delete();
+                    $entity->notes()->delete();
+                    
+                    // Remove user permissions
+                    $entity->users()->detach();
+                    
+                    // Finally delete the entity
+                    if ($entity->delete()) {
+                        $deletedCount++;
+                    } else {
+                        $errors[] = "Failed to delete '{$entity->display_name}'.";
+                    }
+                    
+                } catch (\Exception $e) {
+                    Log::error("Failed to delete financial entity {$entity->id}: " . $e->getMessage());
+                    $errors[] = "Error deleting '{$entity->display_name}': " . $e->getMessage();
+                }
+            }
+            
+            // Prepare response message
+            $message = "Successfully deleted {$deletedCount} financial entit" . ($deletedCount === 1 ? 'y' : 'ies') . ".";
+            if (!empty($errors)) {
+                $message .= " Errors: " . implode(' ', $errors);
+            }
+            
+            $messageType = empty($errors) ? 'success' : 'warning';
+            
+            if ($request->ajax()) {
+                return response()->json([
+                    'success' => empty($errors),
+                    'message' => $message,
+                    'deleted_count' => $deletedCount,
+                    'errors' => $errors
+                ]);
+            }
+            
+            return redirect()->route('financial-entities.index')
+                ->with($messageType, $message);
+                
+        } catch (\Exception $e) {
+            Log::error('Failed to bulk delete financial entities: ' . $e->getMessage());
+            
+            if ($request->ajax()) {
+                return response()->json(['success' => false, 'message' => 'An error occurred while deleting the financial entities. Please try again.'], 500);
+            }
+            
+            return redirect()->route('financial-entities.index')
+                ->with('error', 'An error occurred while deleting the financial entities. Please try again.');
+        }
     }
 
     /**
