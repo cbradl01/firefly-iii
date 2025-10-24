@@ -263,6 +263,7 @@ Route::group(
         Route::get('edit-modal-new', ['uses' => 'FinancialEntityController@editModalNew', 'as' => 'edit.modal.new']);
         Route::put('update/{id}/modal', ['uses' => 'FinancialEntityController@updateModal', 'as' => 'update.modal']);
         Route::delete('destroy/{id}', ['uses' => 'FinancialEntityController@destroy', 'as' => 'destroy']);
+        Route::delete('bulk-destroy', ['uses' => 'FinancialEntityController@bulkDestroy', 'as' => 'bulk-destroy']);
         
         // API routes - put these before the wildcard routes
         Route::get('autocomplete', ['uses' => 'FinancialEntityController@autocomplete', 'as' => 'autocomplete']);
