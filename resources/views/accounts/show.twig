@@ -57,20 +57,20 @@
                                     
                                     {% set allFields = allFields|merge([{
                                         'label': trans('list.account_type'),
-                                        'value': account.accountType.type|_
+                                        'value': account.accountType.name
                                     }]) %}
                                     
                                     {% if account.accountType.category %}
                                     {% set allFields = allFields|merge([{
-                                        'label': 'Category',
-                                        'value': account.accountType.category.name|_
+                                        'label': trans('list.category'),
+                                        'value': account.accountType.category.name
                                     }]) %}
                                     {% endif %}
                                     
                                     {% if account.accountType.behavior %}
                                     {% set allFields = allFields|merge([{
-                                        'label': 'Behavior',
-                                        'value': account.accountType.behavior.name|_
+                                        'label': trans('list.behavior'),
+                                        'value': account.accountType.behavior.name
                                     }]) %}
                                     {% endif %}
                                     
@@ -86,25 +86,17 @@
                                     
                                     {# Add dynamic fields to the array #}
                                     {% for fieldName, fieldInfo in overviewData %}
+                                        {% set fieldData = fieldInfo.field_data %}
+                                        {% set label = fieldName|_ %}
+                                        {% if fieldData.show_help %}
+                                            {% set label = label ~ ' <i class="fa fa-question-circle text-info" data-toggle="tooltip" title="' ~ (fieldName ~ '_description')|_ ~ '"></i>' %}
+                                        {% endif %}
                                         {% set allFields = allFields|merge([{
-                                            'label': fieldName|_,
+                                            'label': label,
                                             'value': fieldInfo.link ? '<a href="' ~ fieldInfo.link ~ '">' ~ fieldInfo.value ~ '</a>' : fieldInfo.value|raw
                                         }]) %}
                                     {% endfor %}
                                     
-                                    {% if account.iban %}
-                                    {% set allFields = allFields|merge([{
-                                        'label': trans('list.iban'),
-                                        'value': account.iban
-                                    }]) %}
-                                    {% endif %}
-                                    
-                                    {% if account.account_number %}
-                                    {% set allFields = allFields|merge([{
-                                        'label': trans('list.account_number'),
-                                        'value': account.account_number
-                                    }]) %}
-                                    {% endif %}
                                     
                                     {# Add beneficiaries to the array #}
                                     {% set beneficiaries = accountGetBeneficiaries(account) %}
@@ -132,7 +124,7 @@
                                             {% endif %}
                                         {% endfor %}
                                     {% else %}
-                                        {% set beneficiaryHtml = '<span class="text-muted">-</span><span class="label label-warning" style="margin-left: 10px;"><i class="fa fa-exclamation-triangle"></i> Recommended: Add beneficiaries</span>' %}
+                                        {% set beneficiaryHtml = '<span class="text-muted">-</span> <i class="fa fa-exclamation-triangle text-warning" data-toggle="tooltip" title="Recommended: Add beneficiaries"></i>' %}
                                     {% endif %}
                                     
                                     {% set allFields = allFields|merge([{
@@ -814,6 +806,9 @@
                 
                 $('.content-wrapper .content').prepend(alert);
             }
+            
+            // Initialize tooltips
+            $('[data-toggle="tooltip"]').tooltip();
         });
     </script>
     

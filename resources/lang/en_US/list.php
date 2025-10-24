@@ -52,6 +52,7 @@ return [
     'invited_by'              => 'Invited by',
     'invite_link'             => 'Invite link',
     'account_type'            => 'Account type',
+    'behavior'                => 'Behavior',
     'created_at'              => 'Created at',
     'account'                 => 'Account',
     'external_url'            => 'External URL',
