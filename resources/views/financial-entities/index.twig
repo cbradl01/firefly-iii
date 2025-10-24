@@ -20,6 +20,26 @@
                         Financial Entities
                     </h3>
                     <div class="box-tools pull-right">
+                        <!-- Bulk Actions (hidden by default) -->
+                        <div id="bulk-actions" class="btn-group" style="display: none; margin-right: 10px;">
+                            <button type="button" id="bulk-delete-btn" class="btn btn-danger btn-sm">
+                                <i class="fa fa-trash"></i>
+                                Delete Selected
+                            </button>
+                        </div>
+                        
+                        <!-- Settings dropdown -->
+                        <div class="btn-group" style="margin-right: 10px;">
+                            <button type="button" class="btn btn-default btn-sm dropdown-toggle" data-toggle="dropdown" title="Settings">
+                                <i class="fa fa-cog"></i>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-right">
+                                <li><a href="#" id="resetConfirmations">
+                                    <i class="fa fa-refresh"></i> Reset confirmation dialogs
+                                </a></li>
+                            </ul>
+                        </div>
+                        
                         <div class="btn-group">
                             <button type="button" class="btn btn-primary btn-sm dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
                                 <i class="fa fa-plus"></i>
@@ -78,6 +98,9 @@
                         <table class="table sortable table-striped table-hover" id="financial-entities-table">
                             <thead>
                                 <tr>
+                                    <th data-defaultsort="disabled" style="width: 40px;">
+                                        <input type="checkbox" id="select-all" title="Select all entities">
+                                    </th>
                                     <th data-defaultsign="az">Name</th>
                                     <th data-defaultsign="az">Type</th>
                                     <th data-defaultsign="az">Description</th>
@@ -89,7 +112,10 @@
                             <tbody>
                                 {% for entity in entities %}
                                     {% set entityStats = entityService.getEntityStatistics(entity) %}
-                                    <tr>
+                                    <tr data-entity-id="{{ entity.id }}" class="entity-row">
+                                        <td>
+                                            <input type="checkbox" class="entity-checkbox" value="{{ entity.id }}">
+                                        </td>
                                         <td data-value="{{ entity.display_name|lower }}">
                                             <a href="{{ route('financial-entities.show', entity.id) }}" class="text-primary">
                                                 <strong>{{ entity.display_name }}</strong>
@@ -131,7 +157,7 @@
                                     </tr>
                                 {% else %}
                                     <tr>
-                                        <td colspan="6" class="text-center text-muted">
+                                        <td colspan="7" class="text-center text-muted">
                                             No financial entities found.
                                         </td>
                                     </tr>
@@ -160,6 +186,56 @@
                 background-color: inherit;
             }
         }
+        
+        /* Row selection styles */
+        .entity-row {
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+        
+        .entity-row:hover {
+            background-color: #f5f5f5;
+        }
+        
+        .entity-row.selected {
+            background-color: #3a4045 !important;
+            border-left: 2px solid #5a6065;
+        }
+        
+        .entity-row.selected:hover {
+            background-color: #2e3439 !important;
+        }
+        
+        /* Prevent text selection on checkboxes */
+        .entity-checkbox {
+            cursor: pointer;
+            pointer-events: auto;
+        }
+        
+        /* Bulk actions styling */
+        #bulk-actions {
+            animation: slideIn 0.3s ease-in-out;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        
+        /* Disable row click on action buttons */
+        .entity-row td:last-child {
+            pointer-events: auto;
+        }
+        
+        .entity-row td:last-child * {
+            pointer-events: auto;
+        }
     </style>
 
     <script type="text/javascript" nonce="{{ JS_NONCE }}">
@@ -167,6 +243,12 @@
             const searchInput = document.getElementById('search');
             const typeFilter = document.getElementById('type-filter');
             const clearFilters = document.getElementById('clear-filters');
+            const selectAllCheckbox = document.getElementById('select-all');
+            const bulkActions = document.getElementById('bulk-actions');
+            const bulkDeleteBtn = document.getElementById('bulk-delete-btn');
+            
+            let selectedEntities = new Set();
+            let lastSelectedIndex = -1;
 
             // Handle delete form submissions with confirmation
             document.addEventListener('submit', function(e) {
@@ -196,6 +278,325 @@
                 typeFilter.value = '';
                 updateFilters();
             });
+
+            // Multi-select functionality
+            function updateBulkActions() {
+                if (selectedEntities.size > 0) {
+                    bulkActions.style.display = 'inline-block';
+                    bulkDeleteBtn.textContent = `Delete Selected (${selectedEntities.size})`;
+                } else {
+                    bulkActions.style.display = 'none';
+                }
+            }
+
+            function updateSelectAllState() {
+                const checkboxes = document.querySelectorAll('.entity-checkbox');
+                const checkedCount = document.querySelectorAll('.entity-checkbox:checked').length;
+                
+                if (checkedCount === 0) {
+                    selectAllCheckbox.indeterminate = false;
+                    selectAllCheckbox.checked = false;
+                } else if (checkedCount === checkboxes.length) {
+                    selectAllCheckbox.indeterminate = false;
+                    selectAllCheckbox.checked = true;
+                } else {
+                    selectAllCheckbox.indeterminate = true;
+                }
+            }
+
+            function toggleRowSelection(row, isSelected) {
+                if (isSelected) {
+                    row.classList.add('selected');
+                } else {
+                    row.classList.remove('selected');
+                }
+            }
+
+            function selectEntity(entityId, isSelected) {
+                const row = document.querySelector(`tr[data-entity-id="${entityId}"]`);
+                const checkbox = row.querySelector('.entity-checkbox');
+                
+                if (isSelected) {
+                    selectedEntities.add(entityId);
+                    checkbox.checked = true;
+                } else {
+                    selectedEntities.delete(entityId);
+                    checkbox.checked = false;
+                }
+                
+                toggleRowSelection(row, isSelected);
+                updateBulkActions();
+                updateSelectAllState();
+            }
+
+            function selectRange(startIndex, endIndex) {
+                const rows = Array.from(document.querySelectorAll('.entity-row'));
+                const start = Math.min(startIndex, endIndex);
+                const end = Math.max(startIndex, endIndex);
+                
+                for (let i = start; i <= end; i++) {
+                    if (rows[i]) {
+                        const entityId = rows[i].dataset.entityId;
+                        selectEntity(entityId, true);
+                    }
+                }
+            }
+
+            // Handle select all checkbox
+            selectAllCheckbox.addEventListener('change', function() {
+                const checkboxes = document.querySelectorAll('.entity-checkbox');
+                const isChecked = this.checked;
+                
+                checkboxes.forEach(checkbox => {
+                    const entityId = checkbox.value;
+                    selectEntity(entityId, isChecked);
+                });
+            });
+
+            // Handle individual checkbox changes
+            document.addEventListener('change', function(e) {
+                if (e.target.classList.contains('entity-checkbox')) {
+                    const entityId = e.target.value;
+                    const isSelected = e.target.checked;
+                    selectEntity(entityId, isSelected);
+                }
+            });
+
+            // Handle row clicks
+            document.addEventListener('click', function(e) {
+                const row = e.target.closest('.entity-row');
+                if (!row) return;
+                
+                // Don't trigger row selection if clicking on checkbox or action buttons
+                if (e.target.type === 'checkbox' || 
+                    e.target.closest('button') || 
+                    e.target.closest('a') ||
+                    e.target.closest('.dropdown-menu')) {
+                    return;
+                }
+                
+                const entityId = row.dataset.entityId;
+                const checkbox = row.querySelector('.entity-checkbox');
+                const isCurrentlySelected = selectedEntities.has(entityId);
+                
+                if (e.metaKey || e.ctrlKey) {
+                    // Cmd/Ctrl + click: toggle selection
+                    selectEntity(entityId, !isCurrentlySelected);
+                } else if (e.shiftKey && lastSelectedIndex !== -1) {
+                    // Shift + click: select range
+                    const rows = Array.from(document.querySelectorAll('.entity-row'));
+                    const currentIndex = rows.indexOf(row);
+                    selectRange(lastSelectedIndex, currentIndex);
+                } else {
+                    // Regular click: select only this row
+                    // Clear all selections first
+                    selectedEntities.forEach(id => selectEntity(id, false));
+                    selectedEntities.clear();
+                    
+                    // Select this row
+                    selectEntity(entityId, true);
+                }
+                
+                // Update last selected index
+                const rows = Array.from(document.querySelectorAll('.entity-row'));
+                lastSelectedIndex = rows.indexOf(row);
+            });
+
+            // Handle bulk delete
+            bulkDeleteBtn.addEventListener('click', function() {
+                if (selectedEntities.size === 0) return;
+                
+                const count = selectedEntities.size;
+                showDeleteConfirmationModal(count, function() {
+                    // Show loading state
+                    bulkDeleteBtn.disabled = true;
+                    bulkDeleteBtn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Deleting...';
+                    
+                    // Prepare form data
+                    const formData = new FormData();
+                    formData.append('_token', '{{ csrf_token() }}');
+                    formData.append('_method', 'DELETE');
+                    
+                    // Add selected entity IDs
+                    selectedEntities.forEach(entityId => {
+                        formData.append('entity_ids[]', entityId);
+                    });
+                    
+                    // Make AJAX request
+                    fetch('{{ route("financial-entities.bulk-destroy") }}', {
+                        method: 'POST',
+                        body: formData,
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest'
+                        }
+                    })
+                    .then(response => {
+                        if (response.ok) {
+                            return response.json();
+                        }
+                        throw new Error('Network response was not ok');
+                    })
+                    .then(data => {
+                        if (data.success) {
+                            // Remove deleted rows from the table
+                            selectedEntities.forEach(entityId => {
+                                const row = document.querySelector(`tr[data-entity-id="${entityId}"]`);
+                                if (row) {
+                                    row.remove();
+                                }
+                            });
+                            
+                            // Clear selection
+                            selectedEntities.clear();
+                            updateBulkActions();
+                            updateSelectAllState();
+                            
+                            // Show success message
+                            showSuccessMessage(data.message);
+                            
+                            // Check if table is now empty
+                            const remainingRows = document.querySelectorAll('.entity-row');
+                            if (remainingRows.length === 0) {
+                                const tbody = document.querySelector('#financial-entities-table tbody');
+                                tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No financial entities found.</td></tr>';
+                            }
+                        } else {
+                            // Show error message
+                            showErrorMessage(data.message);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        showErrorMessage('An error occurred while deleting the entities. Please try again.');
+                    })
+                    .finally(() => {
+                        // Reset button state
+                        bulkDeleteBtn.disabled = false;
+                        bulkDeleteBtn.innerHTML = '<i class="fa fa-trash"></i> Delete Selected';
+                    });
+                });
+            });
+
+            // Check if user has disabled delete confirmation
+            function shouldShowDeleteConfirmation() {
+                return localStorage.getItem('hideDeleteConfirmation') !== 'true';
+            }
+            
+            // Show delete confirmation modal
+            function showDeleteConfirmationModal(count, onConfirm) {
+                if (!shouldShowDeleteConfirmation()) {
+                    onConfirm();
+                    return;
+                }
+                
+                const modalHtml = `
+                    <div class="modal fade" id="deleteConfirmationModal" tabindex="-1" role="dialog">
+                        <div class="modal-dialog" role="document">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h4 class="modal-title">
+                                        <i class="fa fa-exclamation-triangle text-warning"></i>
+                                        Confirm Deletion
+                                    </h4>
+                                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                                </div>
+                                <div class="modal-body">
+                                    <p>Are you sure you want to delete <strong>${count}</strong> financial entit${count === 1 ? 'y' : 'ies'}?</p>
+                                    <p class="text-muted">This action cannot be undone.</p>
+                                    <div class="checkbox">
+                                        <label>
+                                            <input type="checkbox" id="dontShowAgain"> Don't show this message again
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+                                    <button type="button" class="btn btn-danger" id="confirmDeleteBtn">
+                                        <i class="fa fa-trash"></i> Delete ${count} Entit${count === 1 ? 'y' : 'ies'}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                // Remove existing modal if any
+                const existingModal = document.getElementById('deleteConfirmationModal');
+                if (existingModal) {
+                    existingModal.remove();
+                }
+                
+                // Add modal to page
+                document.body.insertAdjacentHTML('beforeend', modalHtml);
+                
+                // Show modal
+                $('#deleteConfirmationModal').modal('show');
+                
+                // Handle confirm button click
+                document.getElementById('confirmDeleteBtn').addEventListener('click', function() {
+                    const dontShowAgain = document.getElementById('dontShowAgain').checked;
+                    if (dontShowAgain) {
+                        localStorage.setItem('hideDeleteConfirmation', 'true');
+                    }
+                    
+                    $('#deleteConfirmationModal').modal('hide');
+                    onConfirm();
+                });
+                
+                // Clean up modal when hidden
+                $('#deleteConfirmationModal').on('hidden.bs.modal', function() {
+                    $(this).remove();
+                });
+            }
+
+            // Helper functions for showing messages
+            function showSuccessMessage(message) {
+                showAlert(message, 'success');
+            }
+            
+            function showErrorMessage(message) {
+                showAlert(message, 'danger');
+            }
+            
+            function showAlert(message, type) {
+                // Remove any existing alerts
+                const existingAlert = document.querySelector('.alert');
+                if (existingAlert) {
+                    existingAlert.remove();
+                }
+                
+                // Create new alert
+                const alert = document.createElement('div');
+                alert.className = `alert alert-${type} alert-dismissible fade in`;
+                alert.style.marginTop = '10px';
+                alert.innerHTML = `
+                    <button type="button" class="close" data-dismiss="alert">&times;</button>
+                    <strong>${type === 'success' ? 'Success!' : 'Error!'}</strong> ${message}
+                `;
+                
+                // Insert after the box header
+                const boxHeader = document.querySelector('.box-header');
+                boxHeader.insertAdjacentElement('afterend', alert);
+                
+                // Auto-dismiss success messages after 3 seconds
+                if (type === 'success') {
+                    setTimeout(() => {
+                        if (alert.parentNode) {
+                            alert.remove();
+                        }
+                    }, 3000);
+                }
+            }
+
+            // Handle reset confirmations
+            document.getElementById('resetConfirmations').addEventListener('click', function(e) {
+                e.preventDefault();
+                localStorage.removeItem('hideDeleteConfirmation');
+                showSuccessMessage('Confirmation dialogs have been re-enabled.');
+            });
+
+            // Initialize bulk actions state
+            updateBulkActions();
         });
     </script>
 
