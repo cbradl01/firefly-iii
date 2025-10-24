@@ -91,9 +91,8 @@ class FieldDefinitions
             'data_type' => 'string',
             'input_type' => 'financial_entity_select',
             'category' => 'basic_info',
-            'required' => true,
             'validation' => 'required|string|max:255',
-            'overview_link' => true, // Link to the financial entity
+            'overview_link' => true,
             'options' => [
                 'exclude_entity_types' => ['institution']
             ]
@@ -102,29 +101,26 @@ class FieldDefinitions
             'data_type' => 'string',
             'input_type' => 'text',
             'category' => 'basic_info',
-            'required' => true,
-            'validation' => 'required|string|max:255'
+            'validation' => 'required|string|max:255',
+            'overview_link' => true
         ],
         'product_name' => [
             'data_type' => 'string',
             'input_type' => 'text',
             'category' => 'basic_info',
-            'required' => true,
             'validation' => 'required|string|max:255'
         ],
-        'account_status' => [
+        'active' => [
             'data_type' => 'boolean',
             'input_type' => 'checkbox',
             'category' => 'basic_info',
-            'required' => true,
-            'validation' => 'required|boolean',
+            'validation' => 'boolean',
             'default' => true
         ],
         'currency_id' => [
             'data_type' => 'integer',
             'input_type' => 'currency_select',
             'category' => 'basic_info',
-            'required' => false,
             'validation' => 'nullable|integer|exists:transaction_currencies,id'
         ],
 
@@ -427,7 +423,6 @@ class FieldDefinitions
             'data_type' => 'string',
             'input_type' => 'text',
             'category' => 'basic_info',
-            'required' => true,
             'validation' => 'required|string|max:255'
         ],
         'institution_type' => [
@@ -524,8 +519,8 @@ class FieldDefinitions
     public const TRUST_FIELDS = [
         'trust_type' => ['data_type' => 'string',
             'input_type' => 'select',
-            'category' => 'legal','required' => true,
-            'validation' => ['required', 'string'],
+            'category' => 'legal',
+            'validation' => 'required|string',
             'options' => [
                 'revocable_living' => 'Revocable Living Trust',
                 'irrevocable_living' => 'Irrevocable Living Trust',
@@ -538,7 +533,7 @@ class FieldDefinitions
                 'other' => 'Other']],
         'trustee_name' => ['data_type' => 'string',
             'input_type' => 'text',
-            'category' => 'legal','required' => true,
+            'category' => 'legal',
             'validation' => 'required|string|max:255'],
         'trust_established_date' => ['data_type' => 'date',
             'input_type' => 'date',
@@ -556,8 +551,8 @@ class FieldDefinitions
     public const BUSINESS_FIELDS = [
         'business_type' => ['data_type' => 'string',
             'input_type' => 'select',
-            'category' => 'legal','required' => true,
-            'validation' => ['required', 'string'],
+            'category' => 'legal',
+            'validation' => 'required|string',
             'options' => [
                 'sole_proprietorship' => 'Sole Proprietorship',
                 'partnership' => 'Partnership',
@@ -599,7 +594,6 @@ class FieldDefinitions
             'data_type' => 'string',
             'input_type' => 'text',
             'category' => 'basic_info',
-            'required' => true,
             'validation' => 'required|string|max:255'
         ],
         'display_name' => [
@@ -699,8 +693,8 @@ class FieldDefinitions
             if (isset($fieldData['validation'])) {
                 $validation = $fieldData['validation'];
                 
-                // If field is not required, add nullable to the validation rules
-                if (!isset($fieldData['required']) || $fieldData['required'] !== true) {
+                // If validation doesn't start with 'required', add nullable
+                if (strpos($validation, 'required') !== 0) {
                     // Check if nullable is already in the validation string
                     if (strpos($validation, 'nullable') === false) {
                         $validation = 'nullable|' . $validation;
