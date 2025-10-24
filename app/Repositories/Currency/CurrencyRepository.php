@@ -86,19 +86,11 @@ class CurrencyRepository implements CurrencyRepositoryInterface, UserGroupInterf
         }
 
         // is being used in accounts:
-        $meta             = AccountMeta::where('name', 'currency_id')->where('data', json_encode((string)$currency->id))->count();
+        $meta             = Account::where('currency_id', $currency->id)->count();
         if ($meta > 0) {
             Log::info(sprintf('Used in %d accounts as currency_id, return true. ', $meta));
 
-            return 'account_meta';
-        }
-
-        // second search using integer check.
-        $meta             = AccountMeta::where('name', 'currency_id')->where('data', json_encode((int)$currency->id))->count();
-        if ($meta > 0) {
-            Log::info(sprintf('Used in %d accounts as currency_id, return true. ', $meta));
-
-            return 'account_meta';
+            return 'accounts';
         }
 
         // is being used in bills:
@@ -119,16 +111,7 @@ class CurrencyRepository implements CurrencyRepositoryInterface, UserGroupInterf
             return 'recurring';
         }
 
-        // is being used in accounts (as integer)
-        $meta             = AccountMeta::leftJoin('accounts', 'accounts.id', '=', 'account_meta.account_id')
-            ->whereNull('accounts.deleted_at')
-            ->where('account_meta.name', 'currency_id')->where('account_meta.data', json_encode($currency->id))->count()
-        ;
-        if ($meta > 0) {
-            Log::info(sprintf('Used in %d accounts as currency_id, return true. ', $meta));
-
-            return 'account_meta';
-        }
+        // is being used in accounts (as integer) - already checked above, so this is redundant
 
         // is being used in available budgets
         $availableBudgets = AvailableBudget::where('transaction_currency_id', $currency->id)->count();

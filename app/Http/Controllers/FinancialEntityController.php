@@ -94,9 +94,6 @@ class FinancialEntityController extends Controller
                 FinancialEntity::TYPE_BUSINESS,
                 FinancialEntity::TYPE_ADVISOR,
             ])
-            ->whereHas('users', function ($query) use ($user) {
-                $query->where('user_id', $user->id);
-            })
             ->orderBy('name')
             ->get(['id', 'name', 'display_name', 'entity_type']);
 
@@ -141,9 +138,6 @@ class FinancialEntityController extends Controller
                 FinancialEntity::TYPE_BUSINESS,
                 FinancialEntity::TYPE_ADVISOR,
             ])
-            ->whereHas('users', function ($query) use ($user) {
-                $query->where('user_id', $user->id);
-            })
             ->orderBy('name')
             ->get(['id', 'name', 'display_name', 'entity_type']);
 
@@ -286,15 +280,11 @@ class FinancialEntityController extends Controller
      */
     public function show($id): View
     {
-        $user = Auth::user();
-        
-        // Find the entity and check if user has permission
-        $financialEntity = FinancialEntity::whereHas('users', function ($query) use ($user) {
-            $query->where('user_id', $user->id);
-        })->find($id);
+        // Find the entity - no permission check needed for basic financial entities
+        $financialEntity = FinancialEntity::find($id);
         
         if (!$financialEntity) {
-            abort(404, 'Financial entity not found or you do not have permission to view it.');
+            abort(404, 'Financial entity not found.');
         }
         
         $relationships = $this->entityService->getEntityRelationships($financialEntity);
@@ -309,12 +299,8 @@ class FinancialEntityController extends Controller
      */
     public function edit($id): View
     {
-        $user = Auth::user();
-        
-        // Find the entity and check if user has permission
-        $financialEntity = FinancialEntity::whereHas('users', function ($query) use ($user) {
-            $query->where('user_id', $user->id);
-        })->find($id);
+        // Find the entity - no permission check needed for basic financial entities
+        $financialEntity = FinancialEntity::find($id);
         
         if (!$financialEntity) {
             abort(404, 'Financial entity not found or you do not have permission to edit it.');
@@ -338,9 +324,6 @@ class FinancialEntityController extends Controller
                 FinancialEntity::TYPE_ADVISOR,
             ])
             ->where('id', '!=', $financialEntity->id) // Exclude the current entity
-            ->whereHas('users', function ($query) use ($user) {
-                $query->where('user_id', $user->id);
-            })
             ->orderBy('name')
             ->get(['id', 'name', 'display_name', 'entity_type']);
 
@@ -359,12 +342,8 @@ class FinancialEntityController extends Controller
      */
     public function editModal($id): View
     {
-        $user = Auth::user();
-        
-        // Find the entity and check if user has permission
-        $financialEntity = FinancialEntity::whereHas('users', function ($query) use ($user) {
-            $query->where('user_id', $user->id);
-        })->find($id);
+        // Find the entity - no permission check needed for basic financial entities
+        $financialEntity = FinancialEntity::find($id);
         
         if (!$financialEntity) {
             abort(404, 'Financial entity not found or you do not have permission to edit it.');
@@ -391,9 +370,6 @@ class FinancialEntityController extends Controller
                 FinancialEntity::TYPE_ADVISOR,
             ])
             ->where('id', '!=', $financialEntity->id) // Exclude the current entity
-            ->whereHas('users', function ($query) use ($user) {
-                $query->where('user_id', $user->id);
-            })
             ->orderBy('name')
             ->get(['id', 'name', 'display_name', 'entity_type']);
 
@@ -493,12 +469,8 @@ class FinancialEntityController extends Controller
      */
     public function getEntityData($id): JsonResponse
     {
-        $user = Auth::user();
-        
-        // Find the entity and check if user has permission
-        $financialEntity = FinancialEntity::whereHas('users', function ($query) use ($user) {
-            $query->where('user_id', $user->id);
-        })->find($id);
+        // Find the entity - no permission check needed for basic financial entities
+        $financialEntity = FinancialEntity::find($id);
         
         if (!$financialEntity) {
             return response()->json(['success' => false, 'message' => 'Financial entity not found'], 404);
@@ -581,12 +553,8 @@ class FinancialEntityController extends Controller
      */
     public function update(Request $request, $id)
     {
-        $user = Auth::user();
-        
-        // Find the entity and check if user has permission
-        $financialEntity = FinancialEntity::whereHas('users', function ($query) use ($user) {
-            $query->where('user_id', $user->id);
-        })->find($id);
+        // Find the entity - no permission check needed for basic financial entities
+        $financialEntity = FinancialEntity::find($id);
         
         if (!$financialEntity) {
             abort(404, 'Financial entity not found or you do not have permission to update it.');
@@ -640,12 +608,8 @@ class FinancialEntityController extends Controller
     public function updateModal(Request $request, $id): JsonResponse
     {
         
-        $user = Auth::user();
-        
-        // Find the entity and check if user has permission
-        $financialEntity = FinancialEntity::whereHas('users', function ($query) use ($user) {
-            $query->where('user_id', $user->id);
-        })->find($id);
+        // Find the entity - no permission check needed for basic financial entities
+        $financialEntity = FinancialEntity::find($id);
         
         if (!$financialEntity) {
             return response()->json([

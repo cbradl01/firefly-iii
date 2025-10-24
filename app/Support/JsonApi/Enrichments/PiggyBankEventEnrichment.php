@@ -137,12 +137,12 @@ class PiggyBankEventEnrichment implements EnrichmentInterface
         }
 
         // get account currency preference for ALL.
-        $set       = AccountMeta::whereIn('account_id', array_values($this->accountIds))->where('name', 'currency_id')->get();
+        $set       = Account::whereIn('id', array_values($this->accountIds))->whereNotNull('currency_id')->get(['id', 'currency_id']);
 
-        /** @var AccountMeta $item */
+        /** @var Account $item */
         foreach ($set as $item) {
-            $accountId                           = (int)$item->account_id;
-            $currencyId                          = (int)$item->data;
+            $accountId                           = (int)$item->id;
+            $currencyId                          = (int)$item->currency_id;
             if (!array_key_exists($currencyId, $this->currencies)) {
                 $this->currencies[$currencyId] = Amount::getTransactionCurrencyById($currencyId);
             }

@@ -56,8 +56,7 @@ class AccountDestroyService
         // delete piggy banks:
         PiggyBank::where('account_id', $account->id)->delete();
 
-        // delete account meta:
-        $account->accountMeta()->delete();
+        // account meta data now stored directly in accounts table, no separate deletion needed
         // delete account.
         // at this point the account observer interferes and deletes most of the other stuff.
         $account->delete();
@@ -88,7 +87,7 @@ class AccountDestroyService
                 $ibAccount = $transaction->account;
                 app('log')->debug(sprintf('Connected to account #%d "%s"', $ibAccount->id, $ibAccount->name));
 
-                $ibAccount->accountMeta()->delete();
+                // account meta data now stored directly in accounts table, no separate deletion needed
                 $transaction->delete();
                 $ibAccount->delete();
             }

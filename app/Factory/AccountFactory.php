@@ -232,19 +232,13 @@ class AccountFactory
             return null;
         }
 
-        // Query accounts that have the same account_type_id and matching metadata
-        // We need to find accounts that have ALL three metadata fields matching
+        // Query accounts that have the same account_type_id and matching fields
+        // We need to find accounts that have ALL three fields matching
         $query = $this->user->accounts()
             ->where('account_type_id', $type->id)
-            ->whereHas('accountMeta', function ($q) use ($institution) {
-                $q->where('name', 'institution')->where('data', $institution);
-            })
-            ->whereHas('accountMeta', function ($q) use ($accountHolder) {
-                $q->where('name', 'account_holder')->where('data', $accountHolder);
-            })
-            ->whereHas('accountMeta', function ($q) use ($productName) {
-                $q->where('name', 'product_name')->where('data', $productName);
-            });
+            ->where('institution', $institution)
+            ->where('account_holder', $accountHolder)
+            ->where('product_name', $productName);
 
         /** @var null|Account */
         return $query->first();
@@ -287,18 +281,38 @@ class AccountFactory
             'data_keys' => array_keys($data)
         ]);
 
-        $databaseData   = [
+        // Get all account fields from FieldDefinitions
+        $accountFields = Account::getAccountFields();
+        
+        // Start with the core required fields
+        $databaseData = [
             'user_id'         => $this->user->id,
             'user_group_id'   => $this->user->user_group_id,
             'account_type_id' => $type->id,
             'template_id'     => null, // No longer using templates
-            'entity_id'       => $data['entity_id'] ?? null,
+            'entity_id'       => $data['entity_id'] ?? null, // TODO: this field is not needed on accounts
             'name'            => $generatedName,
             'order'           => 25000,
             'virtual_balance' => $virtualBalance,
             'active'          => $active,
             'iban'            => $data['iban'],
         ];
+        
+        // Add all account fields from FieldDefinitions, using data value or null
+        foreach ($accountFields as $fieldName => $fieldConfig) {
+            $databaseData[$fieldName] = $data[$fieldName] ?? null;
+        }
+        
+        // Add foreign key fields if available
+        $databaseData['account_holder_id'] = $data['account_holder_id'] ?? null;
+        $databaseData['institution_id'] = $data['institution_id'] ?? null;
+        
+        // Log the fields being included for debugging
+        Log::debug('AccountFactory::createAccount - Fields included', [
+            'total_fields' => count($databaseData),
+            'field_names' => array_keys($databaseData),
+            'account_fields_count' => count($accountFields)
+        ]);
         // fix virtual balance when it's empty
         if ('' === (string) $databaseData['virtual_balance']) {
             $databaseData['virtual_balance'] = null;
@@ -379,63 +393,12 @@ class AccountFactory
 
     private function storeMetaData(Account $account, array $data): void
     {
-        // Use the new validation service to get valid fields
-        $fields = $this->fieldValidationService->getValidFields($account->accountType, $data);
-        
-        Log::info('AccountFactory::storeMetaData - Field selection', [
-            'account_type' => $account->accountType->type,
-            'account_role' => $data['account_role'] ?? 'NOT_SET',
-            'valid_fields' => $fields,
-            'data_keys' => array_keys($data),
-            'owner_in_data' => array_key_exists('owner', $data),
-            'institution_in_data' => array_key_exists('institution', $data),
-            'owner_value' => $data['owner'] ?? 'NOT_SET'
+        // Metadata is now stored directly in the accounts table during creation
+        // No need for separate metadata storage
+        Log::info('AccountFactory::storeMetaData - Metadata already stored in accounts table', [
+            'account_id' => $account->id,
+            'account_name' => $account->name
         ]);
-        
-
-        // remove currency_id if necessary.
-        $type    = $account->accountType->type;
-        $list    = config('firefly.valid_currency_account_types');
-        if (!in_array($type, $list, true)) {
-            $pos = array_search('currency_id', $fields, true);
-            if (false !== $pos) {
-                unset($fields[$pos]);
-            }
-        }
-
-        /** @var AccountMetaFactory $factory */
-        $factory = app(AccountMetaFactory::class);
-        foreach ($fields as $field) {
-            // if the field is set but NULL, skip it.
-            // if the field is set but "", update it.
-            if (array_key_exists($field, $data) && null !== $data[$field]) {
-                // convert boolean value:
-                if (is_bool($data[$field]) && false === $data[$field]) {
-                    $data[$field] = 0;
-                }
-                if (true === $data[$field]) {
-                    $data[$field] = 1;
-                }
-
-                Log::info('Storing meta field', [
-                    'field' => $field,
-                    'value' => $data[$field],
-                    'account_id' => $account->id,
-                    'account_name' => $account->name
-                ]);
-                
-                $factory->crud($account, $field, (string) $data[$field]);
-            } else {
-                Log::info('Skipping meta field', [
-                    'field' => $field,
-                    'exists' => array_key_exists($field, $data),
-                    'value' => $data[$field] ?? 'NOT_SET',
-                    'is_null' => null === ($data[$field] ?? null),
-                    'account_id' => $account->id,
-                    'account_name' => $account->name
-                ]);
-            }
-        }
     }
 
     /**

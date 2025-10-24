@@ -644,18 +644,16 @@ class FireflyValidator extends Validator
             $accountId = (int) ($parameters[0] ?? 0.0);
         }
 
-        $query     = AccountMeta::leftJoin('accounts', 'accounts.id', '=', 'account_meta.account_id')
-            ->whereNull('accounts.deleted_at')
+        $query     = Account::whereNull('accounts.deleted_at')
             ->where('accounts.user_id', auth()->user()->id)
-            ->where('account_meta.name', 'account_number')
-            ->where('account_meta.data', json_encode($value))
+            ->where('accounts.account_number', $value)
         ;
 
         if ($accountId > 0) {
             // exclude current account from check.
-            $query->where('account_meta.account_id', '!=', $accountId);
+            $query->where('accounts.id', '!=', $accountId);
         }
-        $set       = $query->get(['account_meta.*']);
+        $set       = $query->get(['accounts.*']);
         $count     = $set->count();
         if (0 === $count) {
             return true;

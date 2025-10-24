@@ -27,6 +27,7 @@ use FireflyIII\Enums\AccountTypeEnum;
 use FireflyIII\Handlers\Observer\AccountObserver;
 use FireflyIII\Models\AccountCategory;
 use FireflyIII\Models\AccountBehavior;
+use FireflyIII\Models\FinancialEntity;
 use FireflyIII\Support\Models\ReturnsIntegerIdTrait;
 use FireflyIII\Support\Models\ReturnsIntegerUserIdTrait;
 use FireflyIII\User;
@@ -61,7 +62,8 @@ class Account extends Model
     {
         return [
             'user_id', 'user_group_id', 'account_type_id', 'template_id', 'entity_id', 
-            'native_virtual_balance', 'name', 'active', 'iban', 'order', 'virtual_balance'
+            'native_virtual_balance', 'name', 'active', 'iban', 'order', 'virtual_balance',
+            'account_holder_id', 'institution_id'
         ];
     }
 
@@ -71,7 +73,7 @@ class Account extends Model
     public function getFillable()
     {
         $systemFields = $this->getSystemFields();
-        $accountFields = \FireflyIII\FieldDefinitions\FieldDefinitions::getFieldsForTargetType('account');
+        $accountFields = self::getAccountFields();
         $fieldNames = array_keys($accountFields);
         
         return array_merge($systemFields, $fieldNames);
@@ -266,24 +268,47 @@ class Account extends Model
     protected function accountNumber(): Attribute
     {
         return Attribute::make(get: function () {
-            /** @var null|AccountMeta $metaValue */
-            $metaValue = $this->accountMeta()
-                ->where('name', 'account_number')
-                ->first()
-            ;
-
-            return null !== $metaValue ? $metaValue->data : '';
+            return $this->attributes['account_number'] ?? '';
         });
     }
 
-    public function accountMeta(): HasMany
+    /**
+     * Get the account path for file system operations.
+     */
+    protected function accountPath(): Attribute
     {
-        return $this->hasMany(AccountMeta::class);
+        return Attribute::make(get: function () {
+            $accountsPath = config('firefly.accounts_path'); // TODO: make this configurable
+            
+            $institution = $this->institutionEntity?->name;
+            $accountHolder = $this->accountHolder?->name;
+            $accountType = $this->accountType?->name;
+            $accountNumber = $this->account_number;
+
+            $typeSuffix = $accountType ? " - {$accountType}" : "";
+            $numberSuffix = $accountNumber ? " - {$accountNumber}" : "";
+            
+            $accountPath = "{$accountsPath}/{$accountHolder}/{$institution}{$typeSuffix}{$numberSuffix}";
+            
+            // Check if path exists, if not try closed accounts
+            // if (!file_exists($accountPath)) {
+            //     throw new \Exception("Account path does not exist: {$accountPath}");
+            // }
+
+            return $accountPath;
+        });
     }
 
-    public function accountMetadata(): HasMany
+    // Removed accountMeta relationship - data now stored directly in accounts table
+
+    public function accountHolder(): BelongsTo
     {
-        return $this->hasMany(AccountMeta::class);
+        return $this->belongsTo(FinancialEntity::class, 'account_holder_id');
+    }
+
+    public function institutionEntity(): BelongsTo
+    {
+        return $this->belongsTo(FinancialEntity::class, 'institution_id');
     }
 
     public function beneficiaries(): HasMany
@@ -417,7 +442,7 @@ class Account extends Model
     protected function virtualBalance(): Attribute
     {
         return Attribute::make(
-            get: fn () => $this->virtual_balance,
+            get: fn () => $this->attributes['virtual_balance'] ?? null,
             set: fn ($value) => $this->attributes['virtual_balance'] = $value,
         );
     }
@@ -464,22 +489,87 @@ class Account extends Model
     }
 
     /**
-     * Get metadata value by key
+     * Get metadata value by key (now stored directly in accounts table)
      */
     public function getMetadataValue(string $key, mixed $default = null): mixed
     {
-        $metadata = $this->accountMetadata()->where('name', $key)->first();
-        return $metadata ? $metadata->parsed_value : $default;
+        return $this->getAttribute($key) ?? $default;
     }
 
     /**
-     * Set metadata value
+     * Set metadata value (now stored directly in accounts table)
      */
     public function setMetadataValue(string $key, mixed $value): void
     {
-        $this->accountMetadata()->updateOrCreate(
-            ['name' => $key],
-            ['data' => is_array($value) || is_object($value) ? json_encode($value) : (string) $value]
-        );
+        $this->setAttribute($key, $value);
+    }
+
+    /**
+     * Get all account fields from FieldDefinitions
+     * 
+     * @return array
+     */
+    public static function getAccountFields(): array
+    {
+        return \FireflyIII\FieldDefinitions\FieldDefinitions::getFieldsForTargetType('account');
+    }
+
+    /**
+     * Get overview data for display on account show page
+     * Only shows fields that are defined in the account type's firefly_mapping
+     * 
+     * @return array
+     */
+    public function getOverviewData(): array
+    {
+        // Get all possible overview fields from FieldDefinitions
+        $allOverviewFields = \FireflyIII\FieldDefinitions\FieldDefinitions::getOverviewFields('account');
+        
+        // Get the fields that are actually configured for this account type
+        $accountTypeFields = [];
+        if ($this->accountType && $this->accountType->firefly_mapping) {
+            $accountTypeFields = $this->accountType->firefly_mapping['account_fields'] ?? [];
+        }
+        
+        // Filter to only show fields that are defined in the account type template
+        $overviewFields = [];
+        foreach ($allOverviewFields as $fieldName => $fieldData) {
+            if (isset($accountTypeFields[$fieldName])) {
+                $overviewFields[$fieldName] = $fieldData;
+            }
+        }
+        
+        $overviewData = [];
+        
+        foreach ($overviewFields as $fieldName => $fieldData) {
+            $value = $this->getMetadataValue($fieldName);
+            
+            // Special handling for account_holder to get the entity name and link
+            if ($fieldName === 'account_holder' && $value) {
+                $entity = \FireflyIII\Models\FinancialEntity::where('name', $value)->first();
+                if ($entity) {
+                    $displayValue = $entity->display_name ?? $entity->name;
+                    $overviewData[$fieldName] = [
+                        'value' => $displayValue,
+                        'link' => route('financial-entities.show', $entity->id),
+                        'field_data' => $fieldData
+                    ];
+                } else {
+                    $overviewData[$fieldName] = [
+                        'value' => \FireflyIII\FieldDefinitions\FieldDefinitions::getOverviewDisplayValue($fieldName, $value, $fieldData),
+                        'link' => null,
+                        'field_data' => $fieldData
+                    ];
+                }
+            } else {
+                $overviewData[$fieldName] = [
+                    'value' => \FireflyIII\FieldDefinitions\FieldDefinitions::getOverviewDisplayValue($fieldName, $value, $fieldData),
+                    'link' => null,
+                    'field_data' => $fieldData
+                ];
+            }
+        }
+        
+        return $overviewData;
     }
 }

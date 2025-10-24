@@ -346,12 +346,9 @@ class TransactionGroupRepository implements TransactionGroupRepositoryInterface,
                 continue;
             }
             // get currency preference.
-            $currencyPreference   = AccountMeta::where('account_id', $row->piggyBank->account_id)
-                ->where('name', 'currency_id')
-                ->first()
-            ;
-            if (null !== $currencyPreference) {
-                $currency = Amount::getTransactionCurrencyById((int) $currencyPreference->data);
+            $account = Account::where('id', $row->piggyBank->account_id)->first(['currency_id']);
+            if (null !== $account && null !== $account->currency_id) {
+                $currency = Amount::getTransactionCurrencyById((int) $account->currency_id);
             }
             $journalId            = $row->transaction_journal_id;
             $return[$journalId] ??= [];

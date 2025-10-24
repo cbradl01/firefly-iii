@@ -111,15 +111,8 @@ class AccountRepository implements AccountRepositoryInterface, UserGroupInterfac
     {
         $dbQuery = $this->user
             ->accounts()
-            ->leftJoin('account_meta', 'accounts.id', '=', 'account_meta.account_id')
             ->where('accounts.active', true)
-            ->where(
-                static function (EloquentBuilder $q1) use ($number): void {
-                    $json = json_encode($number);
-                    $q1->where('account_meta.name', '=', 'account_number');
-                    $q1->where('account_meta.data', '=', $json);
-                }
-            )
+            ->where('accounts.account_number', $number)
         ;
 
         if (0 !== count($types)) {
@@ -244,8 +237,9 @@ class AccountRepository implements AccountRepositoryInterface, UserGroupInterfac
     {
         $query = $this->user->accounts()->with(
             [  // @phpstan-ignore-line
-                'accountmeta',
                 'attachments',
+                'accountHolder',
+                'institutionEntity',
             ]
         );
         if (0 !== count($types)) {
@@ -306,9 +300,8 @@ class AccountRepository implements AccountRepositoryInterface, UserGroupInterfac
     {
         $query = $this->user->accounts()->with(
             [ // @phpstan-ignore-line
-                'accountmeta' => static function (HasMany $query): void {
-                    $query->where('name', 'account_role');
-                },
+                'accountHolder',
+                'institutionEntity',
             ]
         );
         if (0 !== count($types)) {
@@ -454,17 +447,8 @@ class AccountRepository implements AccountRepositoryInterface, UserGroupInterfac
      */
     public function getMetaValue(Account $account, string $field): ?string
     {
-        $result = $account->accountMeta->filter(
-            static fn (AccountMeta $meta) => strtolower($meta->name) === strtolower($field)
-        );
-        if (0 === $result->count()) {
-            return null;
-        }
-        if (1 === $result->count()) {
-            return (string) $result->first()->data;
-        }
-
-        return null;
+        $value = $account->getAttribute($field);
+        return $value ? (string) $value : null;
     }
 
     public function count(array $types): int
@@ -697,11 +681,10 @@ class AccountRepository implements AccountRepositoryInterface, UserGroupInterfac
     public function searchAccountNr(string $query, array $types, int $limit): Collection
     {
         $dbQuery = $this->user->accounts()->distinct()
-            ->leftJoin('account_meta', 'accounts.id', '=', 'account_meta.account_id')
             ->where('accounts.active', true)
             ->orderBy('accounts.order', 'ASC')
             ->orderBy('accounts.name', 'ASC')
-            ->with(['accountType', 'accountMeta'])
+            ->with(['accountType'])
         ;
         if ('' !== $query) {
             // split query on spaces just in case:
@@ -711,12 +694,7 @@ class AccountRepository implements AccountRepositoryInterface, UserGroupInterfac
                 $dbQuery->where(
                     static function (EloquentBuilder $q1) use ($search): void {
                         $q1->whereLike('accounts.iban', $search);
-                        $q1->orWhere(
-                            static function (EloquentBuilder $q2) use ($search): void {
-                                $q2->where('account_meta.name', '=', 'account_number');
-                                $q2->whereLike('account_meta.data', $search);
-                            }
-                        );
+                        $q1->orWhereLike('accounts.account_number', $search);
                     }
                 );
             }

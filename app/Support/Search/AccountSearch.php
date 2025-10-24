@@ -63,7 +63,6 @@ class AccountSearch implements GenericSearchInterface
     public function search(): Collection
     {
         $searchQuery   = $this->user->accounts()
-            ->leftJoin('account_meta', 'accounts.id', '=', 'account_meta.account_id')
             ->accountTypeIn($this->types)
         ;
         $like          = sprintf('%%%s%%', $this->query);
@@ -80,13 +79,7 @@ class AccountSearch implements GenericSearchInterface
                     }
                 );
                 // meta data:
-                $searchQuery->orWhere(
-                    static function (Builder $q) use ($originalQuery): void {
-                        $json = json_encode($originalQuery, JSON_THROW_ON_ERROR);
-                        $q->where('account_meta.name', '=', 'account_number');
-                        $q->whereLike('account_meta.data', $json);
-                    }
-                );
+                $searchQuery->orWhereLike('accounts.account_number', $originalQuery);
 
                 break;
 
@@ -107,13 +100,7 @@ class AccountSearch implements GenericSearchInterface
 
             case self::SEARCH_NUMBER:
                 // meta data:
-                $searchQuery->Where(
-                    static function (Builder $q) use ($originalQuery): void {
-                        $json = json_encode($originalQuery, JSON_THROW_ON_ERROR);
-                        $q->where('account_meta.name', 'account_number');
-                        $q->where('account_meta.data', $json);
-                    }
-                );
+                $searchQuery->where('accounts.account_number', $originalQuery);
 
                 break;
         }

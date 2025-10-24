@@ -215,7 +215,7 @@ class EditController extends Controller
         
         // Get account metadata values
         $institution = $account->getMetadataValue('institution', '');
-        $owner = $account->getMetadataValue('owner', '');
+        $accountHolder = $account->getMetadataValue('account_holder', '');
         $productName = $account->getMetadataValue('product_name', '');
 
         // Get user's manageable entities for the owner dropdown
@@ -235,7 +235,7 @@ class EditController extends Controller
             'allCurrencies', 
             'currency',
             'institution',
-            'owner',
+            'accountHolder',
             'productName',
             'userEntities',
             'userEntity'
@@ -337,7 +337,7 @@ class EditController extends Controller
 
         // Update metadata fields
         $account->setMetadataValue('institution', $request->input('institution'));
-        $account->setMetadataValue('owner', $request->input('owner'));
+        $account->setMetadataValue('account_holder', $request->input('account_holder'));
         $account->setMetadataValue('product_name', $request->input('product_name'));
 
         Log::channel('audit')->info(sprintf('Updated account #%d from template.', $account->id), $request->all());
@@ -468,15 +468,10 @@ class EditController extends Controller
 
         try {
             // Load account with all necessary relationships
-            $account->load(['accountType', 'accountType.category', 'accountMetadata']);
+            $account->load(['accountType', 'accountType.category']);
             
-            // Start with basic account attributes
+            // Get all account data directly from the accounts table
             $accountData = $account->toArray();
-            
-            // Add metadata fields directly
-            foreach ($account->accountMetadata as $meta) {
-                $accountData[$meta->name] = $meta->parsed_value;
-            }
             
             // Add any computed fields
             $accountData['account_status'] = $account->active ? 'active' : 'inactive';
@@ -580,7 +575,7 @@ class EditController extends Controller
             }
             
             // Get all account fields from field definitions
-            $accountFields = \FireflyIII\FieldDefinitions\FieldDefinitions::getFieldsForTargetType('account');
+            $accountFields = Account::getAccountFields();
             
             // Add all metadata fields
             foreach ($accountFields as $fieldName => $fieldData) {
@@ -683,7 +678,7 @@ class EditController extends Controller
 
             // Update metadata fields
             $account->setMetadataValue('institution', $request->input('institution'));
-            $account->setMetadataValue('owner', $request->input('owner'));
+            $account->setMetadataValue('account_holder', $request->input('account_holder'));
             $account->setMetadataValue('product_name', $request->input('product_name'));
 
             Log::channel('audit')->info(sprintf('Updated account #%d from template.', $account->id), $request->all());
@@ -710,12 +705,7 @@ class EditController extends Controller
     {
         $fieldValues = [];
         
-        // Get values from account metadata
-        if ($account->accountMetadata) {
-            foreach ($account->accountMetadata as $metadata) {
-                $fieldValues[$metadata->name] = $metadata->data;
-            }
-        }
+        // Get values directly from account fields (metadata now stored in accounts table)
         
         // Add basic account fields
         $fieldValues['name'] = $account->name;
@@ -729,7 +719,7 @@ class EditController extends Controller
         
         // Add entity information if available
         if ($account->entity) {
-            $fieldValues['owner'] = $account->entity->id; // Use entity ID for dropdown selection
+            $fieldValues['account_holder'] = $account->entity->id; // Use entity ID for dropdown selection
         }
         
         return $fieldValues;

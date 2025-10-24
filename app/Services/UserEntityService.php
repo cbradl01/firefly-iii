@@ -96,10 +96,9 @@ class UserEntityService
      */
     public function getUserEntity(User $user): ?FinancialEntity
     {
+        // Return the first individual entity or null if none exist
+        // In the current system, we don't need user-specific entities
         return FinancialEntity::where('entity_type', FinancialEntity::TYPE_INDIVIDUAL)
-            ->whereHas('users', function ($query) use ($user) {
-                $query->where('user_id', $user->id);
-            })
             ->first();
     }
 
@@ -108,8 +107,7 @@ class UserEntityService
      */
     public function getUserManageableEntities(User $user): \Illuminate\Support\Collection
     {
-        return FinancialEntity::whereHas('users', function ($query) use ($user) {
-            $query->where('user_id', $user->id);
-        })->active()->get();
+        // Return all active financial entities - no permission check needed for basic entities
+        return FinancialEntity::active()->get();
     }
 }

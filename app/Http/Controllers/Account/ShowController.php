@@ -224,6 +224,9 @@ class ShowController extends Controller
 
         Log::debug(sprintf('show: Call finalAccountBalance with date/time "%s"', $now->toIso8601String()));
         $balances         = Steam::filterAccountBalance(Steam::finalAccountBalance($account, $now), $account, $this->convertToPrimary, $accountCurrency);
+        
+        // Get overview data for the account
+        $overviewData = $account->getOverviewData();
 
         return view(
             'accounts.show',
@@ -246,7 +249,8 @@ class ShowController extends Controller
                 'balances',
                 'sortField',
                 'sortDirection',
-                'hideHoldTransactions'
+                'hideHoldTransactions',
+                'overviewData'
             )
         );
     }
@@ -347,6 +351,9 @@ class ShowController extends Controller
         // correct
         Log::debug(sprintf('showAll: Call finalAccountBalance with date/time "%s"', $end->toIso8601String()));
         $balances        = Steam::filterAccountBalance(Steam::finalAccountBalance($account, $end), $account, $this->convertToPrimary, $accountCurrency);
+        
+        // Get overview data for the account
+        $overviewData = $account->getOverviewData();
 
         return view(
             'accounts.show',
@@ -370,7 +377,8 @@ class ShowController extends Controller
                 'balances',
                 'sortField',
                 'sortDirection',
-                'hideHoldTransactions'
+                'hideHoldTransactions',
+                'overviewData'
             )
         );
     }

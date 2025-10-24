@@ -13,7 +13,7 @@ class FieldDefinitionService
      */
     public function getAccountFields(): array
     {
-        return FieldDefinitions::getFieldsForTargetType('account');
+        return Account::getAccountFields();
     }
 
     /**

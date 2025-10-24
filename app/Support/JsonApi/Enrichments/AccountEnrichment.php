@@ -328,16 +328,26 @@ class AccountEnrichment implements EnrichmentInterface
 
     private function collectMetaData(): void
     {
-        $set                 = AccountMeta::whereIn('name', ['is_multi_currency', 'include_net_worth', 'currency_id', 'account_role', 'account_number', 'BIC', 'liability_direction', 'interest', 'interest_period', 'current_debt'])
-            ->whereIn('account_id', $this->ids)
-            ->get(['account_meta.id', 'account_meta.account_id', 'account_meta.name', 'account_meta.data'])->toArray()
+        // Get accounts with the fields we need directly from the accounts table
+        $accounts = Account::whereIn('id', $this->ids)
+            ->get(['id', 'is_multi_currency', 'include_net_worth', 'currency_id', 'account_role', 'account_number', 'BIC', 'liability_direction', 'interest', 'interest_period', 'current_debt'])
+            ->toArray()
         ;
 
-        /** @var array $entry */
-        foreach ($set as $entry) {
-            $this->meta[(int)$entry['account_id']][$entry['name']] = (string)$entry['data'];
-            if ('currency_id' === $entry['name']) {
-                $this->currencies[(int)$entry['data']] = true;
+        /** @var array $account */
+        foreach ($accounts as $account) {
+            $accountId = (int)$account['id'];
+            
+            // Map the fields to the expected meta structure
+            $fields = ['is_multi_currency', 'include_net_worth', 'currency_id', 'account_role', 'account_number', 'BIC', 'liability_direction', 'interest', 'interest_period', 'current_debt'];
+            
+            foreach ($fields as $field) {
+                if (isset($account[$field]) && $account[$field] !== null) {
+                    $this->meta[$accountId][$field] = (string)$account[$field];
+                    if ('currency_id' === $field) {
+                        $this->currencies[(int)$account[$field]] = true;
+                    }
+                }
             }
         }
         if (count($this->currencies) > 0) {

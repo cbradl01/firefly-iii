@@ -254,7 +254,7 @@ class TemplateController extends Controller
         $this->cleanRequestData($request);
 
         // Get all account fields from FieldDefinitions - single source of truth
-        $accountFields = FieldDefinitions::getFieldsForTargetType('account');
+        $accountFields = Account::getAccountFields();
         $fieldNames = array_keys($accountFields);
         
         // Get form data for all account fields
@@ -326,7 +326,7 @@ class TemplateController extends Controller
             }
         }
         
-        $accountFields = FieldDefinitions::getFieldsForTargetType('account');
+        $accountFields = Account::getAccountFields();
         
         foreach ($accountFields as $fieldName => $fieldConfig) {
             if ($request->has($fieldName)) {

@@ -585,11 +585,9 @@ class OperatorQuerySearch implements SearchInterface
                 $ibanMatch      = $stringMethod(strtolower((string)$account->iban), strtolower($value));
                 $accountNrMatch = false;
 
-                /** @var AccountMeta $meta */
-                foreach ($account->accountMeta as $meta) {
-                    if ('account_number' === $meta->name && $stringMethod(strtolower((string)$meta->data), strtolower($value))) {
-                        $accountNrMatch = true;
-                    }
+                // Check account number directly from accounts table
+                if ($account->account_number && $stringMethod(strtolower((string)$account->account_number), strtolower($value))) {
+                    $accountNrMatch = true;
                 }
 
                 return $ibanMatch || $accountNrMatch;

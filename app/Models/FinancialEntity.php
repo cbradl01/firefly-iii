@@ -41,6 +41,7 @@ class FinancialEntity extends Model
     public const TYPE_ADVISOR = 'advisor';
     public const TYPE_CUSTODIAN = 'custodian';
     public const TYPE_PLAN_ADMINISTRATOR = 'plan_administrator';
+    public const TYPE_INSTITUTION = 'institution';
 
     /**
      * Get all accounts owned by this entity

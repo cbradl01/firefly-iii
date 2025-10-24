@@ -1013,12 +1013,11 @@ class Steam
         if (!in_array($type, $list, true)) {
             return null;
         }
-        $result = $account->accountMeta()->where('name', 'currency_id')->first();
-        if (null === $result) {
+        if (null === $account->currency_id) {
             return null;
         }
 
-        return Amount::getTransactionCurrencyById((int)$result->data);
+        return Amount::getTransactionCurrencyById((int)$account->currency_id);
     }
 
     public function getHostName(string $ipAddress): string
@@ -1291,13 +1290,13 @@ class Steam
         $currencies[$primary->id] = $primary;
 
         $ids                      = $accounts->pluck('id')->toArray();
-        $result                   = AccountMeta::whereIn('account_id', $ids)->where('name', 'currency_id')->get();
+        $result                   = Account::whereIn('id', $ids)->whereNotNull('currency_id')->get(['id', 'currency_id']);
 
-        /** @var AccountMeta $item */
+        /** @var Account $item */
         foreach ($result as $item) {
-            $integer = (int)$item->data;
+            $integer = (int)$item->currency_id;
             if (0 !== $integer) {
-                $accountPreferences[(int)$item->account_id] = $integer;
+                $accountPreferences[(int)$item->id] = $integer;
             }
         }
         // collect those currencies, skip primary because we already have it.
