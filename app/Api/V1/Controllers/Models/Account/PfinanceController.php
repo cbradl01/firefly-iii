@@ -466,11 +466,11 @@ class PfinanceController extends Controller
             // Validate the request
             $request->validate([
                 'accounts' => 'required|array|min:1',
-                'accounts.*.name' => 'required|string|max:1024',
+                'accounts.*.name' => 'nullable|string|max:1024', // Name is auto-generated, not required
                 'accounts.*.account_type_name' => 'required|string|max:1024',
                 'accounts.*.account_holder' => 'required|string|max:255',
-                'accounts.*.institution' => 'nullable|string|max:255',
-                'accounts.*.product_name' => 'nullable|string|max:255',
+                'accounts.*.institution' => 'required|string|max:255', // Required for name generation
+                'accounts.*.product_name' => 'required|string|max:255', // Required for name generation
             ]);
 
             $accounts = $request->input('accounts');
@@ -522,10 +522,13 @@ class PfinanceController extends Controller
                         $accountData['institution_id'] = $institutionEntity->id;
                     }
 
-                    // Use the AccountFactory to create the account (same as importFromJson)
-                    $factory = app(\FireflyIII\Factory\AccountFactory::class);
-                    $factory->setUser(auth()->user());
-                    $account = $factory->create($accountData);
+                        // Use the AccountFactory to create the account (same as importFromJson)
+                        $factory = app(\FireflyIII\Factory\AccountFactory::class);
+                        $factory->setUser(auth()->user());
+                        
+                        // If no name is provided, let AccountFactory generate it
+                        // If name is provided, use it (AccountFactory will use it if present)
+                        $account = $factory->create($accountData);
                     
                     if (!$account) {
                         throw new \Exception('Failed to create account');
@@ -543,7 +546,8 @@ class PfinanceController extends Controller
 
                 } catch (\Exception $e) {
                     $skippedCount++;
-                    $skippedReasons[] = "Account " . ($index + 1) . " ('{$accountData['name']}'): " . $e->getMessage();
+                    $accountName = $accountData['name'] ?? ($accountData['institution'] . ' - ' . $accountData['product_name'] . ' (' . $accountData['account_holder'] . ')');
+                    $skippedReasons[] = "Account " . ($index + 1) . " ('{$accountName}'): " . $e->getMessage();
                     Log::error('Failed to create account via API', [
                         'account_data' => $accountData,
                         'error' => $e->getMessage()
