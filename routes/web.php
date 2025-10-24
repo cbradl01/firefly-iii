@@ -212,7 +212,6 @@ Route::group(
         
         // import from json
         Route::get('import/json/{objectType}', ['uses' => 'Account\ImportController@importJson', 'as' => 'import.json'])->where('objectType', 'revenue|asset|expense|liabilities');
-        Route::post('import/json/{objectType}', ['uses' => 'Account\ImportController@importFromJson', 'as' => 'import.json.process'])->where('objectType', 'revenue|asset|expense|liabilities');
 
         // template routes
         Route::get('templates', ['uses' => 'Account\TemplateController@index', 'as' => 'templates.index']);

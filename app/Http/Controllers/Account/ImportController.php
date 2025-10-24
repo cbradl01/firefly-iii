@@ -28,7 +28,6 @@ use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Http\Controllers\Controller;
 use FireflyIII\Models\Account;
 use FireflyIII\Repositories\Account\AccountRepositoryInterface;
-use FireflyIII\Services\AccountClassificationService;
 use FireflyIII\Support\Http\Controllers\BasicDataSupport;
 use Illuminate\Contracts\View\Factory;
 use Illuminate\Http\RedirectResponse;
@@ -47,7 +46,6 @@ class ImportController extends Controller
     use BasicDataSupport;
 
     private AccountRepositoryInterface $repository;
-    private AccountClassificationService $classificationService;
 
     /**
      * ImportController constructor.
@@ -63,7 +61,6 @@ class ImportController extends Controller
                 app('view')->share('title', (string) trans('firefly.accounts'));
 
                 $this->repository = app(AccountRepositoryInterface::class);
-                $this->classificationService = app(AccountClassificationService::class);
 
                 return $next($request);
             }
@@ -360,255 +357,15 @@ class ImportController extends Controller
         return view('accounts.import-json', compact('objectType', 'subTitle', 'entityMapping'));
     }
 
-    /**
-     * Import accounts from JSON file (alternative to CSV)
-     * This method provides explicit account definitions
-     */
-    public function importFromJson(Request $request, string $objectType)
-    {
-        $request->validate([
-            'json_file' => 'required|file|mimes:json|max:10240', // 10MB max
-        ]);
-
-        $file = $request->file('json_file');
-        
-        try {
-            $jsonContent = file_get_contents($file->getPathname());
-            $accounts = json_decode($jsonContent, true);
-            
-            if (json_last_error() !== JSON_ERROR_NONE) {
-                return redirect()->back()->withErrors(['json_file' => 'Invalid JSON file: ' . json_last_error_msg()]);
-            }
-            
-            if (!is_array($accounts)) {
-                return redirect()->back()->withErrors(['json_file' => 'JSON file must contain an array of accounts']);
-            }
-            
-            // Get entity mapping for owner field
-            $entityMapping = $this->getEntityMapping();
-            
-            // Check if any entities are available for mapping
-            if (empty($entityMapping)) {
-                return redirect()->back()->withErrors(['json_file' => 'No financial entities are available for owner mapping. Please create some entities first before importing accounts.']);
-            }
-            
-            $createdCount = 0;
-            $skippedCount = 0;
-            $skippedReasons = [];
-            
-            foreach ($accounts as $index => $accountData) {
-                try {
-                    // Handle source account for liability credit accounts
-                    $sourceAccountId = null;
-                    if (isset($accountData['source_account_id']) && !empty($accountData['source_account_id'])) {
-                        $sourceAccountId = $accountData['source_account_id'];
-                        unset($accountData['source_account_id']); // Remove from account data
-                    }
-                    
-                    // Use account classification service to map account type to Firefly III format
-                    if (isset($accountData['account_type'])) {
-                        $mapping = $this->classificationService->getFireflyMapping($accountData['account_type']);
-                        
-                        if ($mapping) {
-                            // Use the mapping from the classification system for Firefly III internal processing
-                            $accountData['account_type_name'] = $mapping['firefly_type'];
-                            $accountData['account_role'] = $mapping['firefly_role'];
-                            
-                            // Keep the descriptive account type as metadata for display
-                            // Don't unset it - let it be stored as metadata
-                            
-                            Log::info('Mapped account type using classification system', [
-                                'descriptive_type' => $accountData['account_type'],
-                                'firefly_type' => $mapping['firefly_type'],
-                                'firefly_role' => $mapping['firefly_role']
-                            ]);
-                        } else {
-                            // Fallback to original behavior if no mapping found
-                            $accountData['account_type_name'] = $accountData['account_type'];
-                            
-                            Log::warning('No classification mapping found for account type', [
-                                'account_type' => $accountData['account_type']
-                            ]);
-                        }
-                        
-                        // Don't unset account_type - let it be stored as metadata for display
-                    }
-                    
-        // Handle template_name field for account type mapping (now using account types directly)
-        if (isset($accountData['template_name']) && !empty($accountData['template_name'])) {
-            // Look up account type by name in database
-            $accountType = \FireflyIII\Models\AccountType::where('name', $accountData['template_name'])
-                ->where('active', true)
-                ->first();
-            
-            if ($accountType) {
-                $accountData['template'] = $accountType->name; // Use the account type name for AccountFactory
-                unset($accountData['template_name']); // Remove template_name, keep template
-                
-                Log::info('Using account type for mapping', [
-                    'template_name' => $accountData['template_name'],
-                    'account_type_name' => $accountType->name,
-                    'account_name' => $accountData['name'] ?? 'Unknown'
-                ]);
-            } else {
-                Log::warning('Account type not found for account import', [
-                    'template_name' => $accountData['template_name'],
-                    'account_name' => $accountData['name'] ?? 'Unknown'
-                ]);
-                // Continue without account type - will fall back to category/behavior mapping
-            }
-        }
-                    
-                    // Debug currency information
-                    Log::info('Currency debug', [
-                        'currency_id' => $accountData['currency_id'] ?? 'NOT_SET',
-                        'currency_code' => $accountData['currency_code'] ?? 'NOT_SET',
-                        'has_currency_id' => isset($accountData['currency_id']),
-                        'has_currency_code' => isset($accountData['currency_code'])
-                    ]);
-                    
-                    // Add default currency if not present or is 0
-                    if ((!isset($accountData['currency_id']) || $accountData['currency_id'] == 0) && !isset($accountData['currency_code'])) {
-                        // Get the user's primary currency
-                        $primaryCurrency = app('amount')->getPrimaryCurrencyByUserGroup(Auth::user()->userGroup);
-                        $accountData['currency_id'] = $primaryCurrency->id;
-                        Log::info('Added default currency_id to account data', [
-                            'currency_id' => $primaryCurrency->id,
-                            'currency_code' => $primaryCurrency->code
-                        ]);
-                    }
-                    
-                    // Map owner to entity ID - this is required for import
-                    if (isset($accountData['owner']) && !empty($accountData['owner'])) {
-                        $ownerDisplayName = $accountData['owner'];
-                        if (isset($entityMapping[$ownerDisplayName])) {
-                            $accountData['entity_id'] = $entityMapping[$ownerDisplayName];
-                            Log::info('Mapped owner to entity', [
-                                'owner' => $ownerDisplayName,
-                                'entity_id' => $accountData['entity_id']
-                            ]);
-                        } else {
-                            // Skip this account if owner doesn't match any entity
-                            $skippedCount++;
-                            $skippedReasons[] = "Account " . ($index + 1) . " ('{$accountData['name']}'): Owner '{$ownerDisplayName}' does not match any existing financial entity. Available entities: " . implode(', ', array_keys($entityMapping));
-                            Log::warning('Skipping account - owner not found in entity mapping', [
-                                'account_name' => $accountData['name'],
-                                'owner' => $ownerDisplayName,
-                                'available_entities' => array_keys($entityMapping)
-                            ]);
-                            continue; // Skip to next account
-                        }
-                    } else {
-                        // Skip accounts without owner
-                        $skippedCount++;
-                        $skippedReasons[] = "Account " . ($index + 1) . " ('{$accountData['name']}'): No owner specified. All accounts must have an owner that matches an existing financial entity.";
-                        Log::warning('Skipping account - no owner specified', [
-                            'account_name' => $accountData['name']
-                        ]);
-                        continue; // Skip to next account
-                    }
-                    
-                    // Create account directly using the repository
-                    Log::info('Creating account from JSON', ['account_data' => $accountData]);
-                    Log::info('Owner field check', [
-                        'owner' => $accountData['owner'] ?? 'NOT_SET', 
-                        'entity_id' => $accountData['entity_id'] ?? 'NOT_SET',
-                        'institution' => $accountData['institution'] ?? 'NOT_SET',
-                        'owner_type' => gettype($accountData['owner'] ?? null),
-                        'institution_type' => gettype($accountData['institution'] ?? null),
-                        'owner_empty' => empty($accountData['owner'] ?? null),
-                        'institution_empty' => empty($accountData['institution'] ?? null)
-                    ]);
-                    
-                    // Extract beneficiaries data before creating account
-                    $beneficiariesData = null;
-                    if (isset($accountData['beneficiaries'])) {
-                        $beneficiariesData = $accountData['beneficiaries'];
-                        unset($accountData['beneficiaries']); // Remove from account data
-                    }
-                    
-                    // Use the account factory to create the account
-                    $factory = app(\FireflyIII\Factory\AccountFactory::class);
-                    $factory->setUser(Auth::user());
-                    $account = $factory->create($accountData);
-                    
-                    if (!$account) {
-                        throw new \Exception('Failed to create account');
-                    }
-                    
-                    // Create beneficiaries if provided
-                    if ($beneficiariesData && $account) {
-                        $this->createBeneficiaries($account, $beneficiariesData);
-                    }
-                    
-                    // Update the opening balance transaction to use the real source account
-                    if ($sourceAccountId && $account) {
-                        $this->updateOpeningBalanceSourceAccount($account, $sourceAccountId);
-                    }
-                    
-                    $createdCount++;
-                    
-                    Log::channel('audit')->info('Imported account from JSON.', [
-                        'account_id' => $account->id,
-                        'account_name' => $account->name,
-                        'account_index' => $index + 1,
-                    ]);
-                    
-                } catch (\Exception $e) {
-                    $skippedCount++;
-                    $skippedReasons[] = "Account " . ($index + 1) . ": " . $e->getMessage();
-                    Log::error('Error importing account from JSON', [
-                        'account_index' => $index + 1,
-                        'account_data' => $accountData,
-                        'error' => $e->getMessage(),
-                    ]);
-                }
-            }
-            
-            if ($createdCount > 0) {
-                $message = "Import completed successfully! Created {$createdCount} accounts.";
-                if ($skippedCount > 0) {
-                    $message .= " Skipped {$skippedCount} accounts due to owner mapping issues.";
-                }
-            } else {
-                $message = "Import failed! No accounts were created.";
-                if ($skippedCount > 0) {
-                    $message .= " All {$skippedCount} accounts were skipped due to owner mapping issues.";
-                }
-            }
-            
-            if (!empty($skippedReasons)) {
-                $message .= "\n\nSkipped accounts: " . implode('; ', array_slice($skippedReasons, 0, 5));
-                if (count($skippedReasons) > 5) {
-                    $message .= ' (and ' . (count($skippedReasons) - 5) . ' more)';
-                }
-            }
-            
-            return redirect()->route('accounts.index', [$objectType])
-                ->with('success', $message);
-                
-        } catch (\Exception $e) {
-            Log::error('Error processing JSON file', [
-                'error' => $e->getMessage(),
-                'file' => $file->getClientOriginalName(),
-            ]);
-            
-            return redirect()->back()->withErrors(['json_file' => 'Error processing JSON file: ' . $e->getMessage()]);
-        }
-    }
 
     /**
-     * Get entity mapping for owner field mapping
-     * Maps owner display names to entity IDs
+     * Get entity mapping for account holder field mapping
+     * Maps account holder display names to entity IDs
      */
     private function getEntityMapping(): array
     {
-        $user = Auth::user();
-        
-        // Get all entities that the user has permission to see
-        $entities = \FireflyIII\Models\FinancialEntity::whereHas('users', function ($query) use ($user) {
-            $query->where('user_id', $user->id);
-        })->where('is_active', true)->get();
+        // Get all active financial entities (now global)
+        $entities = \FireflyIII\Models\FinancialEntity::where('is_active', true)->get();
         
         $mapping = [];
         foreach ($entities as $entity) {
@@ -750,6 +507,37 @@ class ImportController extends Controller
                 'error' => $e->getMessage()
             ]);
         }
+    }
+
+    /**
+     * Create or find a financial entity by name and type
+     */
+    private function createOrFindEntity(string $name, string $type): \FireflyIII\Models\FinancialEntity
+    {
+        // First, try to find existing entity
+        $entity = \FireflyIII\Models\FinancialEntity::where('name', $name)
+            ->where('entity_type', $type)
+            ->first();
+        
+        if ($entity) {
+            return $entity;
+        }
+        
+        // Create new entity if not found
+        $entity = \FireflyIII\Models\FinancialEntity::create([
+            'name' => $name,
+            'entity_type' => $type,
+            'display_name' => $name,
+            'is_active' => true,
+        ]);
+        
+        Log::info('Created new financial entity', [
+            'name' => $name,
+            'type' => $type,
+            'id' => $entity->id
+        ]);
+        
+        return $entity;
     }
 
 
