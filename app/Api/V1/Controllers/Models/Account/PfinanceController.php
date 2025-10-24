@@ -8,6 +8,7 @@ use FireflyIII\Api\V1\Controllers\Controller;
 use FireflyIII\Api\V1\Requests\Models\Account\PfinanceRequest;
 use FireflyIII\Exceptions\FireflyException;
 use FireflyIII\Http\Api\ApiResponse;
+use FireflyIII\Models\Account;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
@@ -24,6 +25,29 @@ class PfinanceController extends Controller
     {
         parent::__construct();
         $this->pfinanceServiceUrl = config('firefly.pfinance_service_url', 'http://pfinance-microservice:5001');
+    }
+
+    /**
+     * Get account metadata and calculate account path for PFinance integration.
+     */
+    private function getAccountMetadataForPfinance(string $accountId): array
+    {
+        $account = Account::with(['accountType', 'accountHolder', 'institutionEntity'])->find($accountId);
+        
+        if (!$account) {
+            throw new \Exception("Account not found: {$accountId}");
+        }
+
+        // Get all account data
+        $accountData = $account->toArray();
+
+        // Add calculated fields using model properties
+        $accountData['account_path'] = $account->account_path;
+        $accountData['institution'] = $account->institutionEntity?->name ?? $account->institution;
+        $accountData['account_holder'] = $account->accountHolder?->name ?? $account->account_holder;
+        $accountData['account_type'] = $account->accountType?->name;
+        
+        return $accountData;
     }
 
     /**
@@ -65,7 +89,12 @@ class PfinanceController extends Controller
         try {
             $accountId = $request->get('account_id');
             
-            $response = Http::post($this->pfinanceServiceUrl . '/api/v1/accounts/consolidate-transactions/' . $accountId);
+            // Get account metadata and calculate account path
+            $accountData = $this->getAccountMetadataForPfinance($accountId);
+            
+            $response = Http::post($this->pfinanceServiceUrl . '/api/v1/accounts/consolidate-transactions/' . $accountId, [
+                'account_data' => $accountData
+            ]);
             
             if ($response->successful()) {
                 return response()->json($response->json());
@@ -129,7 +158,12 @@ class PfinanceController extends Controller
         try {
             $accountId = $request->get('account_id');
             
-            $response = Http::post($this->pfinanceServiceUrl . '/api/v1/accounts/generate-firefly-transactions/' . $accountId);
+            // Get account metadata and calculate account path
+            $accountData = $this->getAccountMetadataForPfinance($accountId);
+            
+            $response = Http::post($this->pfinanceServiceUrl . '/api/v1/accounts/generate-firefly-transactions/' . $accountId, [
+                'account_data' => $accountData
+            ]);
             
             if ($response->successful()) {
                 return response()->json($response->json());
@@ -166,8 +200,13 @@ class PfinanceController extends Controller
         try {
             $accountId = $request->get('account_id');
             
+            // Get account metadata and calculate account path
+            $accountData = $this->getAccountMetadataForPfinance($accountId);
+            
             // First, consolidate transactions
-            $consolidateResponse = Http::post($this->pfinanceServiceUrl . '/api/v1/accounts/consolidate-transactions/' . $accountId);
+            $consolidateResponse = Http::post($this->pfinanceServiceUrl . '/api/v1/accounts/consolidate-transactions/' . $accountId, [
+                'account_data' => $accountData
+            ]);
             
             if (!$consolidateResponse->successful()) {
                 Log::error('PFinance consolidation service error', [
@@ -182,7 +221,9 @@ class PfinanceController extends Controller
             }
             
             // Then, generate Firefly transactions
-            $generateResponse = Http::post($this->pfinanceServiceUrl . '/api/v1/accounts/generate-firefly-transactions/' . $accountId);
+            $generateResponse = Http::post($this->pfinanceServiceUrl . '/api/v1/accounts/generate-firefly-transactions/' . $accountId, [
+                'account_data' => $accountData
+            ]);
             
             if (!$generateResponse->successful()) {
                 Log::error('PFinance generation service error', [
@@ -412,5 +453,149 @@ class PfinanceController extends Controller
                 'error' => 'Service unavailable'
             ], 503);
         }
+    }
+
+    /**
+     * Import accounts using the modern AccountFactory approach.
+     * This endpoint provides a consistent way to create accounts programmatically
+     * using the same logic as the web import functionality.
+     */
+    public function importAccounts(Request $request): JsonResponse
+    {
+        try {
+            // Validate the request
+            $request->validate([
+                'accounts' => 'required|array|min:1',
+                'accounts.*.name' => 'required|string|max:1024',
+                'accounts.*.account_type_name' => 'required|string|max:1024',
+                'accounts.*.account_holder' => 'required|string|max:255',
+                'accounts.*.institution' => 'nullable|string|max:255',
+                'accounts.*.product_name' => 'nullable|string|max:255',
+            ]);
+
+            $accounts = $request->input('accounts');
+            $createdCount = 0;
+            $skippedCount = 0;
+            $skippedReasons = [];
+            $createdAccounts = [];
+
+            foreach ($accounts as $index => $accountData) {
+                try {
+                    // Validate account_type_name exists in database
+                    if (isset($accountData['account_type_name']) && !empty($accountData['account_type_name'])) {
+                        $accountType = \FireflyIII\Models\AccountType::where('name', $accountData['account_type_name'])
+                            ->where('active', true)
+                            ->first();
+                        
+                        if (!$accountType) {
+                            $skippedCount++;
+                            $skippedReasons[] = "Account " . ($index + 1) . " ('{$accountData['name']}'): Account type '{$accountData['account_type_name']}' does not exist in database.";
+                            continue;
+                        }
+                    } else {
+                        $skippedCount++;
+                        $skippedReasons[] = "Account " . ($index + 1) . " ('{$accountData['name']}'): No account_type_name specified.";
+                        continue;
+                    }
+
+                    // Add default currency if not present
+                    if ((!isset($accountData['currency_id']) || $accountData['currency_id'] == 0) && !isset($accountData['currency_code'])) {
+                        $primaryCurrency = app('amount')->getPrimaryCurrencyByUserGroup(auth()->user()->userGroup);
+                        $accountData['currency_id'] = $primaryCurrency->id;
+                    }
+
+                    // Automatically create and link account holder entity
+                    if (isset($accountData['account_holder']) && !empty($accountData['account_holder'])) {
+                        $accountHolderName = $accountData['account_holder'];
+                        $accountHolderEntity = $this->createOrFindEntity($accountHolderName, 'individual');
+                        $accountData['account_holder_id'] = $accountHolderEntity->id;
+                    } else {
+                        $skippedCount++;
+                        $skippedReasons[] = "Account " . ($index + 1) . " ('{$accountData['name']}'): No account holder specified.";
+                        continue;
+                    }
+
+                    // Automatically create and link institution entity
+                    if (isset($accountData['institution']) && !empty($accountData['institution'])) {
+                        $institutionName = $accountData['institution'];
+                        $institutionEntity = $this->createOrFindEntity($institutionName, 'institution');
+                        $accountData['institution_id'] = $institutionEntity->id;
+                    }
+
+                    // Use the AccountFactory to create the account (same as importFromJson)
+                    $factory = app(\FireflyIII\Factory\AccountFactory::class);
+                    $factory->setUser(auth()->user());
+                    $account = $factory->create($accountData);
+                    
+                    if (!$account) {
+                        throw new \Exception('Failed to create account');
+                    }
+
+                    $createdAccounts[] = [
+                        'id' => $account->id,
+                        'name' => $account->name,
+                        'account_type_name' => $account->accountType->name,
+                        'account_holder' => $account->account_holder,
+                        'institution' => $account->institution,
+                    ];
+
+                    $createdCount++;
+
+                } catch (\Exception $e) {
+                    $skippedCount++;
+                    $skippedReasons[] = "Account " . ($index + 1) . " ('{$accountData['name']}'): " . $e->getMessage();
+                    Log::error('Failed to create account via API', [
+                        'account_data' => $accountData,
+                        'error' => $e->getMessage()
+                    ]);
+                }
+            }
+
+            return response()->json([
+                'message' => 'Account import completed',
+                'created_count' => $createdCount,
+                'skipped_count' => $skippedCount,
+                'created_accounts' => $createdAccounts,
+                'skipped_reasons' => $skippedReasons,
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Account import failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'message' => 'Account import failed',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Create or find an entity (account holder or institution).
+     * This is a simplified version of the method from ImportController.
+     */
+    private function createOrFindEntity(string $name, string $type): \FireflyIII\Models\FinancialEntity
+    {
+        // Try to find existing entity
+        $entity = \FireflyIII\Models\FinancialEntity::where('name', $name)
+            ->where('entity_type', $type)
+            ->where('is_active', true)
+            ->first();
+
+        if ($entity) {
+            return $entity;
+        }
+
+        // Create new entity
+        $entity = \FireflyIII\Models\FinancialEntity::create([
+            'name' => $name,
+            'entity_type' => $type,
+            'display_name' => $name,
+            'is_active' => true,
+        ]);
+
+        return $entity;
     }
 }
