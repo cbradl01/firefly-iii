@@ -68,13 +68,13 @@ class CorrectsCurrencies extends Command
         Log::debug(sprintf('Now correcting currencies for user group #%d', $userGroup->id));
         $found           = [$primaryCurrency->id];
 
-        // get all meta entries
-        $meta            = AccountMeta::leftJoin('accounts', 'accounts.id', '=', 'account_meta.account_id')
-            ->where('accounts.user_group_id', $userGroup->id)
-            ->where('account_meta.name', 'currency_id')->groupBy('data')->get(['data'])
+        // get all currency_id entries from accounts
+        $meta            = Account::where('user_group_id', $userGroup->id)
+            ->whereNotNull('currency_id')
+            ->groupBy('currency_id')->get(['currency_id'])
         ;
         foreach ($meta as $entry) {
-            $found[] = (int) $entry->data;
+            $found[] = (int) $entry->currency_id;
         }
 
         // get all from journals:

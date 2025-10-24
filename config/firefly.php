@@ -108,6 +108,7 @@ return [
     'pfinance_service_url'         => env('PFINANCE_SERVICE_URL', 'http://192.168.4.47:5001'),
     // 'pfinance_service_url'         => env('PFINANCE_SERVICE_URL', 'http://host.docker.internal:5001'),
     // 'pfinance_service_url'         => env('PFINANCE_SERVICE_URL', 'http://localhost:5001'),
+    'accounts_path'                => env('ACCOUNTS_PATH', '/Users/Cameron/Personal/Finance/Accounts'),
     'disable_csp_header'           => env('DISABLE_CSP_HEADER', false),
     'allow_webhooks'               => env('ALLOW_WEBHOOKS', false),
 

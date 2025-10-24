@@ -234,10 +234,7 @@ class ForcesDecimalSize extends Command
         $regularExpression = $this->regularExpression;
 
         /** @var Builder $query */
-        $query             = Account::leftJoin('account_meta', 'accounts.id', '=', 'account_meta.account_id')
-            ->where('account_meta.name', 'currency_id')
-            ->where('account_meta.data', json_encode((string) $currency->id))
-        ;
+        $query             = Account::where('currency_id', $currency->id);
         $query->where(static function (Builder $q) use ($fields, $currency, $operator, $cast, $regularExpression): void {
             foreach ($fields as $field) {
                 $q->orWhere(
@@ -338,9 +335,7 @@ class ForcesDecimalSize extends Command
         /** @var Builder $query */
         $query             = PiggyBankEvent::leftJoin('piggy_banks', 'piggy_bank_events.piggy_bank_id', '=', 'piggy_banks.id')
             ->leftJoin('accounts', 'piggy_banks.account_id', '=', 'accounts.id')
-            ->leftJoin('account_meta', 'accounts.id', '=', 'account_meta.account_id')
-            ->where('account_meta.name', 'currency_id')
-            ->where('account_meta.data', json_encode((string) $currency->id))
+            ->where('accounts.currency_id', $currency->id)
             ->where(static function (Builder $q) use ($fields, $currency, $cast, $operator, $regularExpression): void {
                 foreach ($fields as $field) {
                     $q->orWhere(
@@ -394,9 +389,7 @@ class ForcesDecimalSize extends Command
         /** @var Builder $query */
         $query             = PiggyBankRepetition::leftJoin('piggy_banks', 'piggy_bank_repetitions.piggy_bank_id', '=', 'piggy_banks.id')
             ->leftJoin('accounts', 'piggy_banks.account_id', '=', 'accounts.id')
-            ->leftJoin('account_meta', 'accounts.id', '=', 'account_meta.account_id')
-            ->where('account_meta.name', 'currency_id')
-            ->where('account_meta.data', json_encode((string) $currency->id))
+            ->where('accounts.currency_id', $currency->id)
             ->where(static function (Builder $q) use ($fields, $currency, $operator, $cast, $regularExpression): void {
                 foreach ($fields as $field) {
                     $q->orWhere(
@@ -448,9 +441,7 @@ class ForcesDecimalSize extends Command
 
         /** @var Builder $query */
         $query             = PiggyBank::leftJoin('accounts', 'piggy_banks.account_id', '=', 'accounts.id')
-            ->leftJoin('account_meta', 'accounts.id', '=', 'account_meta.account_id')
-            ->where('account_meta.name', 'currency_id')
-            ->where('account_meta.data', json_encode((string) $currency->id))
+            ->where('accounts.currency_id', $currency->id)
             ->where(static function (Builder $q) use ($fields, $currency, $operator, $cast, $regularExpression): void {
                 foreach ($fields as $field) {
                     $q->orWhere(

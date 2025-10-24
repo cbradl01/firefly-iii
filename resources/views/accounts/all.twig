@@ -75,7 +75,7 @@
                                 <tr>
                                     <th data-defaultsign="az">Type</th>
                                     <th data-defaultsign="az">Institution</th>
-                                    <th data-defaultsign="az">Owner</th>
+                                    <th data-defaultsign="az">Account Holder</th>
                                     <th data-defaultsign="az">Product Name</th>
                                     <th data-defaultsign="az">Account Number</th>
                                     <th data-defaultsign="_19">Beneficiaries</th>
@@ -99,14 +99,26 @@
                                             </td>
                                             <td data-value="{% set institution = accountGetMetaField(account, 'institution') %}{% if institution %}{{ institution|lower }}{% else %}{% endif %}">
                                                 {% if institution %}
-                                                    {{ institution }}
+                                                    {% if account.institutionEntity %}
+                                                        <a href="{{ route('financial-entities.show', account.institutionEntity.id) }}" class="text-primary">
+                                                            {{ institution }}
+                                                        </a>
+                                                    {% else %}
+                                                        {{ institution }}
+                                                    {% endif %}
                                                 {% else %}
                                                     <span class="text-muted">-</span>
                                                 {% endif %}
                                             </td>
                                             <td data-value="{% set owner = accountGetMetaField(account, 'account_holder') %}{% if owner %}{{ owner|lower }}{% else %}{% endif %}">
                                                 {% if owner %}
-                                                    {{ owner }}
+                                                    {% if account.accountHolder %}
+                                                        <a href="{{ route('financial-entities.show', account.accountHolder.id) }}" class="text-primary">
+                                                            {{ owner }}
+                                                        </a>
+                                                    {% else %}
+                                                        {{ owner }}
+                                                    {% endif %}
                                                 {% else %}
                                                     <span class="text-muted">-</span>
                                                 {% endif %}

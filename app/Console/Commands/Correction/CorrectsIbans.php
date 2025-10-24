@@ -43,7 +43,7 @@ class CorrectsIbans extends Command
      */
     public function handle(): int
     {
-        $accounts = Account::with('accountMeta')->get();
+        $accounts = Account::all();
         $this->filterIbans($accounts);
         $this->countAndCorrectIbans($accounts);
 
@@ -63,13 +63,12 @@ class CorrectsIbans extends Command
                 ++$this->count;
             }
             // same for account number:
-            $accountNumber = $account->accountMeta->where('name', 'account_number')->first();
-            if (null !== $accountNumber) {
-                $number    = (string) $accountNumber->value;
+            if (null !== $account->account_number) {
+                $number    = (string) $account->account_number;
                 $newNumber = app('steam')->filterSpaces($number);
                 if ('' !== $number && $number !== $newNumber) {
-                    $accountNumber->value = $newNumber;
-                    $accountNumber->save();
+                    $account->account_number = $newNumber;
+                    $account->save();
                     $this->friendlyInfo(sprintf('Removed spaces from account number of account #%d', $account->id));
                     ++$this->count;
                 }
