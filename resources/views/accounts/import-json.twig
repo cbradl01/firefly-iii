@@ -152,7 +152,7 @@
 ]</code></pre>
                             </div>
 
-                            <form method="post" action="{{ route('accounts.import.json.process', objectType) }}" enctype="multipart/form-data">
+                            <form id="import-form" enctype="multipart/form-data">
                                 {{ csrf_field() }}
                                 
                                 <div class="form-group">
@@ -164,13 +164,16 @@
                                 </div>
 
                                 <div class="form-group">
-                                    <button type="submit" class="btn btn-success">
+                                    <button type="submit" class="btn btn-success" id="import-button">
                                         <span class="fa fa-upload fa-fw"></span> Import accounts
                                     </button>
                                     <a href="{{ route('accounts.index', objectType) }}" class="btn btn-default">
                                         <span class="fa fa-arrow-left fa-fw"></span> Back to accounts
                                     </a>
                                 </div>
+                                
+                                <!-- Progress and status messages -->
+                                <div id="import-status" class="alert" style="display: none;"></div>
                             </form>
                         </div>
                         
@@ -215,16 +218,108 @@
 
 {% block scripts %}
     <script type="text/javascript" nonce="{{ JS_NONCE }}">
-        // Add any JavaScript for file validation or preview here
+        // File validation
         document.getElementById('json_file').addEventListener('change', function(e) {
             const file = e.target.files[0];
             if (file && file.type === 'application/json') {
-                // File is valid JSON
                 console.log('JSON file selected:', file.name);
             } else if (file) {
                 alert('Please select a valid JSON file (.json)');
                 e.target.value = '';
             }
         });
+
+        // Form submission via API
+        document.getElementById('import-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const fileInput = document.getElementById('json_file');
+            const file = fileInput.files[0];
+            const importButton = document.getElementById('import-button');
+            const statusDiv = document.getElementById('import-status');
+            
+            if (!file) {
+                showStatus('Please select a JSON file.', 'alert-danger');
+                return;
+            }
+            
+            // Show loading state
+            importButton.disabled = true;
+            importButton.innerHTML = '<span class="fa fa-spinner fa-spin fa-fw"></span> Importing...';
+            showStatus('Reading and processing JSON file...', 'alert-info');
+            
+            try {
+                // Read the JSON file
+                const jsonContent = await readFileAsText(file);
+                const accounts = JSON.parse(jsonContent);
+                
+                if (!Array.isArray(accounts)) {
+                    throw new Error('JSON file must contain an array of accounts');
+                }
+                
+                showStatus(`Found ${accounts.length} accounts. Creating accounts...`, 'alert-info');
+                
+                // Call the API endpoint
+                const response = await fetch('/api/v1/pfinance/import-accounts', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    credentials: 'same-origin', // Include session cookies
+                    body: JSON.stringify({
+                        accounts: accounts
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    // Success
+                    const message = `Import completed! Created ${result.created_count} accounts.`;
+                    showStatus(message, 'alert-success');
+                    
+                    if (result.skipped_count > 0) {
+                        const skippedMessage = `Skipped ${result.skipped_count} accounts: ${result.skipped_reasons.slice(0, 3).join('; ')}`;
+                        showStatus(message + '<br>' + skippedMessage, 'alert-warning');
+                    }
+                    
+                    // Redirect after a delay
+                    setTimeout(() => {
+                        window.location.href = '{{ route("accounts.index", objectType) }}';
+                    }, 3000);
+                    
+                } else {
+                    // Error
+                    throw new Error(result.message || 'Import failed');
+                }
+                
+            } catch (error) {
+                console.error('Import error:', error);
+                showStatus('Import failed: ' + error.message, 'alert-danger');
+            } finally {
+                // Reset button
+                importButton.disabled = false;
+                importButton.innerHTML = '<span class="fa fa-upload fa-fw"></span> Import accounts';
+            }
+        });
+        
+        function readFileAsText(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = e => resolve(e.target.result);
+                reader.onerror = e => reject(new Error('Failed to read file'));
+                reader.readAsText(file);
+            });
+        }
+        
+        function showStatus(message, alertClass) {
+            const statusDiv = document.getElementById('import-status');
+            statusDiv.className = 'alert ' + alertClass;
+            statusDiv.innerHTML = message;
+            statusDiv.style.display = 'block';
+        }
+        
     </script>
 {% endblock %}
