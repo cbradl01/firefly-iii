@@ -265,19 +265,27 @@ class AccountFactory
 
         // create it:
         $virtualBalance = array_key_exists('virtual_balance', $data) ? $data['virtual_balance'] : null;
-        $active         = array_key_exists('active', $data) ? $data['active'] : true;
         
-        // Generate a meaningful name from the identifying fields
-        $institution = $data['institution'] ?? 'Unknown Institution';
-        $productName = $data['product_name'] ?? 'Unknown Product';
-        $accountHolder = $data['account_holder'] ?? 'Unknown Holder';
-        $generatedName = "{$institution} - {$productName} ({$accountHolder})";
+        // Handle 'active' field, defaulting to true when not provided
+        $active = $data['active'] ?? true;
         
-        Log::debug('AccountFactory::createAccount - Name generation', [
-            'institution' => $institution,
-            'product_name' => $productName,
-            'account_holder' => $accountHolder,
-            'generated_name' => $generatedName,
+        // Use provided name or generate one from the identifying fields
+        $accountName = $data['name'] ?? null;
+        
+        if (!$accountName) {
+            // Generate a meaningful name from the identifying fields
+            $institution = $data['institution'] ?? 'Unknown Institution';
+            $productName = $data['product_name'] ?? 'Unknown Product';
+            $accountHolder = $data['account_holder'] ?? 'Unknown Holder';
+            $accountName = "{$institution} - {$productName} ({$accountHolder})";
+        }
+        
+        Log::debug('AccountFactory::createAccount - Name handling', [
+            'provided_name' => $data['name'] ?? 'NOT_PROVIDED',
+            'final_name' => $accountName,
+            'institution' => $data['institution'] ?? 'NOT_PROVIDED',
+            'product_name' => $data['product_name'] ?? 'NOT_PROVIDED',
+            'account_holder' => $data['account_holder'] ?? 'NOT_PROVIDED',
             'data_keys' => array_keys($data)
         ]);
 
@@ -291,16 +299,23 @@ class AccountFactory
             'account_type_id' => $type->id,
             'template_id'     => null, // No longer using templates
             'entity_id'       => $data['entity_id'] ?? null, // TODO: this field is not needed on accounts
-            'name'            => $generatedName,
+            'name'            => $accountName,
             'order'           => 25000,
             'virtual_balance' => $virtualBalance,
             'active'          => $active,
             'iban'            => $data['iban'],
+            'account_holder'  => $data['account_holder'],
+            'institution'     => $data['institution'],
+            'product_name'    => $data['product_name'],
         ];
         
         // Add all account fields from FieldDefinitions, using data value or null
+        // Skip fields we've already handled explicitly
+        $excludedFields = ['active', 'name', 'account_holder', 'institution', 'product_name'];
         foreach ($accountFields as $fieldName => $fieldConfig) {
-            $databaseData[$fieldName] = $data[$fieldName] ?? null;
+            if (!in_array($fieldName, $excludedFields)) {
+                $databaseData[$fieldName] = $data[$fieldName] ?? null;
+            }
         }
         
         // Add foreign key fields if available
