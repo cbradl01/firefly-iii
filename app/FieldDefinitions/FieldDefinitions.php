@@ -93,6 +93,7 @@ class FieldDefinitions
             'category' => 'basic_info',
             'required' => true,
             'validation' => 'required|string|max:255',
+            'overview_link' => true, // Link to the financial entity
             'options' => [
                 'exclude_entity_types' => ['institution']
             ]
@@ -112,17 +113,12 @@ class FieldDefinitions
             'validation' => 'required|string|max:255'
         ],
         'account_status' => [
-            'data_type' => 'string',
-            'input_type' => 'select',
+            'data_type' => 'boolean',
+            'input_type' => 'checkbox',
             'category' => 'basic_info',
             'required' => true,
-            'validation' => 'required|in:active,inactive,closed,suspended',
-            'options' => [
-                'active' => 'Active',
-                'inactive' => 'Inactive',
-                'closed' => 'Closed',
-                'suspended' => 'Suspended'
-            ]
+            'validation' => 'required|boolean',
+            'default' => true
         ],
         'currency_id' => [
             'data_type' => 'integer',
@@ -832,6 +828,73 @@ class FieldDefinitions
         }
         
         return $defaults;
+    }
+
+    /**
+     * Get fields that should be displayed in the overview
+     * By default, all fields are shown unless explicitly hidden
+     * 
+     * @param string $targetType
+     * @return array
+     */
+    public static function getOverviewFields(string $targetType): array
+    {
+        $fields = self::getFieldsForTargetType($targetType);
+        $overviewFields = [];
+        
+        foreach ($fields as $fieldName => $fieldData) {
+            // Show field unless explicitly hidden
+            if (!isset($fieldData['hide_from_overview']) || $fieldData['hide_from_overview'] !== true) {
+                $overviewFields[$fieldName] = $fieldData;
+            }
+        }
+        
+        return $overviewFields;
+    }
+
+    /**
+     * Get the display value for a field in the overview
+     * 
+     * @param string $fieldName
+     * @param mixed $value
+     * @param array $fieldData
+     * @return string
+     */
+    public static function getOverviewDisplayValue(string $fieldName, $value, array $fieldData): string
+    {
+        if (empty($value) && $value !== 0 && $value !== false) {
+            return '<span class="text-muted">-</span>';
+        }
+        
+        // Handle different data types
+        switch ($fieldData['data_type'] ?? 'string') {
+            case 'boolean':
+                return $value ? '<span class="fa fa-check text-success"></span> Yes' : '<span class="fa fa-times text-muted"></span> No';
+            
+            case 'date':
+                return $value ? date('M j, Y', strtotime($value)) : '<span class="text-muted">-</span>';
+            
+            case 'decimal':
+                return number_format((float)$value, 2);
+            
+            case 'select':
+                $options = $fieldData['options'] ?? [];
+                return $options[$value] ?? $value;
+            
+            default:
+                return htmlspecialchars($value);
+        }
+    }
+
+    /**
+     * Get the display label for a field (using translations)
+     * 
+     * @param string $fieldName
+     * @return string
+     */
+    public static function getOverviewLabel(string $fieldName): string
+    {
+        return self::getDisplayName($fieldName);
     }
 
 }
