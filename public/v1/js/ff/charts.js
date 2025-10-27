@@ -186,13 +186,13 @@ function applyConditionalFillColors(dataset) {
             gradient.addColorStop(zeroPercent, 'rgba(255, 0, 0, 0.6)'); // Red border at zero
             gradient.addColorStop(1, 'rgba(255, 0, 0, 0.6)'); // Red border at bottom
         } else if (zeroPercent <= 0) {
-            // Zero line is above chart (all positive)
-            gradient.addColorStop(0, 'rgba(0, 255, 0, 0.6)');
-            gradient.addColorStop(1, 'rgba(0, 255, 0, 0.6)');
-        } else {
-            // Zero line is below chart (all negative)
-            gradient.addColorStop(0, 'rgba(255, 0, 0, 0.6)');
+            // Zero line is above chart (all negative)
+            gradient.addColorStop(0, 'rgba(98, 98, 98, 0.6)');
             gradient.addColorStop(1, 'rgba(255, 0, 0, 0.6)');
+        } else {
+            // Zero line is below chart (all positive)
+            gradient.addColorStop(0, 'rgba(98, 98, 98, 0.6)');
+            gradient.addColorStop(1, 'rgba(0, 255, 0, 0.6)');
         }
         
         return gradient;
@@ -224,13 +224,13 @@ function applyConditionalFillColors(dataset) {
             gradient.addColorStop(zeroPercent + 0.01, 'rgba(255, 0, 0, 0.2)'); // Red just after zero
             gradient.addColorStop(1, 'rgba(255, 0, 0, 0.2)'); // Red at bottom (more opaque)
         } else if (zeroPercent <= 0) {
-            // Zero line is above chart (all positive)
-            gradient.addColorStop(0, 'rgba(0, 255, 0, 0.2)');
-            gradient.addColorStop(1, 'rgba(0, 255, 0, 0.2)');
-        } else {
-            // Zero line is below chart (all negative)
+            // Zero line is above chart (all negative)
             gradient.addColorStop(0, 'rgba(255, 0, 0, 0.2)');
             gradient.addColorStop(1, 'rgba(255, 0, 0, 0.2)');
+        } else {
+            // Zero line is below chart (all positive)
+            gradient.addColorStop(0, 'rgba(0, 255, 0, 0.2)');
+            gradient.addColorStop(1, 'rgba(0, 255, 0, 0.2)');
         }
         
         return gradient;
