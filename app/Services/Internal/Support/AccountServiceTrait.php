@@ -625,17 +625,20 @@ trait AccountServiceTrait
         $destId     = null;
         $destName   = null;
 
+        // Get or create the Initial balance account
+        $initialBalanceAccount = $this->getOrCreateInitialBalanceAccount($account->user);
+        
         // amount is positive.
         if (1 === bccomp($openingBalance, '0')) {
-            app('log')->debug(sprintf('Amount is %s, which is positive. Source is a new IB account, destination is #%d', $openingBalance, $account->id));
-            $sourceName = trans('firefly.initial_balance_description', ['account' => $account->name], $language);
-            $destId     = $account->id;
+            app('log')->debug(sprintf('Amount is %s, which is positive. Source is Initial balance account #%d, destination is #%d', $openingBalance, $initialBalanceAccount->id, $account->id));
+            $sourceId = $initialBalanceAccount->id;
+            $destId   = $account->id;
         }
         // amount is not positive
         if (-1 === bccomp($openingBalance, '0')) {
-            app('log')->debug(sprintf('Amount is %s, which is negative. Destination is a new IB account, source is #%d', $openingBalance, $account->id));
-            $destName = trans('firefly.initial_balance_account', ['account' => $account->name], $language);
+            app('log')->debug(sprintf('Amount is %s, which is negative. Source is #%d, destination is Initial balance account #%d', $openingBalance, $account->id, $initialBalanceAccount->id));
             $sourceId = $account->id;
+            $destId   = $initialBalanceAccount->id;
         }
         // amount is 0
         if (0 === bccomp($openingBalance, '0')) {
@@ -663,9 +666,7 @@ trait AccountServiceTrait
                     'type'             => 'Opening balance',
                     'date'             => $openingBalanceDate,
                     'source_id'        => $sourceId,
-                    'source_name'      => $sourceName,
                     'destination_id'   => $destId,
-                    'destination_name' => $destName,
                     'user'             => $account->user,
                     'user_group'       => $account->user->userGroup,
                     'currency_id'      => $currency->id,
@@ -686,6 +687,7 @@ trait AccountServiceTrait
             ],
         ];
         app('log')->debug('Going for submission in createOBGroupV2', $submission);
+        app('log')->debug('Source ID: ' . ($sourceId ?? 'null') . ', Destination ID: ' . ($destId ?? 'null'));
 
         /** @var TransactionGroupFactory $factory */
         $factory    = app(TransactionGroupFactory::class);
@@ -701,5 +703,45 @@ trait AccountServiceTrait
         }
 
         return $group;
+    }
+
+    /**
+     * Get or create the Initial balance account for opening balance transactions
+     */
+    protected function getOrCreateInitialBalanceAccount(\FireflyIII\User $user): \FireflyIII\Models\Account
+    {
+        app('log')->debug('getOrCreateInitialBalanceAccount called for user ID: ' . $user->id);
+        
+        // Try to find existing Initial balance account
+        $initialBalanceAccount = \FireflyIII\Models\Account::whereHas('accountType', function($query) {
+            $query->where('name', 'Initial balance account');
+        })->where('user_id', $user->id)->first();
+
+        if ($initialBalanceAccount) {
+            app('log')->debug('Found existing Initial balance account: ID=' . $initialBalanceAccount->id);
+            return $initialBalanceAccount;
+        }
+
+        // Create new Initial balance account
+        $accountType = \FireflyIII\Models\AccountType::where('name', 'Initial balance account')->first();
+        
+        if (!$accountType) {
+            throw new \Exception('Initial balance account type not found');
+        }
+
+        $initialBalanceAccount = \FireflyIII\Models\Account::create([
+            'user_id' => $user->id,
+            'user_group_id' => $user->user_group_id,
+            'account_type_id' => $accountType->id,
+            'name' => 'Initial balance account',
+            'account_holders' => ['System'],
+            'institution' => 'Firefly III',
+            'product_name' => 'Initial Balance',
+            'active' => true,
+            'virtual_balance' => null,
+            'iban' => null,
+        ]);
+
+        return $initialBalanceAccount;
     }
 }

@@ -208,40 +208,89 @@ class AccountFactory
 
     /**
      * Find existing account based on required identifying fields
-     * Uses institution, account_holder, and product_name for uniqueness
+     * Uses institution, account_holders, product_name, and account_number for uniqueness
      */
     private function findExistingAccount(array $data, AccountType $type): ?Account
     {
         Log::debug('Now in AccountFactory::findExistingAccount()', [
             'institution' => $data['institution'] ?? 'NOT_SET',
-            'account_holder' => $data['account_holder'] ?? 'NOT_SET', 
-            'product_name' => $data['product_name'] ?? 'NOT_SET'
+            'account_holders' => $data['account_holders'] ?? 'NOT_SET', 
+            'product_name' => $data['product_name'] ?? 'NOT_SET',
+            'account_number' => $data['account_number'] ?? 'NOT_SET'
         ]);
 
-        // All accounts are required to have institution, account_holder, and product_name
+        // All accounts are required to have institution, account_holders, and product_name
         $institution = $data['institution'] ?? null;
-        $accountHolder = $data['account_holder'] ?? null;
+        $accountHolders = $data['account_holders'] ?? null;
         $productName = $data['product_name'] ?? null;
+        $accountNumber = $data['account_number'] ?? null;
 
-        if (!$institution || !$accountHolder || !$productName) {
+        if (!$institution || !$accountHolders || !$productName) {
             Log::debug('Missing required identifying fields for account search', [
                 'has_institution' => !empty($institution),
-                'has_account_holder' => !empty($accountHolder),
+                'has_account_holders' => !empty($accountHolders),
                 'has_product_name' => !empty($productName)
             ]);
             return null;
         }
 
-        // Query accounts that have the same account_type_id and matching fields
-        // We need to find accounts that have ALL three fields matching
+        // Build the base query with required fields
+        // Use PostgreSQL JSON equality operator with proper type casting
         $query = $this->user->accounts()
             ->where('account_type_id', $type->id)
             ->where('institution', $institution)
-            ->where('account_holder', $accountHolder)
+            ->whereRaw('account_holders::text = ?::text', [json_encode($accountHolders)])
             ->where('product_name', $productName);
 
-        /** @var null|Account */
-        return $query->first();
+        // If account number is provided, include it in the uniqueness check
+        if ($accountNumber) {
+            $query->where('account_number', $accountNumber);
+            Log::debug('Including account_number in uniqueness check', ['account_number' => $accountNumber]);
+        } else {
+            Log::debug('No account_number provided, using base uniqueness criteria');
+        }
+
+        // Get all matching records to ensure uniqueness
+        $matches = $query->get();
+        
+        if ($matches->count() === 0) {
+            Log::debug('No existing account found');
+            return null;
+        }
+        
+        if ($matches->count() === 1) {
+            Log::debug('Found exactly one existing account', ['account_id' => $matches->first()->id]);
+            return $matches->first();
+        }
+        
+        // Multiple matches found - this indicates a data integrity issue
+        $accountIds = $matches->pluck('id')->toArray();
+        $accountNames = $matches->pluck('name')->toArray();
+        
+        Log::error('Multiple accounts found with same uniqueness criteria', [
+            'count' => $matches->count(),
+            'account_ids' => $accountIds,
+            'account_names' => $accountNames,
+            'institution' => $institution,
+            'product_name' => $productName,
+            'account_holders' => $accountHolders,
+            'account_number' => $accountNumber
+        ]);
+        
+        // Throw an exception to prevent data corruption
+        throw new FireflyException(sprintf(
+            'Data integrity error: Found %d accounts with identical uniqueness criteria. ' .
+            'Account IDs: %s, Names: %s. ' .
+            'Criteria: institution="%s", product_name="%s", account_holders=%s, account_number="%s". ' .
+            'This must be resolved before proceeding.',
+            $matches->count(),
+            implode(', ', $accountIds),
+            implode(', ', $accountNames),
+            $institution,
+            $productName,
+            json_encode($accountHolders),
+            $accountNumber ?? 'null'
+        ));
     }
 
     /**
@@ -261,7 +310,6 @@ class AccountFactory
      */
     private function createAccount(AccountType $type, array $data): Account
     {
-        $this->accountRepository->resetAccountOrder();
 
         // create it:
         $virtualBalance = array_key_exists('virtual_balance', $data) ? $data['virtual_balance'] : null;
@@ -276,8 +324,16 @@ class AccountFactory
             // Generate a meaningful name from the identifying fields
             $institution = $data['institution'] ?? 'Unknown Institution';
             $productName = $data['product_name'] ?? 'Unknown Product';
-            $accountHolder = $data['account_holder'] ?? 'Unknown Holder';
-            $accountName = "{$institution} - {$productName} ({$accountHolder})";
+            $accountHolders = $data['account_holders'] ?? ['Unknown Holder'];
+            
+            // Handle both single and multiple account holders
+            if (is_array($accountHolders) && !empty($accountHolders)) {
+                $holderDisplay = count($accountHolders) === 1 ? $accountHolders[0] : implode(', ', $accountHolders);
+            } else {
+                $holderDisplay = 'Unknown Holder';
+            }
+            
+            $accountName = "{$institution} - {$productName} ({$holderDisplay})";
         }
         
         Log::debug('AccountFactory::createAccount - Name handling', [
@@ -285,7 +341,7 @@ class AccountFactory
             'final_name' => $accountName,
             'institution' => $data['institution'] ?? 'NOT_PROVIDED',
             'product_name' => $data['product_name'] ?? 'NOT_PROVIDED',
-            'account_holder' => $data['account_holder'] ?? 'NOT_PROVIDED',
+            'account_holders' => $data['account_holders'] ?? 'NOT_PROVIDED',
             'data_keys' => array_keys($data)
         ]);
 
@@ -300,18 +356,17 @@ class AccountFactory
             'template_id'     => null, // No longer using templates
             'entity_id'       => $data['entity_id'] ?? null, // TODO: this field is not needed on accounts
             'name'            => $accountName,
-            'order'           => 25000,
             'virtual_balance' => $virtualBalance,
             'active'          => $active,
             'iban'            => $data['iban'],
-            'account_holder'  => $data['account_holder'],
+            'account_holders' => $data['account_holders'],
             'institution'     => $data['institution'],
             'product_name'    => $data['product_name'],
         ];
         
         // Add all account fields from FieldDefinitions, using data value or null
         // Skip fields we've already handled explicitly
-        $excludedFields = ['active', 'name', 'account_holder', 'institution', 'product_name'];
+        $excludedFields = ['active', 'name', 'account_holders', 'institution', 'product_name'];
         foreach ($accountFields as $fieldName => $fieldConfig) {
             if (!in_array($fieldName, $excludedFields)) {
                 $databaseData[$fieldName] = $data[$fieldName] ?? null;
@@ -319,8 +374,8 @@ class AccountFactory
         }
         
         // Add foreign key fields if available
-        $databaseData['account_holder_id'] = $data['account_holder_id'] ?? null;
-        $databaseData['institution_id'] = $data['institution_id'] ?? null;
+        $databaseData['account_holder_ids'] = $data['account_holder_ids'] ?? null; // TODO: remove null check
+        $databaseData['institution_id'] = $data['institution_id'] ?? null; // TODO: remove null check
         
         // Log the fields being included for debugging
         Log::debug('AccountFactory::createAccount - Fields included', [
@@ -333,7 +388,7 @@ class AccountFactory
             $databaseData['virtual_balance'] = null;
         }
         // remove virtual balance when not an asset account
-        if (!in_array($type->type, $this->canHaveVirtual, true)) {
+        if ($type && !in_array($type->type, $this->canHaveVirtual, true)) {
             $databaseData['virtual_balance'] = null;
         }
         // Debug: Log the data being sent to Account::create
@@ -373,8 +428,7 @@ class AccountFactory
         // create location
         $this->storeNewLocation($account, $data);
 
-        // set order
-        $this->storeOrder($account, $data);
+        // Account order functionality has been removed
 
         // refresh and return
         $account->refresh();
@@ -393,11 +447,11 @@ class AccountFactory
         $currency             = $this->getCurrency($currencyId, $currencyCode);
 
         // only asset account may have a role:
-        if (AccountTypeEnum::ASSET->value !== $account->accountType->type) {
+        if ($account->accountType && AccountTypeEnum::ASSET->value !== $account->accountType->type) {
             $accountRole = '';
         }
         // only liability may have direction:
-        if (array_key_exists('liability_direction', $data) && !in_array($account->accountType->type, config('firefly.valid_liabilities'), true)) {
+        if (array_key_exists('liability_direction', $data) && $account->accountType && !in_array($account->accountType->type, config('firefly.valid_liabilities'), true)) {
             $data['liability_direction'] = null;
         }
         $data['account_role'] = $accountRole;
@@ -421,9 +475,9 @@ class AccountFactory
      */
     private function storeOpeningBalance(Account $account, array $data): void
     {
-        $accountType = $account->accountType->type;
+        $accountCategoryId = $account->accountType->category_id;
 
-        if (in_array($accountType, $this->canHaveOpeningBalance, true)) {
+        if (in_array($accountCategoryId, [1], true)) {
             if ($this->validOBData($data)) {
                 $openingBalance     = $data['opening_balance'];
                 $openingBalanceDate = $data['opening_balance_date'];
@@ -442,6 +496,13 @@ class AccountFactory
     {
         Log::debug('storeCreditLiability');
         $account->refresh();
+        
+        // Check if accountType relationship is loaded and not null
+        if (!$account->accountType) {
+            Log::debug('Account type not found, skipping credit liability processing');
+            return;
+        }
+        
         $accountType = $account->accountType->type;
         $direction   = $this->accountRepository->getMetaValue($account, 'liability_direction');
         $valid       = config('firefly.valid_liabilities');
@@ -461,30 +522,11 @@ class AccountFactory
         }
     }
 
-    /**
-     * @throws FireflyException
-     */
-    private function storeOrder(Account $account, array $data): void
-    {
-        $accountType   = $account->accountType->type;
-        $maxOrder      = $this->accountRepository->maxOrder($accountType);
-        $order         = null;
-        if (!array_key_exists('order', $data)) {
-            $order = $maxOrder + 1;
-        }
-        if (array_key_exists('order', $data)) {
-            $order = (int) ($data['order'] > $maxOrder ? $maxOrder + 1 : $data['order']);
-            $order = 0 === $order ? $maxOrder + 1 : $order;
-        }
-
-        $updateService = app(AccountUpdateService::class);
-        $updateService->setUser($account->user);
-        $updateService->update($account, ['order' => $order]);
-    }
 
     public function setUser(User $user): void
     {
         $this->user = $user;
         $this->accountRepository->setUser($user);
     }
+
 }

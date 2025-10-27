@@ -192,6 +192,14 @@ class Steam
         }
         $cache->store($balances);
         Log::debug('End of method');
+        
+        $totalTime = microtime(true) - $startTime;
+        Log::debug('🔧 [PERF] dailyAccountBalances - Cache miss, calculated:', [
+            'account_id' => $account->id,
+            'total_time_ms' => round($totalTime * 1000, 2),
+            'cache_time_ms' => round($cacheTime * 1000, 2),
+            'calculation_time_ms' => round(($totalTime - $cacheTime) * 1000, 2)
+        ]);
 
         return $balances;
     }
@@ -201,6 +209,8 @@ class Steam
      */
     public function dailyAccountBalances(Account $account): array //, Carbon $start, Carbon $end, bool $convertToNative): array
     {
+        $startTime = microtime(true);
+        
         // expand period.
         // $start->startOfDay();
         // $end->endOfDay();
@@ -213,6 +223,7 @@ class Steam
         $newCache->addProperty("dailyBalances");
         // $newCache->delete();
 
+        $cacheStartTime = microtime(true);
         if ($newCache->has()) {
             // Check the needs_recalculation flag in the account_balance_flags table
             $needsRecalculation = DB::table('account_balance_flags')
@@ -220,9 +231,17 @@ class Steam
                 ->value('needs_recalculation');
 
             if ($needsRecalculation === false) {
+                $cacheTime = microtime(true) - $cacheStartTime;
+                $totalTime = microtime(true) - $startTime;
+                Log::debug('🔧 [PERF] dailyAccountBalances - Cache hit:', [
+                    'account_id' => $account->id,
+                    'total_time_ms' => round($totalTime * 1000, 2),
+                    'cache_time_ms' => round($cacheTime * 1000, 2)
+                ]);
                 return $newCache->get();
             }
         }
+        $cacheTime = microtime(true) - $cacheStartTime;
         // // set up cache
         // $cache                = new CacheProperties();
         // $cache->addProperty($account->id);
@@ -773,6 +792,7 @@ class Steam
      */
     public function finalAccountBalance(Account $account, Carbon $date, ?TransactionCurrency $primary = null, ?bool $convertToPrimary = null): array
     {
+        $startTime = microtime(true);
 
         $newCache             = new CacheProperties();
         $newCache->addProperty($account->id);
@@ -799,11 +819,24 @@ class Steam
         
         // If the date exists in balances, return it directly
         if (isset($balances[$formattedDate])) {
+            $totalTime = microtime(true) - $startTime;
+            Log::debug('🔧 [PERF] finalAccountBalance - Cache hit:', [
+                'account_id' => $account->id,
+                'time_ms' => round($totalTime * 1000, 2),
+                'date' => $formattedDate
+            ]);
             return $balances[$formattedDate];
         }
         
         // If balances is empty, return default values
         if (empty($balances)) {
+            $totalTime = microtime(true) - $startTime;
+            Log::debug('🔧 [PERF] finalAccountBalance - Empty balances:', [
+                'account_id' => $account->id,
+                'time_ms' => round($totalTime * 1000, 2),
+                'date' => $formattedDate
+            ]);
+            // TODO: This should use the user's primary currency, not hardcoded USD
             return ["balance" => "0", "USD" => "0"];
         }
         
@@ -815,10 +848,25 @@ class Steam
         // TODO: this is not necessarily correct... need to think about the best way to
         // handle this
         if ($formattedDate > $lastDate) {
+            $totalTime = microtime(true) - $startTime;
+            Log::debug('🔧 [PERF] finalAccountBalance - After last date:', [
+                'account_id' => $account->id,
+                'time_ms' => round($totalTime * 1000, 2),
+                'date' => $formattedDate,
+                'last_date' => $lastDate
+            ]);
             return $balances[$lastDate];
         }
         
         // Otherwise return default values
+        $totalTime = microtime(true) - $startTime;
+        Log::debug('🔧 [PERF] finalAccountBalance - Default values:', [
+            'account_id' => $account->id,
+            'time_ms' => round($totalTime * 1000, 2),
+            'date' => $formattedDate,
+            'last_date' => $lastDate
+        ]);
+        // TODO: This should use the user's primary currency, not hardcoded USD
         return ["balance" => "0", "USD" => "0"];
 
         // $formattedDate = $date->format('Y-m-d');
@@ -1057,20 +1105,36 @@ class Steam
 
     public function getLastActivities(array $accounts): array
     {
+        $startTime = microtime(true);
         $list = [];
 
+        $queryStartTime = microtime(true);
         $set  = auth()->user()->transactions()
             ->whereIn('transactions.account_id', $accounts)
             ->groupBy(['transactions.account_id', 'transaction_journals.user_id'])
             ->get(['transactions.account_id', DB::raw('MAX(transaction_journals.date) AS max_date')]) // @phpstan-ignore-line
         ;
+        $queryTime = microtime(true) - $queryStartTime;
 
+        $processStartTime = microtime(true);
         /** @var Transaction $entry */
         foreach ($set as $entry) {
             $date                          = new Carbon($entry->max_date, config('app.timezone'));
             $date->setTimezone(config('app.timezone'));
             $list[(int)$entry->account_id] = $date;
         }
+        $processTime = microtime(true) - $processStartTime;
+        
+        $totalTime = microtime(true) - $startTime;
+        
+        Log::debug('🔧 [PERF] Steam::getLastActivities:', [
+            'total_time_ms' => round($totalTime * 1000, 2),
+            'query_time_ms' => round($queryTime * 1000, 2),
+            'process_time_ms' => round($processTime * 1000, 2),
+            'accounts_requested' => count($accounts),
+            'results_returned' => $set->count(),
+            'activities_found' => count($list)
+        ]);
 
         return $list;
     }
@@ -1181,6 +1245,31 @@ class Steam
         }
 
         return $returnUrl;
+    }
+
+    /**
+     * Normalize a string amount for BC Math operations
+     */
+    public function floatalize(string $amount): string
+    {
+        if ('' === $amount) {
+            return '0';
+        }
+        
+        // Remove any non-numeric characters except decimal point and minus sign
+        $amount = preg_replace('/[^0-9.-]/', '', $amount);
+        
+        // Handle empty result
+        if ('' === $amount) {
+            return '0';
+        }
+        
+        // Ensure proper decimal format for BC Math
+        if (!preg_match('/^-?\d+(\.\d+)?$/', $amount)) {
+            return '0';
+        }
+        
+        return $amount;
     }
 
     public function negative(string $amount): string

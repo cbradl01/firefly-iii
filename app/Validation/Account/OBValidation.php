@@ -41,8 +41,9 @@ trait OBValidation
         $accountName = array_key_exists('name', $array) ? $array['name'] : null;
         Log::debug('Now in validateOBDestination', $array);
 
-        // source can be any of the following types.
-        $validTypes  = $this->combinations[$this->transactionType][$this->source?->accountType->type] ?? [];
+        // For opening balance transactions, any category except Expense and Revenue can be a destination
+        // We don't need to check the source because opening balance sources are typically "Initial balance accounts"
+        $validTypes = ['Asset account', 'Loan', 'Debt', 'Mortgage', 'Initial balance account'];
         if (null === $accountId && null === $accountName && false === $this->canCreateTypes($validTypes)) {
             // if both values are NULL we return false,
             // because the destination of a deposit can't be created.
@@ -104,18 +105,36 @@ trait OBValidation
             Log::debug('Source ID is not null, but name is null.');
             $search = $this->accountRepository->find($accountId);
 
-            // the source resulted in an account, but it's not of a valid type.
-            if (null !== $search && !in_array($search->accountType->type, $validTypes, true)) {
-                $message           = sprintf('User submitted only an ID (#%d), which is a "%s", so this is not a valid source.', $accountId, $search->accountType->type);
+            // Check if source account type's category allows opening balances
+            $sourceCategoryId = $search?->accountType?->category_id ?? null;
+            $canHaveOpeningBalance = $sourceCategoryId && !in_array($sourceCategoryId, [3, 4], true); // 3=Expense, 4=Revenue
+            
+            // the source resulted in an account, but it's not of a valid category.
+            if (null !== $search && !$canHaveOpeningBalance) {
+                $message           = sprintf('User submitted only an ID (#%d), which is a "%s" (category %d), so this is not a valid source.', $accountId, $search->accountType->name, $sourceCategoryId);
                 Log::debug($message);
                 $this->sourceError = $message;
                 $result            = false;
             }
-            // the source resulted in an account, AND it's of a valid type.
-            if (null !== $search && in_array($search->accountType->type, $validTypes, true)) {
-                Log::debug(sprintf('Found account of correct type: #%d, "%s"', $search->id, $search->name));
+            // the source resulted in an account, AND it's of a valid category.
+            if (null !== $search && $canHaveOpeningBalance) {
+                Log::debug(sprintf('Found account of correct category: #%d, "%s"', $search->id, $search->name));
                 $this->setSource($search);
                 $result = true;
+            }
+        }
+
+        // if the user submits a name only (no ID), we can create an initial balance account
+        if (null === $accountId && null !== $accountName && null === $result) {
+            Log::debug('Source ID is null, but name is not null. Can create initial balance account.');
+            if ($this->canCreateTypes($validTypes)) {
+                $result = true;
+                // set the source to be a (dummy) initial balance account.
+                $account = new Account();
+                /** @var AccountType $accountType */
+                $accountType = AccountType::whereType(AccountTypeEnum::INITIAL_BALANCE->value)->first();
+                $account->accountType = $accountType;
+                $this->setSource($account);
             }
         }
 
