@@ -53,6 +53,11 @@
           "firefly_type": "Asset account",
           "firefly_role": "defaultAsset",
           "description": "Combined checking and investment account"
+        },
+        "E-commerce Account": {
+          "firefly_type": "Asset account",
+          "firefly_role": "defaultAsset",
+          "description": "Online storefronts and e-commerce platforms (Facebook shops, Etsy, Shopify, etc.)"
         }
       },
       "Short-term Investments": {

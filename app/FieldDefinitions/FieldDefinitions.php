@@ -87,11 +87,11 @@ class FieldDefinitions
      */
     public const ACCOUNT_FIELDS = [
         // Core Required Fields
-        'account_holder' => [
-            'data_type' => 'string',
-            'input_type' => 'financial_entity_select',
+        'account_holders' => [
+            'data_type' => 'array',
+            'input_type' => 'financial_entity_multiselect',
             'category' => 'basic_info',
-            'validation' => 'required|string|max:255',
+            'validation' => 'required|array|min:1',
             'overview_link' => true,
             'options' => [
                 'exclude_entity_types' => ['institution']

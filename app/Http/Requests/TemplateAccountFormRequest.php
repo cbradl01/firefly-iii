@@ -66,7 +66,7 @@ class TemplateAccountFormRequest extends FormRequest
             'name.required' => 'Account name is required.',
             'currency_id.required' => 'Currency is required.',
             'institution.required' => 'Institution is required.',
-            'owner.required' => 'Owner is required.',
+            'account_holder.required' => 'Account holder is required.',
             'product_name.required' => 'Product name is required.',
         ];
     }
