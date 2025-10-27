@@ -83,24 +83,105 @@ function applyConditionalFillColors(dataset) {
         return;
     }
     
-    dataset.fill = 'origin';
+    dataset.fill = 'origin'; // Fill to zero line
     
-    var backgroundColor = [];
+    // Create arrays for per-point styling
+    var pointBackgroundColor = [];
+    var pointBorderColor = [];
     var borderColor = [];
     
     for (var i = 0; i < dataset.data.length; i++) {
         var value = dataset.data[i];
         if (value >= 0) {
-            backgroundColor.push('rgba(0, 255, 0, 0.1)'); // Green for positive
+            // Green for positive values with transparency
+            pointBackgroundColor.push('rgba(0, 255, 0, 0.7)');
+            pointBorderColor.push('rgba(0, 255, 0, 0.9)');
             borderColor.push('rgba(0, 255, 0, 0.8)');
         } else {
-            backgroundColor.push('rgba(255, 0, 0, 0.1)'); // Red for negative
+            // Red for negative values with transparency
+            pointBackgroundColor.push('rgba(255, 0, 0, 0.7)');
+            pointBorderColor.push('rgba(255, 0, 0, 0.9)');
             borderColor.push('rgba(255, 0, 0, 0.8)');
         }
     }
     
-    dataset.backgroundColor = backgroundColor;
-    dataset.borderColor = borderColor;
+    dataset.pointBackgroundColor = pointBackgroundColor;
+    dataset.pointBorderColor = pointBorderColor;
+    
+    // Add a subtle border to the fill area
+    dataset.borderWidth = 1;
+    dataset.borderColor = function(context) {
+        const chart = context.chart;
+        const {ctx, chartArea} = chart;
+        
+        if (!chartArea) {
+            return 'rgba(0, 0, 0, 0.3)';
+        }
+        
+        const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+        const zeroY = chart.scales.y.getPixelForValue(0);
+        const chartTop = chartArea.top;
+        const chartBottom = chartArea.bottom;
+        
+        // Calculate the position of zero line as a percentage
+        const zeroPercent = (zeroY - chartTop) / (chartBottom - chartTop);
+        
+        if (zeroPercent > 0 && zeroPercent < 1) {
+            // Zero line is within the chart area
+            gradient.addColorStop(0, 'rgba(0, 255, 0, 0.6)'); // Green border at top
+            gradient.addColorStop(zeroPercent, 'rgba(0, 255, 0, 0.6)'); // Green border at zero
+            gradient.addColorStop(zeroPercent, 'rgba(255, 0, 0, 0.6)'); // Red border at zero
+            gradient.addColorStop(1, 'rgba(255, 0, 0, 0.6)'); // Red border at bottom
+        } else if (zeroPercent <= 0) {
+            // Zero line is above chart (all positive)
+            gradient.addColorStop(0, 'rgba(0, 255, 0, 0.6)');
+            gradient.addColorStop(1, 'rgba(0, 255, 0, 0.6)');
+        } else {
+            // Zero line is below chart (all negative)
+            gradient.addColorStop(0, 'rgba(255, 0, 0, 0.6)');
+            gradient.addColorStop(1, 'rgba(255, 0, 0, 0.6)');
+        }
+        
+        return gradient;
+    };
+    
+    // Use a gradient fill that changes at zero with border effect
+    dataset.backgroundColor = function(context) {
+        const chart = context.chart;
+        const {ctx, chartArea} = chart;
+        
+        if (!chartArea) {
+            return 'rgba(0, 0, 0, 0.1)';
+        }
+        
+        const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+        const zeroY = chart.scales.y.getPixelForValue(0);
+        const chartTop = chartArea.top;
+        const chartBottom = chartArea.bottom;
+        
+        // Calculate the position of zero line as a percentage
+        const zeroPercent = (zeroY - chartTop) / (chartBottom - chartTop);
+        
+        if (zeroPercent > 0 && zeroPercent < 1) {
+            // Zero line is within the chart area - create a more defined border
+            gradient.addColorStop(0, 'rgba(0, 255, 0, 0.2)'); // Green at top (more opaque)
+            gradient.addColorStop(zeroPercent - 0.01, 'rgba(0, 255, 0, 0.2)'); // Green just before zero
+            gradient.addColorStop(zeroPercent, 'rgba(0, 255, 0, 0.3)'); // Green border at zero
+            gradient.addColorStop(zeroPercent, 'rgba(255, 0, 0, 0.3)'); // Red border at zero
+            gradient.addColorStop(zeroPercent + 0.01, 'rgba(255, 0, 0, 0.2)'); // Red just after zero
+            gradient.addColorStop(1, 'rgba(255, 0, 0, 0.2)'); // Red at bottom (more opaque)
+        } else if (zeroPercent <= 0) {
+            // Zero line is above chart (all positive)
+            gradient.addColorStop(0, 'rgba(0, 255, 0, 0.2)');
+            gradient.addColorStop(1, 'rgba(0, 255, 0, 0.2)');
+        } else {
+            // Zero line is below chart (all negative)
+            gradient.addColorStop(0, 'rgba(255, 0, 0, 0.2)');
+            gradient.addColorStop(1, 'rgba(255, 0, 0, 0.2)');
+        }
+        
+        return gradient;
+    };
 }
 
 /**
@@ -478,6 +559,12 @@ function drawAChart(URL, container, chartType, options, colorData) {
         } else {
             // new chart!
             var ctx = document.getElementById(container).getContext("2d");
+            
+            // Apply conditional fill colors for line charts
+            if (chartType === 'line' && data.datasets && data.datasets.length > 0) {
+                applyConditionalFillColors(data.datasets[0]);
+            }
+            
             console.log("Creating new chart with data:", data);
             console.log("Chart options:", options);
             var chartOpts = {
@@ -581,3 +668,4 @@ function drawAChart(URL, container, chartType, options, colorData) {
         $('#' + container).addClass('general-chart-error');
     });
 }
+

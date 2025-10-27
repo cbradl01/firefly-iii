@@ -330,24 +330,43 @@ class IndexController extends Controller
                 // Calculate balances only if account has transactions
                 if (in_array($account->id, $accountsWithTransactions)) {
                     $balanceStart = microtime(true);
-                    $account->startBalances = Steam::filterAccountBalance(
-                        Steam::finalAccountBalance($account, $start, $this->primaryCurrency, $this->convertToPrimary), 
+                    
+                    // Calculate current balance (as of today) for display
+                    $now = today()->endOfDay();
+                    $currentBalance = Steam::filterAccountBalance(
+                        Steam::finalAccountBalance($account, $now, $this->primaryCurrency, $this->convertToPrimary), 
                         $account, 
                         $this->convertToPrimary, 
                         $currency
                     );
-                    $account->endBalances = Steam::filterAccountBalance(
-                        Steam::finalAccountBalance($account, $end, $this->primaryCurrency, $this->convertToPrimary), 
-                        $account, 
-                        $this->convertToPrimary, 
-                        $currency
-                    );
+                    
+                    // Set both startBalances and endBalances to current balance for display
+                    $account->startBalances = $currentBalance;
+                    $account->endBalances = $currentBalance;
+                    
+                    // Also set current_balance for the template
+                    $account->current_balance = $currentBalance['balance'] ?? '0';
+                    $account->currency_symbol = $currency->symbol ?? $this->primaryCurrency->symbol;
+                    $account->currency_decimal_places = $currency->decimal_places ?? $this->primaryCurrency->decimal_places;
+                    
+                    // Debug logging
+                    app('log')->debug('Setting balances for account', [
+                        'account_id' => $account->id,
+                        'account_name' => $account->name,
+                        'currentBalance' => $currentBalance,
+                        'endBalances' => $account->endBalances,
+                        'current_balance' => $account->current_balance
+                    ]);
+                    
                     $balanceCalcTime += microtime(true) - $balanceStart;
                     $balanceCalcCount++;
                 } else {
                     // No transactions, so balance is 0 - set directly without any calculations
                     $account->startBalances = ["balance" => "0", $this->primaryCurrency->code => "0"];
                     $account->endBalances = ["balance" => "0", $this->primaryCurrency->code => "0"];
+                    $account->current_balance = "0";
+                    $account->currency_symbol = $currency->symbol ?? $this->primaryCurrency->symbol;
+                    $account->currency_decimal_places = $currency->decimal_places ?? $this->primaryCurrency->decimal_places;
                 }
                 
                 $account->differences = $this->subtract($account->startBalances, $account->endBalances);
@@ -409,7 +428,12 @@ class IndexController extends Controller
         
         app('log')->debug('🔧 [PERF] IndexController::all - Starting view rendering');
         $viewStartTime = microtime(true);
-        $view = view('accounts.all', compact('subTitle', 'subTitleIcon', 'accounts', 'totalAccounts', 'visibleAccounts', 'sortColumn', 'sortDirection', 'pageSize', 'financialEntities', 'metaValues', 'accountHolders', 'accountInstitutions', 'accountTypeNames', 'accountData'));
+        
+        // Define variables for the view
+        $convertToPrimary = $this->convertToPrimary;
+        $primaryCurrency = $this->primaryCurrency;
+        
+        $view = view('accounts.all', compact('subTitle', 'subTitleIcon', 'accounts', 'totalAccounts', 'visibleAccounts', 'sortColumn', 'sortDirection', 'pageSize', 'financialEntities', 'metaValues', 'accountHolders', 'accountInstitutions', 'accountTypeNames', 'accountData', 'convertToPrimary', 'primaryCurrency'));
         
         // Force the view to render immediately to see if that's where the delay is
         app('log')->debug('🔧 [PERF] IndexController::all - About to render view to string');
