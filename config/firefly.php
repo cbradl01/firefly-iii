@@ -355,14 +355,16 @@ return [
         AccountTypeEnum::IMPORT->value      => 'fa-download',
         'liabilities'                       => 'fa-ticket',
     ],
+    // TODO: get rid of this list of accountTypesByIdentifier; use the db relationships instead.
     'accountTypesByIdentifier'     => [
-        'asset'       => ['Default account', 'Asset account', 'Checking Account', 'Savings Account', 'Cash account', 'Brokerage account', 'Individual Brokerage', 'Joint Brokerage', 'Roth IRA', 'Traditional IRA', '401(k)', 'Solo 401(k)', 'Health Savings Account (HSA)', 'Cryptocurrency', 'Digital Wallet', 'Private Equity', 'Bonds', 'Beneficiary account', 'Import account', 'Initial balance account', 'Reconciliation account', 'Custodial Account (UTMA/UGMA)', 'Coverdell ESA', 'Business Checking', 'Payment Processor'],
+        'asset'       => ['Default account', 'Asset account', 'Checking Account', 'Savings Account', 'Cash account', 'Brokerage Account', 'Individual Brokerage', 'Joint Brokerage', 'Roth IRA', 'Traditional IRA', '401(k)', 'Solo 401(k)', 'Health Savings Account (HSA)', 'Cryptocurrency', 'Digital Wallet', 'Private Equity', 'Bonds', 'Beneficiary account', 'Import account', 'Initial balance account', 'Reconciliation account', 'Custodial Account (UTMA/UGMA)', 'Coverdell ESA', 'Business Checking', 'Payment Processor', 'Education Account', 'Health Account', 'Venture Capital Account', 'Private Equity Account', 'Alternative Investment Account', 'E-commerce Account'],
         'expense'     => ['Expense account'],
         'revenue'     => ['Revenue account'],
         'import'      => ['Import account'],
-        'liabilities' => ['Credit card', 'Debt', 'Loan', 'Auto Loan', 'Mortgage', 'Personal Loans'],
+        'liabilities' => ['Credit Card', 'Debt', 'Loan', 'Auto Loan', 'Mortgage', 'Personal Loans'],
         'holding'     => [],
     ],
+    // TODO: get rid of this list of accountTypeByIdentifier; use the db relationships instead.
     'accountTypeByIdentifier'      => [
         'asset'       => [AccountTypeEnum::ASSET->value],
         'expense'     => [AccountTypeEnum::EXPENSE->value],
@@ -378,6 +380,7 @@ return [
         'liability'   => [AccountTypeEnum::LOAN->value, AccountTypeEnum::DEBT->value, AccountTypeEnum::MORTGAGE->value, AccountTypeEnum::CREDITCARD->value],
         'holding'     => [AccountTypeEnum::HOLDING->value],
     ],
+    // TODO: get rid of this list of shortNamesByFullName; use the db relationships instead.
     'shortNamesByFullName'         => [
         AccountTypeEnum::DEFAULT->value         => 'asset',
         AccountTypeEnum::ASSET->value           => 'asset',
@@ -395,6 +398,7 @@ return [
         AccountTypeEnum::DEBT->value            => 'liabilities',
         AccountTypeEnum::MORTGAGE->value        => 'liabilities',
     ],
+    // TODO: get rid of this list of shortLiabilityNameByFullName; use the db relationships instead.
     'shortLiabilityNameByFullName' => [
         AccountTypeEnum::CREDITCARD->value => 'creditcard',
         AccountTypeEnum::LOAN->value       => AccountTypeEnum::LOAN->value,
@@ -523,10 +527,7 @@ return [
             TransactionTypeEnum::OPENING_BALANCE->value  => [
                 AccountTypeEnum::INITIAL_BALANCE->value,
                 AccountTypeEnum::ASSET->value,
-                AccountTypeEnum::LOAN->value,
-                AccountTypeEnum::DEBT->value,
-                AccountTypeEnum::MORTGAGE->value,
-                AccountTypeEnum::BROKERAGE->value,
+                AccountTypeEnum::LIABILITY->value,
             ],
             TransactionTypeEnum::RECONCILIATION->value   => [AccountTypeEnum::RECONCILIATION->value, AccountTypeEnum::ASSET->value],
             TransactionTypeEnum::LIABILITY_CREDIT->value => [AccountTypeEnum::LIABILITY_CREDIT->value, AccountTypeEnum::LOAN->value, AccountTypeEnum::DEBT->value, AccountTypeEnum::MORTGAGE->value],
@@ -835,7 +836,7 @@ return [
         'max_attempts' => env('WEBHOOK_MAX_ATTEMPTS', 3),
     ],
     'can_have_virtual_amounts'     => [AccountTypeEnum::ASSET->value],
-    'can_have_opening_balance'     => [AccountTypeEnum::ASSET->value, AccountTypeEnum::BROKERAGE->value, AccountTypeEnum::LOAN->value, AccountTypeEnum::DEBT->value, AccountTypeEnum::MORTGAGE->value],
+    'can_have_opening_balance'     => [AccountTypeEnum::ASSET->value],
     'dynamic_creation_allowed'     => [
         AccountTypeEnum::EXPENSE->value,
         AccountTypeEnum::REVENUE->value,

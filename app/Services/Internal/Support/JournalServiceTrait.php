@@ -121,8 +121,8 @@ trait JournalServiceTrait
         // first attempt, find by ID.
         if (null !== $data['id']) {
             $search = $this->accountRepository->find((int) $data['id']);
-            if (null !== $search && in_array($search->accountType->type, $types, true)) {
-                Log::debug(sprintf('Found "account_id" object: #%d, "%s" of type %s (1)', $search->id, $search->name, $search->accountType->type));
+            if (null !== $search && $search->accountType && $search->accountType->category && in_array($search->accountType->category->name, $types, true)) {
+                Log::debug(sprintf('Found "account_id" object: #%d, "%s" of type %s (category: %s) (1)', $search->id, $search->name, $search->accountType->name, $search->accountType->category->name));
 
                 if ($opposite?->id === $search->id) {
                     Log::debug(sprintf('Account #%d is the same as opposite account #%d, returning NULL.', $search->id, $opposite->id));
@@ -323,7 +323,6 @@ trait JournalServiceTrait
                     'active'            => true,
                     'iban'              => $data['iban'],
                     'currency_id'       => $data['currency_id'] ?? null,
-                    'order'             => $this->accountRepository->maxOrder($preferredType),
                 ]
             );
             // store BIC
@@ -347,7 +346,7 @@ trait JournalServiceTrait
     {
         // return cash account.
         if (!$account instanceof Account && '' === (string) $data['name']
-            && in_array(AccountTypeEnum::CASH->value, $types, true)) {
+            && in_array('Asset', $types, true)) {
             $account = $this->accountRepository->getCashAccount();
         }
         Log::debug('Cannot return cash account, return input instead.');
