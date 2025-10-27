@@ -159,7 +159,7 @@ class HomeController extends Controller
         $end            = session('end', today(config('app.timezone'))->endOfMonth());
         $accounts       = $repository->getAccountsById($frontpageArray);
         $today          = today(config('app.timezone'));
-        $accounts       = $accounts->sortBy('order'); // sort frontpage accounts by order
+        // Account order functionality has been removed - accounts are sorted by name
 
         app('log')->debug('Frontpage accounts are ', $frontpageArray);
 

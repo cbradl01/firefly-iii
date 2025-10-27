@@ -347,14 +347,14 @@ class ImportController extends Controller
     /**
      * Show the JSON import form
      */
-    public function importJson(string $objectType)
+    public function importJson()
     {
-        $subTitle = 'Import ' . ucfirst($objectType) . ' accounts from JSON';
+        $subTitle = 'Import accounts from JSON';
         
         // Get available entities for mapping reference
         $entityMapping = $this->getEntityMapping();
         
-        return view('accounts.import-json', compact('objectType', 'subTitle', 'entityMapping'));
+        return view('accounts.import-json', compact('subTitle', 'entityMapping'));
     }
 
 

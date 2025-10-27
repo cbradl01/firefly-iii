@@ -679,7 +679,7 @@ class FinancialEntityController extends Controller
             }
 
             // Check if entity has any accounts - use direct database queries for more reliable checking
-            $accountHolderCount = \FireflyIII\Models\Account::where('account_holder_id', $financialEntity->id)->count();
+            $accountHolderCount = \FireflyIII\Models\Account::whereRaw('account_holder_ids::text LIKE ?', ['%"' . $financialEntity->id . '"%'])->count();
             $institutionCount = \FireflyIII\Models\Account::where('institution_id', $financialEntity->id)->count();
             
             if ($accountHolderCount > 0 || $institutionCount > 0) {
@@ -775,7 +775,7 @@ class FinancialEntityController extends Controller
             foreach ($entities as $entity) {
                 try {
                     // Check if entity has any accounts - use direct database queries for more reliable checking
-                    $accountHolderCount = \FireflyIII\Models\Account::where('account_holder_id', $entity->id)->count();
+                    $accountHolderCount = \FireflyIII\Models\Account::whereRaw('account_holder_ids::text LIKE ?', ['%"' . $entity->id . '"%'])->count();
                     $institutionCount = \FireflyIII\Models\Account::where('institution_id', $entity->id)->count();
                     
                     if ($accountHolderCount > 0 || $institutionCount > 0) {
@@ -943,6 +943,16 @@ class FinancialEntityController extends Controller
             'success' => true,
             'data' => $allData
         ];
+    }
+
+    /**
+     * Show the entity import page
+     */
+    public function importJson(): View
+    {
+        return view('entities.import-json', [
+            'subTitle' => 'Import Financial Entities from JSON'
+        ]);
     }
 
 }
