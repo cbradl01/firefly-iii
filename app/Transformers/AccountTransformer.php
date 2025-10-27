@@ -76,17 +76,12 @@ class AccountTransformer extends AbstractTransformer
         $longitude                             = $account->meta['location']['longitude'] ?? null;
         $latitude                              = $account->meta['location']['latitude'] ?? null;
         $zoomLevel                             = $account->meta['location']['zoom_level'] ?? null;
-        $order                                 = $account->order;
+        // Account order functionality has been removed
 
         // get primary currency as fallback:
         $currency                              = $this->primary; // assume primary currency
         if ($hasCurrencySettings) {
             $currency = $account->meta['currency'];
-        }
-
-        // no order for some accounts:
-        if (!in_array(strtolower($accountType), ['liability', 'liabilities', 'asset'], true)) {
-            $order = null;
         }
 
         // get some listed information from the account meta-data:
@@ -99,7 +94,6 @@ class AccountTransformer extends AbstractTransformer
             'created_at'                      => $account->created_at->toAtomString(),
             'updated_at'                      => $account->updated_at->toAtomString(),
             'active'                          => $account->active,
-            'order'                           => $order,
             'name'                            => $account->name,
             'type'                            => strtolower($accountType),
             'account_role'                    => $accountRole,

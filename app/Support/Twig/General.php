@@ -69,6 +69,7 @@ class General extends AbstractExtension
             $this->formatDate(),
             $this->getMetaField(),
             $this->getBeneficiaries(),
+            $this->getAccountHolders(),
             $this->hasRole(),
             $this->getRootSearchOperator(),
             $this->carbonize(),
@@ -252,7 +253,15 @@ class General extends AbstractExtension
     {
         return new TwigFunction(
             'accountGetMetaField',
-            static function (Account $account, string $field): string {
+            static function (Account $account, string $field, $metaValues = null): string {
+                // Use pre-loaded meta values if available
+                if ($metaValues && isset($metaValues[$account->id])) {
+                    $accountMetas = $metaValues[$account->id];
+                    $meta = $accountMetas->get($field);
+                    return $meta ? $meta->data : '';
+                }
+                
+                // Fallback to original implementation
                 /** @var AccountRepositoryInterface $repository */
                 $repository = app(AccountRepositoryInterface::class);
                 $result     = $repository->getMetaValue($account, $field);
@@ -300,6 +309,166 @@ class General extends AbstractExtension
                 return array_filter($grouped, function($group) {
                     return !empty($group);
                 });
+            }
+        );
+    }
+
+    protected function getAccountHolders(): TwigFunction
+    {
+        return new TwigFunction(
+            'accountGetAccountHolders',
+            static function (Account $account, $financialEntities = null): array {
+                $holders = [];
+                
+                // Use pre-loaded financial entities if available
+                if ($financialEntities) {
+                    // First try to get from account_holders field (plural)
+                    $accountHolders = $account->getMetadataValue('account_holders');
+                    if ($accountHolders) {
+                        // Handle both string and array formats
+                        if (is_string($accountHolders)) {
+                            // Try to decode as JSON array
+                            $decoded = json_decode($accountHolders, true);
+                            if (is_array($decoded)) {
+                                $holderNames = $decoded;
+                            } else {
+                                // Treat as comma-separated string
+                                $holderNames = array_map('trim', explode(',', $accountHolders));
+                            }
+                        } elseif (is_array($accountHolders)) {
+                            $holderNames = $accountHolders;
+                        } else {
+                            $holderNames = [];
+                        }
+                        
+                        // Look up each holder name in pre-loaded financial entities
+                        foreach ($holderNames as $holderName) {
+                            if (empty($holderName)) continue;
+                            
+                            $entity = $financialEntities->get($holderName);
+                            if ($entity) {
+                                $holders[] = [
+                                    'name' => $entity->display_name ?? $entity->name,
+                                    'id' => $entity->id,
+                                    'entity' => $entity
+                                ];
+                            } else {
+                                // Fallback to raw name if entity not found
+                                $holders[] = [
+                                    'name' => $holderName,
+                                    'id' => null,
+                                    'entity' => null
+                                ];
+                            }
+                        }
+                    }
+                    
+                    // Fallback to account_holder field (singular) if no holders found
+                    if (empty($holders)) {
+                        $accountHolder = $account->getMetadataValue('account_holder');
+                        if ($accountHolder) {
+                            $entity = $financialEntities->get($accountHolder);
+                            if ($entity) {
+                                $holders[] = [
+                                    'name' => $entity->display_name ?? $entity->name,
+                                    'id' => $entity->id,
+                                    'entity' => $entity
+                                ];
+                            } else {
+                                $holders[] = [
+                                    'name' => $accountHolder,
+                                    'id' => null,
+                                    'entity' => null
+                                ];
+                            }
+                        }
+                    }
+                    
+                    // Final fallback to accountHolder relationship
+                    if (empty($holders) && $account->accountHolder) {
+                        $holders[] = [
+                            'name' => $account->accountHolder->display_name ?? $account->accountHolder->name,
+                            'id' => $account->accountHolder->id,
+                            'entity' => $account->accountHolder
+                        ];
+                    }
+                } else {
+                    // Fallback to original implementation if no pre-loaded entities
+                    $holders = [];
+                    
+                    // First try to get from account_holders field (plural)
+                    $accountHolders = $account->getMetadataValue('account_holders');
+                    if ($accountHolders) {
+                        // Handle both string and array formats
+                        if (is_string($accountHolders)) {
+                            // Try to decode as JSON array
+                            $decoded = json_decode($accountHolders, true);
+                            if (is_array($decoded)) {
+                                $holderNames = $decoded;
+                            } else {
+                                // Treat as comma-separated string
+                                $holderNames = array_map('trim', explode(',', $accountHolders));
+                            }
+                        } elseif (is_array($accountHolders)) {
+                            $holderNames = $accountHolders;
+                        } else {
+                            $holderNames = [];
+                        }
+                        
+                        // Look up each holder name in financial entities
+                        foreach ($holderNames as $holderName) {
+                            if (empty($holderName)) continue;
+                            
+                            $entity = \FireflyIII\Models\FinancialEntity::where('name', $holderName)->first();
+                            if ($entity) {
+                                $holders[] = [
+                                    'name' => $entity->display_name ?? $entity->name,
+                                    'id' => $entity->id,
+                                    'entity' => $entity
+                                ];
+                            } else {
+                                // Fallback to raw name if entity not found
+                                $holders[] = [
+                                    'name' => $holderName,
+                                    'id' => null,
+                                    'entity' => null
+                                ];
+                            }
+                        }
+                    }
+                    
+                    // Fallback to account_holder field (singular) if no holders found
+                    if (empty($holders)) {
+                        $accountHolder = $account->getMetadataValue('account_holder');
+                        if ($accountHolder) {
+                            $entity = \FireflyIII\Models\FinancialEntity::where('name', $accountHolder)->first();
+                            if ($entity) {
+                                $holders[] = [
+                                    'name' => $entity->display_name ?? $entity->name,
+                                    'id' => $entity->id,
+                                    'entity' => $entity
+                                ];
+                            } else {
+                                $holders[] = [
+                                    'name' => $accountHolder,
+                                    'id' => null,
+                                    'entity' => null
+                                ];
+                            }
+                        }
+                    }
+                    
+                    // Final fallback to accountHolder relationship
+                    if (empty($holders) && $account->accountHolder) {
+                        $holders[] = [
+                            'name' => $account->accountHolder->display_name ?? $account->accountHolder->name,
+                            'id' => $account->accountHolder->id,
+                            'entity' => $account->accountHolder
+                        ];
+                    }
+                }
+                
+                return $holders;
             }
         );
     }
