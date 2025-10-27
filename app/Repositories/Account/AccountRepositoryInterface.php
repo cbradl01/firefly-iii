@@ -95,7 +95,11 @@ interface AccountRepositoryInterface
     /**
      * @param array<int, int|string> $types
      */
-    public function getAccountsByType(array $types, ?array $sort = []): Collection;
+    public function getAccountsByType(array $types, ?array $sort = [], ?int $limit = null): Collection;
+
+    public function getAllAccountsPaginated(int $page, int $pageSize, ?string $sortColumn = null, ?string $sortDirection = 'asc'): array;
+
+    public function getAccountsByTypeCount(array $types): int;
 
     public function getActiveAccountsByType(array $types): Collection;
 
@@ -147,7 +151,6 @@ interface AccountRepositoryInterface
 
     public function isLiability(Account $account): bool;
 
-    public function maxOrder(string $type): int;
 
     /**
      * Returns the date of the very first transaction in this account.
@@ -164,7 +167,6 @@ interface AccountRepositoryInterface
     /**
      * Reset order types of the mentioned accounts.
      */
-    public function resetAccountOrder(): void;
 
     public function searchAccount(string $query, array $types, int $limit): Collection;
 

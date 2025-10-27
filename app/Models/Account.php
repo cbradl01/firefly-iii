@@ -60,10 +60,11 @@ class Account extends Model
      */
     protected function getSystemFields(): array
     {
+        // TODO: what is the purpose of this?
         return [
             'user_id', 'user_group_id', 'account_type_id', 'template_id', 'entity_id', 
-            'native_virtual_balance', 'name', 'active', 'iban', 'order', 'virtual_balance',
-            'account_holder_id', 'institution_id'
+            'native_virtual_balance', 'name', 'active', 'iban', 'virtual_balance',
+            'account_holder_ids', 'institution_id'
         ];
     }
 
@@ -281,7 +282,11 @@ class Account extends Model
             $accountsPath = config('firefly.accounts_path'); // TODO: make this configurable
             
             $institution = $this->institutionEntity?->name;
-            $accountHolder = $this->accountHolder?->name;
+            
+            // Get account holders from the array field (multiple holders supported)
+            $accountHolders = $this->account_holders ?? [];
+            $accountHolder = !empty($accountHolders) ? $accountHolders[0] : 'Unknown';
+            
             $accountType = $this->accountType?->name;
             $accountNumber = $this->account_number;
 
@@ -400,12 +405,15 @@ class Account extends Model
 
     protected function casts(): array
     {
+        // TODO: what is the purpose of this?
         return [
             'created_at'             => 'datetime',
             'updated_at'             => 'datetime',
             'deleted_at'             => 'datetime',
             'encrypted'              => 'boolean',
             'native_virtual_balance' => 'string',
+            'account_holders'        => 'array',
+            'account_holder_ids'     => 'array',
         ];
     }
 
@@ -429,12 +437,6 @@ class Account extends Model
         );
     }
 
-    protected function order(): Attribute
-    {
-        return Attribute::make(
-            get: static fn ($value) => (int)$value,
-        );
-    }
 
     /**
      * Get the virtual balance

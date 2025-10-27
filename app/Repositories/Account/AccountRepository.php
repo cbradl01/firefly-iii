@@ -31,7 +31,6 @@ use FireflyIII\Factory\AccountFactory;
 use FireflyIII\Models\Account;
 use FireflyIII\Models\AccountBehavior;
 use FireflyIII\Models\AccountCategory;
-use FireflyIII\Models\AccountMeta;
 use FireflyIII\Models\AccountType;
 use FireflyIII\Models\Attachment;
 use FireflyIII\Models\Location;
@@ -226,9 +225,8 @@ class AccountRepository implements AccountRepositoryInterface, UserGroupInterfac
         if (0 !== count($accountIds)) {
             $query->whereIn('accounts.id', $accountIds);
         }
-        $query->orderBy('accounts.order', 'ASC');
         $query->orderBy('accounts.active', 'DESC');
-        $query->orderBy('accounts.name', 'ASC');
+        // No additional sorting - let client handle it
 
         return $query->get(['accounts.*']);
     }
@@ -242,12 +240,11 @@ class AccountRepository implements AccountRepositoryInterface, UserGroupInterfac
                 'institutionEntity',
             ]
         );
-        if (0 !== count($types)) {
-            $query->accountTypeIn($types);
-        }
+        // Always apply accountTypeIn scope, even for empty arrays
+        // The scope will handle empty arrays by returning no results
+        $query->accountTypeIn($types);
         $query->where('accounts.active', true);
-        $query->orderBy('accounts.order', 'ASC');
-        $query->orderBy('accounts.name', 'ASC');
+        // No additional sorting - let client handle it
 
         return $query->get(['accounts.*']);
     }
@@ -308,8 +305,7 @@ class AccountRepository implements AccountRepositoryInterface, UserGroupInterfac
             $query->accountTypeIn($types);
         }
         $query->where('accounts.active', 0);
-        $query->orderBy('accounts.order', 'ASC');
-        $query->orderBy('accounts.name', 'ASC');
+        // No additional sorting - let client handle it
 
         return $query->get(['accounts.*']);
     }
@@ -479,31 +475,8 @@ class AccountRepository implements AccountRepositoryInterface, UserGroupInterfac
         return in_array($account->accountType->type, [AccountTypeEnum::CREDITCARD->value, AccountTypeEnum::LOAN->value, AccountTypeEnum::DEBT->value, AccountTypeEnum::MORTGAGE->value], true);
     }
 
-    public function maxOrder(string $type): int
-    {
-        $sets     = [
-            AccountTypeEnum::ASSET->value    => [AccountTypeEnum::DEFAULT->value, AccountTypeEnum::ASSET->value],
-            AccountTypeEnum::EXPENSE->value  => [AccountTypeEnum::EXPENSE->value, AccountTypeEnum::BENEFICIARY->value],
-            AccountTypeEnum::REVENUE->value  => [AccountTypeEnum::REVENUE->value],
-            AccountTypeEnum::LOAN->value     => [AccountTypeEnum::LOAN->value, AccountTypeEnum::DEBT->value, AccountTypeEnum::CREDITCARD->value, AccountTypeEnum::MORTGAGE->value],
-            AccountTypeEnum::DEBT->value     => [AccountTypeEnum::LOAN->value, AccountTypeEnum::DEBT->value, AccountTypeEnum::CREDITCARD->value, AccountTypeEnum::MORTGAGE->value],
-            AccountTypeEnum::MORTGAGE->value => [AccountTypeEnum::LOAN->value, AccountTypeEnum::DEBT->value, AccountTypeEnum::CREDITCARD->value, AccountTypeEnum::MORTGAGE->value],
-        ];
-        if (array_key_exists(ucfirst($type), $sets)) {
-            $order = (int) $this->getAccountsByType($sets[ucfirst($type)])->max('order');
-            Log::debug(sprintf('Return max order of "%s" set: %d', $type, $order));
 
-            return $order;
-        }
-        $specials = [AccountTypeEnum::CASH->value, AccountTypeEnum::INITIAL_BALANCE->value, AccountTypeEnum::IMPORT->value, AccountTypeEnum::RECONCILIATION->value];
-
-        $order    = (int) $this->getAccountsByType($specials)->max('order');
-        Log::debug(sprintf('Return max order of "%s" set (specials!): %d', $type, $order));
-
-        return $order;
-    }
-
-    public function getAccountsByType(array $types, ?array $sort = []): Collection
+    public function getAccountsByType(array $types, ?array $sort = [], ?int $limit = null): Collection
     {
         $res     = array_intersect([AccountTypeEnum::ASSET->value, AccountTypeEnum::MORTGAGE->value, AccountTypeEnum::LOAN->value, AccountTypeEnum::DEBT->value], $types);
         $query   = $this->user->accounts();
@@ -524,15 +497,154 @@ class AccountRepository implements AccountRepositoryInterface, UserGroupInterfac
         }
 
         if (0 === $sorted) {
-            if (0 !== count($res)) {
-                $query->orderBy('accounts.order', 'ASC');
-            }
-            $query->orderBy('accounts.active', 'DESC');
-            $query->orderBy('accounts.name', 'ASC');
-            $query->orderBy('accounts.id', 'ASC');
+            // Add join for sorting by account type
+            $query->leftJoin('account_types', 'accounts.account_type_id', '=', 'account_types.id');
+            
+            $query->orderBy('accounts.institution', 'ASC');
+            $query->orderBy('account_types.name', 'ASC');
+            $query->orderBy('accounts.name', 'ASC'); // Use account name as third sort since holder_ids is JSON
+            
+            app('log')->debug('🔧 [DEBUG] Server-side sorting applied:', [
+                'method' => 'getAccountsByType',
+                'order_by' => 'accounts.institution ASC, account_types.name ASC, accounts.name ASC',
+                'types' => $types
+            ]);
         }
 
-        return $query->get(['accounts.*']);
+        // Apply limit if provided
+        if ($limit !== null) {
+            $query->limit($limit);
+        }
+
+        $result = $query->get(['accounts.*']);
+        
+        // Log first and last institutions for debugging
+        if ($result->count() > 0) {
+            $firstInstitution = $result->first()->institution ?? 'null';
+            $lastInstitution = $result->last()->institution ?? 'null';
+            app('log')->debug('🔧 [DEBUG] Server-side result order:', [
+                'total_accounts' => $result->count(),
+                'first_institution' => $firstInstitution,
+                'last_institution' => $lastInstitution
+            ]);
+        }
+
+        return $result;
+    }
+
+    /**
+     * Get all accounts with pagination and proper sorting.
+     */
+    public function getAllAccountsPaginated(int $page, int $pageSize, ?string $sortColumn = null, ?string $sortDirection = 'asc'): array
+    {
+        $repoStartTime = microtime(true);
+        
+        // Get total count
+        $countStartTime = microtime(true);
+        $total = $this->user->accounts()->count();
+        $countTime = microtime(true) - $countStartTime;
+        
+        // Build query with proper sorting and eager load relationships
+        $query = $this->user->accounts()->with('accountType');
+        $query->leftJoin('account_types', 'accounts.account_type_id', '=', 'account_types.id');
+        
+        // Apply sorting based on parameters
+        if ($sortColumn && $sortDirection) {
+            $this->applySorting($query, $sortColumn, $sortDirection);
+        } else {
+            // Default sorting
+            $query->orderBy('accounts.institution', 'ASC');
+            $query->orderBy('account_types.name', 'ASC');
+            $query->orderBy('accounts.name', 'ASC');
+        }
+        
+        // Apply pagination
+        $queryStartTime = microtime(true);
+        $offset = ($page - 1) * $pageSize;
+        $accounts = $query->offset($offset)->limit($pageSize)->get(['accounts.*']);
+        
+        // Load the accountType relationship for each account
+        $accounts->load('accountType');
+        $queryTime = microtime(true) - $queryStartTime;
+        
+        $totalRepoTime = microtime(true) - $repoStartTime;
+        
+        app('log')->debug('🔧 [PERF] getAllAccountsPaginated - Repository Performance:', [
+            'total_time_ms' => round($totalRepoTime * 1000, 2),
+            'count_query_ms' => round($countTime * 1000, 2),
+            'main_query_ms' => round($queryTime * 1000, 2),
+            'total' => $total,
+            'page' => $page,
+            'page_size' => $pageSize,
+            'sort_column' => $sortColumn,
+            'sort_direction' => $sortDirection,
+            'returned_count' => $accounts->count(),
+            'first_institution' => $accounts->first() ? $accounts->first()->institution : 'none',
+            'last_institution' => $accounts->last() ? $accounts->last()->institution : 'none'
+        ]);
+        
+        return [
+            'accounts' => $accounts,
+            'total' => $total
+        ];
+    }
+
+    /**
+     * Apply sorting to the query based on column and direction.
+     */
+    private function applySorting($query, string $sortColumn, string $sortDirection): void
+    {
+        $direction = strtolower($sortDirection) === 'desc' ? 'DESC' : 'ASC';
+        
+        switch ($sortColumn) {
+            case 'institution':
+                $query->orderBy('accounts.institution', $direction);
+                $query->orderBy('account_types.name', 'ASC');
+                $query->orderBy('accounts.name', 'ASC');
+                break;
+            case 'account_type':
+                $query->orderBy('account_types.name', $direction);
+                $query->orderBy('accounts.institution', 'ASC');
+                $query->orderBy('accounts.name', 'ASC');
+                break;
+            case 'name':
+                $query->orderBy('accounts.name', $direction);
+                $query->orderBy('accounts.institution', 'ASC');
+                $query->orderBy('account_types.name', 'ASC');
+                break;
+            case 'active':
+                $query->orderBy('accounts.active', $direction);
+                $query->orderBy('accounts.institution', 'ASC');
+                $query->orderBy('account_types.name', 'ASC');
+                $query->orderBy('accounts.name', 'ASC');
+                break;
+            case 'balance':
+                // For balance sorting, we'll need to calculate balances
+                // This is more complex and might require a different approach
+                $query->orderBy('accounts.institution', 'ASC');
+                $query->orderBy('account_types.name', 'ASC');
+                $query->orderBy('accounts.name', 'ASC');
+                break;
+            default:
+                // Default sorting if column not recognized
+                $query->orderBy('accounts.institution', 'ASC');
+                $query->orderBy('account_types.name', 'ASC');
+                $query->orderBy('accounts.name', 'ASC');
+                break;
+        }
+    }
+
+    /**
+     * Get total count of accounts by type for pagination.
+     */
+    public function getAccountsByTypeCount(array $types): int
+    {
+        $query = $this->user->accounts();
+        if (0 !== count($types)) {
+            $query->accountTypeIn($types);
+        }
+        
+        return $query->count();
     }
 
     /**
@@ -607,43 +719,6 @@ class AccountRepository implements AccountRepositoryInterface, UserGroupInterfac
 
     }
 
-    public function resetAccountOrder(): void
-    {
-        $sets = [
-            ['Default account', 'Asset account', 'Checking Account', 'Savings Account', 'Cash account', 'Brokerage account', 'Individual Brokerage', 'Joint Brokerage', 'Roth IRA', 'Traditional IRA', '401(k)', 'Solo 401(k)', 'Health Savings Account (HSA)', 'Cryptocurrency', 'Digital Wallet', 'Private Equity', 'Bonds', 'Beneficiary account', 'Import account', 'Initial balance account', 'Reconciliation account', 'Custodial Account (UTMA/UGMA)', 'Coverdell ESA', 'Business Checking', 'Payment Processor'],
-            ['Credit card', 'Debt', 'Loan', 'Auto Loan', 'Mortgage', 'Personal Loans'],
-        ];
-        foreach ($sets as $set) {
-            $list  = $this->getAccountsByType($set);
-            $index = 1;
-            foreach ($list as $account) {
-                if (false === $account->active) {
-                    $account->order = 0;
-
-                    continue;
-                }
-                if ($index !== (int) $account->order) {
-                    Log::debug(sprintf('Account #%d ("%s"): order should %d be but is %d.', $account->id, $account->name, $index, $account->order));
-                    $account->order = $index;
-                    $account->save();
-                }
-                ++$index;
-            }
-        }
-        // reset the rest to zero.
-        $all  = ['Default account', 'Asset account', 'Checking Account', 'Savings Account', 'Cash account', 'Brokerage account', 'Individual Brokerage', 'Joint Brokerage', 'Roth IRA', 'Traditional IRA', '401(k)', 'Solo 401(k)', 'Health Savings Account (HSA)', 'Cryptocurrency', 'Digital Wallet', 'Private Equity', 'Bonds', 'Beneficiary account', 'Import account', 'Initial balance account', 'Reconciliation account', 'Custodial Account (UTMA/UGMA)', 'Coverdell ESA', 'Business Checking', 'Payment Processor', 'Credit card', 'Debt', 'Loan', 'Auto Loan', 'Mortgage', 'Personal Loans'];
-        
-        // Get account type IDs for the specified types
-        $accountTypeIds = AccountType::whereIn('name', $all)
-            ->where('active', true)
-            ->pluck('id')
-            ->toArray();
-        
-        $this->user->accounts()
-            ->whereNotIn('accounts.account_type_id', $accountTypeIds)
-            ->update(['order' => 0]);
-    }
-
     /**
      * @throws FireflyException
      */
@@ -659,8 +734,7 @@ class AccountRepository implements AccountRepositoryInterface, UserGroupInterfac
     {
         $dbQuery = $this->user->accounts()
             ->where('accounts.active', true)
-            ->orderBy('accounts.order', 'ASC')
-            ->orderBy('accounts.name', 'ASC')
+            ->orderBy('accounts.institution', 'DESC')
             ->with(['accountType'])
         ;
         if ('' !== $query) {
@@ -682,8 +756,7 @@ class AccountRepository implements AccountRepositoryInterface, UserGroupInterfac
     {
         $dbQuery = $this->user->accounts()->distinct()
             ->where('accounts.active', true)
-            ->orderBy('accounts.order', 'ASC')
-            ->orderBy('accounts.name', 'ASC')
+            ->orderBy('accounts.institution', 'DESC')
             ->with(['accountType'])
         ;
         if ('' !== $query) {
