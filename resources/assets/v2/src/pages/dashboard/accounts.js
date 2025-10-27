@@ -252,7 +252,6 @@ export default () => ({
                             // console.log(parent);
                             accounts.push({
                                 name: parent.attributes.name,
-                                order: parent.attributes.order,
 
                                 current_balance: formatMoney(parent.attributes.current_balance, parent.attributes.currency_code),
                                 pc_current_balance: null === parent.attributes.pc_current_balance ? null : formatMoney(parent.attributes.pc_current_balance, parent.attributes.primary_currency_code),
@@ -263,7 +262,8 @@ export default () => ({
                             });
                             count++;
                             if (count === totalAccounts) {
-                                accounts.sort((a, b) => a.order - b.order); // b - a for reverse sort
+                                // Sort by name alphabetically since order field is removed
+                                accounts.sort((a, b) => a.name.localeCompare(b.name));
 
                                 this.accountList = accounts;
                                 this.loadingAccounts = false;

@@ -161,14 +161,14 @@ window.TableSorting = {
      */
     getSortState: function(table) {
         const $table = $(table);
-        const $activeHeader = $table.find('th.arrow, th.az, th.AZ, th._19, th.month');
+        const $activeHeader = $table.find('th.sortable-header:has(.fa-sort-asc), th.sortable-header:has(.fa-sort-desc)');
         
         if ($activeHeader.length === 0) {
             return { column: null, direction: null };
         }
 
         const column = $activeHeader.attr('data-defaultsign');
-        const direction = $activeHeader.hasClass('up') ? 'asc' : 'desc';
+        const direction = $activeHeader.find('.fa-sort-asc').length > 0 ? 'asc' : 'desc';
         
         return { column, direction };
     },
@@ -196,12 +196,24 @@ window.TableSorting = {
         const config = {
             url: options.url || window.location.href,
             method: options.method || 'GET',
+            ajax: options.ajax !== false, // Default to true for AJAX sorting
             onSort: options.onSort || function(column, direction) {
-                // Default behavior: reload page with sort parameters
-                const url = new URL(config.url);
-                url.searchParams.set('sort', column);
-                url.searchParams.set('direction', direction);
-                window.location.href = url.toString();
+                if (config.ajax) {
+                    // AJAX-based sorting
+                    TableSorting.sortTableAjax($table, column, direction, config);
+                } else {
+                    // Page reload sorting
+                    const url = new URL(config.url);
+                    if (direction) {
+                        url.searchParams.set('sort', column);
+                        url.searchParams.set('direction', direction);
+                    } else {
+                        // Clear sorting parameters
+                        url.searchParams.delete('sort');
+                        url.searchParams.delete('direction');
+                    }
+                    window.location.href = url.toString();
+                }
             },
             ...options
         };
@@ -210,17 +222,98 @@ window.TableSorting = {
         $table.find('th[data-defaultsign]:not([data-defaultsort=disabled])').on('click', function() {
             const column = $(this).attr('data-defaultsign');
             const currentState = TableSorting.getSortState($table);
-            const direction = (currentState.column === column && currentState.direction === 'asc') ? 'desc' : 'asc';
+            
+            let direction;
+            if (currentState.column === column) {
+                // Same column - cycle through: asc -> desc -> no sort -> asc
+                if (currentState.direction === 'asc') {
+                    direction = 'desc';
+                } else if (currentState.direction === 'desc') {
+                    direction = null; // Clear sorting
+                } else {
+                    direction = 'asc';
+                }
+            } else {
+                // Different column - start with ascending
+                direction = 'asc';
+            }
             
             config.onSort(column, direction);
+        });
+    },
+
+    /**
+     * Sort table using AJAX
+     * @param {jQuery} $table - Table jQuery object
+     * @param {string} column - Column to sort by
+     * @param {string} direction - Sort direction
+     * @param {object} config - Configuration options
+     */
+    sortTableAjax: function($table, column, direction, config) {
+        // Show loading state
+        $table.addClass('loading');
+        
+        // Prepare data for AJAX request
+        const ajaxData = { page: 1 }; // Reset to first page when sorting
+        if (direction) {
+            ajaxData.sort = column;
+            ajaxData.direction = direction;
+        }
+        
+        // Make AJAX request
+        $.ajax({
+            url: config.url,
+            method: config.method,
+            data: ajaxData,
+            success: function(response) {
+                // Extract the table content from the response
+                const $newTable = $(response).find('#' + $table.attr('id'));
+                const $newTbody = $newTable.find('tbody');
+                const $newThead = $newTable.find('thead');
+                
+                // Update the table content
+                $table.find('tbody').html($newTbody.html());
+                $table.find('thead').html($newThead.html());
+                
+                // Re-bind event handlers for the new content
+                TableSorting.initServerSideSorting($table, config);
+                
+                // Update URL without page reload
+                const url = new URL(window.location);
+                if (direction) {
+                    url.searchParams.set('sort', column);
+                    url.searchParams.set('direction', direction);
+                } else {
+                    // Clear sorting parameters
+                    url.searchParams.delete('sort');
+                    url.searchParams.delete('direction');
+                }
+                url.searchParams.delete('page'); // Reset to page 1
+                window.history.pushState({}, '', url);
+                
+                console.log('🔧 [DEBUG] Server-side sort completed:', {
+                    column: column,
+                    direction: direction,
+                    rows_returned: $newTbody.find('tr').length
+                });
+            },
+            error: function(xhr, status, error) {
+                console.error('Sort request failed:', error);
+                alert('Failed to sort table. Please try again.');
+            },
+            complete: function() {
+                $table.removeClass('loading');
+            }
         });
     }
 };
 
 // Auto-initialize when DOM is ready
 $(document).ready(function() {
+    console.log('🔧 [DEBUG] table-sorting.js - DOM ready, initializing TableSorting');
     // Bootstrap-sortable auto-initializes, so we just add our enhancements
     TableSorting.init();
+    console.log('🔧 [DEBUG] table-sorting.js - TableSorting.init() completed');
 });
 
 // Export for use in other scripts
