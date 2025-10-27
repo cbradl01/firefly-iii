@@ -78,35 +78,88 @@ function colorizeData(data) {
  * Apply conditional fill colors to line chart dataset based on positive/negative values
  * @param dataset - The chart dataset to modify
  */
+function applyBeforeExistenceStyling(dataset, labels) {
+    if (!dataset || !dataset.data || dataset.data.length === 0) {
+        return;
+    }
+    
+    // Check if metadata exists in the dataset
+    if (!dataset.metadata) {
+        console.log('No metadata found for before existence styling');
+        return;
+    }
+    
+    // Initialize arrays if they don't exist
+    if (!dataset.pointBackgroundColor) {
+        dataset.pointBackgroundColor = [];
+    }
+    if (!dataset.pointBorderColor) {
+        dataset.pointBorderColor = [];
+    }
+    if (!dataset.borderColor) {
+        dataset.borderColor = [];
+    }
+    
+    // Only modify points that are before existence
+    for (var i = 0; i < dataset.data.length; i++) {
+        var label = labels[i];
+        var metadata = dataset.metadata[label];
+        
+        if (metadata && metadata.before_existence) {
+            // Grey out points before account existence
+            dataset.pointBackgroundColor[i] = 'rgba(128, 128, 128, 0.7)';
+            dataset.pointBorderColor[i] = 'rgba(128, 128, 128, 0.9)';
+            dataset.borderColor[i] = 'rgba(128, 128, 128, 0.5)'; // Grey line segments
+        }
+        // For other points, leave them as they are (will be handled by applyConditionalFillColors)
+    }
+    
+    // Note: Line segments will automatically use the colors of their endpoints
+    // So grey points will create grey line segments between them
+    
+    console.log('Applied before existence styling to dataset');
+}
+
 function applyConditionalFillColors(dataset) {
     if (!dataset || !dataset.data || dataset.data.length === 0) {
         return;
     }
     
+    // Restore fill functionality
     dataset.fill = 'origin'; // Fill to zero line
     
-    // Create arrays for per-point styling
-    var pointBackgroundColor = [];
-    var pointBorderColor = [];
-    var borderColor = [];
-    
-    for (var i = 0; i < dataset.data.length; i++) {
-        var value = dataset.data[i];
-        if (value >= 0) {
-            // Green for positive values with transparency
-            pointBackgroundColor.push('rgba(0, 255, 0, 0.7)');
-            pointBorderColor.push('rgba(0, 255, 0, 0.9)');
-            borderColor.push('rgba(0, 255, 0, 0.8)');
-        } else {
-            // Red for negative values with transparency
-            pointBackgroundColor.push('rgba(255, 0, 0, 0.7)');
-            pointBorderColor.push('rgba(255, 0, 0, 0.9)');
-            borderColor.push('rgba(255, 0, 0, 0.8)');
-        }
+    // Initialize arrays if they don't exist
+    if (!dataset.pointBackgroundColor) {
+        dataset.pointBackgroundColor = [];
+    }
+    if (!dataset.pointBorderColor) {
+        dataset.pointBorderColor = [];
+    }
+    if (!dataset.borderColor) {
+        dataset.borderColor = [];
     }
     
-    dataset.pointBackgroundColor = pointBackgroundColor;
-    dataset.pointBorderColor = pointBorderColor;
+    // Only apply conditional colors to points that are not before existence
+    for (var i = 0; i < dataset.data.length; i++) {
+        // Check if this point is already styled as "before existence" (grey)
+        var isBeforeExistence = dataset.pointBackgroundColor[i] && 
+                               dataset.pointBackgroundColor[i].includes('128, 128, 128');
+        
+        if (!isBeforeExistence) {
+            var value = dataset.data[i];
+            if (value >= 0) {
+                // Green for positive values with transparency
+                dataset.pointBackgroundColor[i] = 'rgba(0, 255, 0, 0.7)';
+                dataset.pointBorderColor[i] = 'rgba(0, 255, 0, 0.9)';
+                dataset.borderColor[i] = 'rgba(0, 255, 0, 0.8)';
+            } else {
+                // Red for negative values with transparency
+                dataset.pointBackgroundColor[i] = 'rgba(255, 0, 0, 0.7)';
+                dataset.pointBorderColor[i] = 'rgba(255, 0, 0, 0.9)';
+                dataset.borderColor[i] = 'rgba(255, 0, 0, 0.8)';
+            }
+        }
+    }
     
     // Add a subtle border to the fill area
     dataset.borderWidth = 1;
@@ -548,9 +601,18 @@ function drawAChart(URL, container, chartType, options, colorData) {
         }
 
         if (allCharts.hasOwnProperty(container)) {
-            // Apply conditional fill colors for line charts
+            // Apply styling for line charts
             if (chartType === 'line' && data.datasets && data.datasets.length > 0) {
-                applyConditionalFillColors(data.datasets[0]);
+                if (container === 'overview-chart') {
+                    // Apply before existence styling first, then conditional fill colors
+                    for (var i = 0; i < data.datasets.length; i++) {
+                        applyBeforeExistenceStyling(data.datasets[i], data.labels);
+                        applyConditionalFillColors(data.datasets[i]);
+                    }
+                } else {
+                    // Apply conditional fill colors for other charts
+                    applyConditionalFillColors(data.datasets[0]);
+                }
             }
             
             allCharts[container].data.datasets = data.datasets;
@@ -560,9 +622,18 @@ function drawAChart(URL, container, chartType, options, colorData) {
             // new chart!
             var ctx = document.getElementById(container).getContext("2d");
             
-            // Apply conditional fill colors for line charts
+            // Apply styling for line charts
             if (chartType === 'line' && data.datasets && data.datasets.length > 0) {
-                applyConditionalFillColors(data.datasets[0]);
+                if (container === 'overview-chart') {
+                    // Apply before existence styling first, then conditional fill colors
+                    for (var i = 0; i < data.datasets.length; i++) {
+                        applyBeforeExistenceStyling(data.datasets[i], data.labels);
+                        applyConditionalFillColors(data.datasets[i]);
+                    }
+                } else {
+                    // Apply conditional fill colors for other charts
+                    applyConditionalFillColors(data.datasets[0]);
+                }
             }
             
             console.log("Creating new chart with data:", data);
@@ -651,8 +722,14 @@ function drawAChart(URL, container, chartType, options, colorData) {
                 console.log('Crosshair configuration:', chartOpts.options.plugins.crosshair);
                 console.log('Tooltip configuration:', chartOpts.options.plugins.tooltip);
                 
-                // Add conditional fill colors for positive/negative values
-                if (data.datasets && data.datasets.length > 0) {
+                // Add styling for overview-chart (before existence + conditional colors)
+                if (container === 'overview-chart' && data.datasets && data.datasets.length > 0) {
+                    // Apply before existence styling to all datasets
+                    for (var i = 0; i < data.datasets.length; i++) {
+                        applyBeforeExistenceStyling(data.datasets[i], data.labels);
+                    }
+                } else if (data.datasets && data.datasets.length > 0) {
+                    // Add conditional fill colors for other charts
                     applyConditionalFillColors(data.datasets[0]);
                 }
             } else {

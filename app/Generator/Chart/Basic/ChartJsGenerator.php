@@ -186,6 +186,9 @@ class ChartJsGenerator implements GeneratorInterface
             if (array_key_exists('backgroundColor', $set)) {
                 $currentSet['backgroundColor'] = $set['backgroundColor'];
             }
+            if (array_key_exists('metadata', $set)) {
+                $currentSet['metadata'] = $set['metadata'];
+            }
             $chartData['datasets'][] = $currentSet;
         }
 

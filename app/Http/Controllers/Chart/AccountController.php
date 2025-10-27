@@ -542,6 +542,10 @@ class AccountController extends Controller
         //     }
         // }
 
+        // Get the account's first transaction date to identify "before existence" periods
+        $firstTransactionDate = $this->accountRepository->oldestJournalDate($account);
+        Log::debug(sprintf('First transaction date for account #%d: %s', $account->id, $firstTransactionDate ? $firstTransactionDate->format('Y-m-d') : 'null'));
+
         // collect and filter balances for the entire period.
         $step            = $this->calculateStep($start, $end);
         Log::debug(sprintf('Step is %s', $step));
@@ -620,6 +624,16 @@ class AccountController extends Controller
             foreach ($momentBalance as $key => $amount) {
                 $label                           = $current->isoFormat($format);
                 $return[$key]['entries'][$label] = $amount;
+                
+                // Add metadata about whether this data point is "before existence"
+                if (!isset($return[$key]['metadata'])) {
+                    $return[$key]['metadata'] = [];
+                }
+                $isBeforeExistence = $firstTransactionDate && $current->lt($firstTransactionDate);
+                $return[$key]['metadata'][$label] = [
+                    'before_existence' => $isBeforeExistence,
+                    'date' => $current->format('Y-m-d')
+                ];
             }
             $current       = app('navigation')->addPeriod($current, $step);
             // here too, to fix #8041, the data is corrected to the end of the period.
@@ -628,6 +642,18 @@ class AccountController extends Controller
         Log::debug('End of chart loop.');
         // second loop (yes) to create nice array with info! Yay!
         $chartData       = [];
+        
+        Log::debug('=== STARTING DATASET OPTIMIZATION ===');
+
+        // Only include pc_balance if conversion is enabled and currencies are different
+        $includePcBalance = $this->convertToPrimary && $accountCurrency->id !== $this->primaryCurrency->id;
+        
+        Log::debug('Dataset inclusion decision', [
+            'convertToPrimary' => $this->convertToPrimary,
+            'account_currency_id' => $accountCurrency->id,
+            'primary_currency_id' => $this->primaryCurrency->id,
+            'include_pc_balance' => $includePcBalance
+        ]);
 
         foreach ($return as $key => $info) {
             if ('balance' !== $key && 'pc_balance' !== $key) {
@@ -637,18 +663,20 @@ class AccountController extends Controller
                 $info['currency_symbol'] = $setCurrency->symbol;
                 $info['currency_code']   = $setCurrency->code;
                 $info['label']           = sprintf('%s (%s)', $account->name, $setCurrency->symbol);
+                $chartData[] = $info;
             }
             if ('balance' === $key) {
                 $info['currency_symbol'] = $accountCurrency->symbol;
                 $info['currency_code']   = $accountCurrency->code;
                 $info['label']           = sprintf('%s (%s)', $account->name, $accountCurrency->symbol);
+                $chartData[] = $info;
             }
-            if ('pc_balance' === $key) {
+            if ('pc_balance' === $key && $includePcBalance) {
                 $info['currency_symbol'] = $this->primaryCurrency->symbol;
                 $info['currency_code']   = $this->primaryCurrency->code;
                 $info['label']           = sprintf('%s (%s) (%s)', $account->name, (string)trans('firefly.sum'), $this->primaryCurrency->symbol);
+                $chartData[] = $info;
             }
-            $chartData[] = $info;
         }
 
         $data            = $this->generator->multiSet($chartData);
