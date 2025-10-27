@@ -1,0 +1,288 @@
+{% extends './layout/default' %}
+
+{% block breadcrumbs %}
+    <ol class="breadcrumb">
+        <li><a href="{{ route('index') }}"><span class="fa fa-home"></span></a></li>
+        <li><a href="{{ route('accounts.all') }}">All Accounts</a></li>
+        <li class="active">Import Entities from JSON</li>
+    </ol>
+{% endblock %}
+
+{% block content %}
+    <div class="row">
+        <div class="col-lg-12 col-md-12 col-sm-12">
+            <div class="box">
+                <div class="box-header with-border">
+                    <h3 class="box-title">
+                        Import Financial Entities from JSON
+                    </h3>
+                </div>
+                <div class="box-body">
+                    <div class="row">
+                        <div class="col-lg-8 col-md-8 col-sm-12">
+                            <p>
+                                Upload a JSON file (.json) to import multiple financial entities at once. Financial entities represent individuals, businesses, trusts, and institutions that can be associated with accounts.
+                            </p>
+                            
+                            <div class="alert alert-info">
+                                <h4>JSON Structure</h4>
+                                <p>The JSON file should be an array of entity objects. Each entity object can contain:</p>
+                                <ul>
+                                    <li><strong>name</strong> - Entity name (required)</li>
+                                    <li><strong>entity_type</strong> - Type of entity (required): individual, business, trust, institution, other</li>
+                                    <li><strong>display_name</strong> - Short display name (optional, defaults to first 50 chars of name)</li>
+                                    <li><strong>description</strong> - Entity description (optional)</li>
+                                    <li><strong>contact_info</strong> - Contact information object (optional)</li>
+                                    <li><strong>contact_info.email</strong> - Email address (optional)</li>
+                                    <li><strong>contact_info.phone</strong> - Phone number (optional)</li>
+                                    <li><strong>contact_info.address</strong> - Physical address (optional)</li>
+                                    <li><strong>contact_info.website</strong> - Website URL (optional)</li>
+                                    <li><strong>metadata</strong> - Additional metadata object (optional)</li>
+                                    <li><strong>is_active</strong> - Active status (optional, defaults to true)</li>
+                                </ul>
+                                
+                                <h4>Entity Types:</h4>
+                                <ul>
+                                    <li><strong>individual</strong> - People, individuals</li>
+                                    <li><strong>business</strong> - Companies, organizations, LLCs</li>
+                                    <li><strong>trust</strong> - Trust entities, estate entities</li>
+                                    <li><strong>institution</strong> - Banks, financial institutions, platforms</li>
+                                    <li><strong>other</strong> - Any other type of entity</li>
+                                </ul>
+                            </div>
+
+                            <div class="alert alert-success">
+                                <h4>Example JSON</h4>
+                                <pre><code>[
+  {
+    "name": "John Smith",
+    "entity_type": "individual",
+    "display_name": "John Smith",
+    "description": "Individual account holder",
+    "contact_info": {
+      "email": "john@example.com",
+      "phone": "+1-555-123-4567"
+    }
+  },
+  {
+    "name": "Acme Corporation",
+    "entity_type": "business",
+    "display_name": "Acme Corp",
+    "description": "Business entity for commercial accounts",
+    "contact_info": {
+      "email": "contact@acme.com",
+      "website": "https://acme.com",
+      "address": "123 Business St, City, State 12345"
+    }
+  },
+  {
+    "name": "Chase Bank",
+    "entity_type": "institution",
+    "display_name": "Chase",
+    "description": "Financial institution for banking services"
+  },
+  {
+    "name": "Smith Family Trust",
+    "entity_type": "trust",
+    "display_name": "Smith Trust",
+    "description": "Family trust entity"
+  }
+]</code></pre>
+                            </div>
+
+                            <form id="import-form" enctype="multipart/form-data">
+                                {{ csrf_field() }}
+                                
+                                <div class="form-group">
+                                    <label for="json_file">JSON file</label>
+                                    <input type="file" class="form-control" id="json_file" name="json_file" accept=".json" required>
+                                    <small class="form-text text-muted">
+                                        Select a JSON file (.json) with entity data. Maximum file size: 10MB.
+                                    </small>
+                                </div>
+
+                                <div class="form-group">
+                                    <button type="submit" class="btn btn-success" id="import-button">
+                                        <span class="fa fa-upload fa-fw"></span> Import entities
+                                    </button>
+                                    <a href="{{ route('accounts.all') }}" class="btn btn-default">
+                                        <span class="fa fa-arrow-left fa-fw"></span> Back to accounts
+                                    </a>
+                                </div>
+                                
+                                <!-- Progress and status messages -->
+                                <div id="import-status" class="alert" style="display: none;"></div>
+                            </form>
+                        </div>
+                        
+                        <div class="col-lg-4 col-md-4 col-sm-12">
+                            <div class="box">
+                                <div class="box-header with-border">
+                                    <h3 class="box-title">Import tips</h3>
+                                </div>
+                                <div class="box-body">
+                                    <ul>
+                                        <li>Entity names must be unique - duplicates will be skipped</li>
+                                        <li>All entities are created as active by default</li>
+                                        <li>Contact information is optional but recommended</li>
+                                        <li>Display names are used for account holder mapping</li>
+                                        <li>You can edit the JSON file before importing to make adjustments</li>
+                                        <li>Entities are required before importing accounts</li>
+                                    </ul>
+                                </div>
+                            </div>
+                            
+                            <div class="box">
+                                <div class="box-header with-border">
+                                    <h3 class="box-title">Why Import Entities First?</h3>
+                                </div>
+                                <div class="box-body">
+                                    <ul>
+                                        <li><strong>Account Requirements</strong> - All accounts need account holders</li>
+                                        <li><strong>Data Integrity</strong> - Ensures all references are valid</li>
+                                        <li><strong>Bulk Creation</strong> - Create all entities at once</li>
+                                        <li><strong>Consistency</strong> - Standardized entity definitions</li>
+                                        <li><strong>Reusability</strong> - Same entities across multiple accounts</li>
+                                    </ul>
+                                </div>
+                            </div>
+
+                            <div class="box">
+                                <div class="box-header with-border">
+                                    <h3 class="box-title">Quick Actions</h3>
+                                </div>
+                                <div class="box-body">
+                                    <a href="{{ route('accounts.import.json') }}" class="btn btn-primary btn-block">
+                                        <span class="fa fa-file-code-o fa-fw"></span> Import Accounts from JSON
+                                    </a>
+                                    <p class="text-muted small" style="margin-top: 10px;">
+                                        After importing entities, you can import your accounts.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block scripts %}
+    <script type="text/javascript" nonce="{{ JS_NONCE }}">
+        // File validation
+        document.getElementById('json_file').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file && file.type === 'application/json') {
+                console.log('JSON file selected:', file.name);
+            } else if (file) {
+                alert('Please select a valid JSON file (.json)');
+                e.target.value = '';
+            }
+        });
+
+        // Form submission via API
+        document.getElementById('import-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const fileInput = document.getElementById('json_file');
+            const file = fileInput.files[0];
+            const importButton = document.getElementById('import-button');
+            const statusDiv = document.getElementById('import-status');
+            
+            if (!file) {
+                showStatus('Please select a JSON file.', 'alert-danger');
+                return;
+            }
+            
+            // Show loading state
+            importButton.disabled = true;
+            importButton.innerHTML = '<span class="fa fa-spinner fa-spin fa-fw"></span> Importing...';
+            showStatus('Reading and processing JSON file...', 'alert-info');
+            
+            try {
+                // Read the JSON file
+                const jsonContent = await readFileAsText(file);
+                const entities = JSON.parse(jsonContent);
+                
+                if (!Array.isArray(entities)) {
+                    throw new Error('JSON file must contain an array of entities');
+                }
+                
+                showStatus(`Found ${entities.length} entities. Creating entities...`, 'alert-info');
+                
+                // Call the API endpoint
+                const response = await fetch('/api/v1/pfinance/import-entities', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    credentials: 'same-origin', // Include session cookies
+                    body: JSON.stringify({
+                        entities: entities
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    // Success
+                    let message = `Import completed! Created ${result.created_count} entities.`;
+                    if (result.skipped_count > 0) {
+                        message += ` Skipped ${result.skipped_count} entities (already existed).`;
+                    }
+                    showStatus(message, 'alert-success');
+                    
+                    if (result.skipped_reasons && result.skipped_reasons.length > 0) {
+                        const skippedDetails = result.skipped_reasons.slice(0, 5).join('<br>');
+                        showStatus(message + '<br><br><strong>Skipped entities:</strong><br>' + skippedDetails, 'alert-warning');
+                    }
+                    
+                    // Show created entities
+                    if (result.created_entities && result.created_entities.length > 0) {
+                        const createdDetails = result.created_entities.slice(0, 10).map(entity => 
+                            `ID: ${entity.id} | ${entity.entity_type} | ${entity.name}`
+                        ).join('<br>');
+                        showStatus(message + '<br><br><strong>Created entities:</strong><br>' + createdDetails, 'alert-success');
+                    }
+                    
+                    // Redirect after a delay
+                    setTimeout(() => {
+                        window.location.href = '{{ route("accounts.all") }}';
+                    }, 5000);
+                    
+                } else {
+                    // Error
+                    throw new Error(result.message || 'Import failed');
+                }
+                
+            } catch (error) {
+                console.error('Import error:', error);
+                showStatus('Import failed: ' + error.message, 'alert-danger');
+            } finally {
+                // Reset button
+                importButton.disabled = false;
+                importButton.innerHTML = '<span class="fa fa-upload fa-fw"></span> Import entities';
+            }
+        });
+        
+        function readFileAsText(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = e => resolve(e.target.result);
+                reader.onerror = e => reject(new Error('Failed to read file'));
+                reader.readAsText(file);
+            });
+        }
+        
+        function showStatus(message, alertClass) {
+            const statusDiv = document.getElementById('import-status');
+            statusDiv.className = 'alert ' + alertClass;
+            statusDiv.innerHTML = message;
+            statusDiv.style.display = 'block';
+        }
+        
+    </script>
+{% endblock %}
