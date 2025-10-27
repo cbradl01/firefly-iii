@@ -15,7 +15,7 @@
             <th>{{ trans('list.interest') }} ({{ trans('list.interest_period') }})</th>
         {% endif %}
         <th class="hidden-sm hidden-xs hidden-md">Institution</th>
-        <th class="hidden-sm hidden-xs hidden-md">Owner</th>
+        <th class="hidden-sm hidden-xs hidden-md">??TEST??-Owner</th>
         <th class="hidden-sm hidden-xs hidden-md">Product Name</th>
         <th class="hidden-sm hidden-xs">{{ trans('form.account_number') }}</th>
         {% if objectType != 'liabilities' %}
@@ -38,9 +38,9 @@
     </thead>
     <tbody>
     {% for account in accounts %}
-        <tr class="sortable-object" data-id="{{ account.id }}" data-order="{{ account.order }}" data-position="{{ loop.index0 }}">
+        <tr class="sortable-object" data-id="{{ account.id }}" data-position="{{ loop.index0 }}">
             <td class="hidden-sm hidden-xs">
-                <span class="fa fa-fw fa-bars object-handle"></span>
+                <!-- Drag handle removed -->
             </td>
             <td>
                 <a href="{{ route('accounts.show.all',account.id) }}">{{ account.name }}</a>

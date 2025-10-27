@@ -2,7 +2,27 @@
 
 {% block title %}{{ subTitle }}{% endblock %}
 
+{% block styles %}
+    <link rel="stylesheet" href="{{ asset('css/table-sorting.css') }}?v={{ "now"|date("U") }}" type="text/css" media="all" nonce="{{ JS_NONCE }}">
+    <style nonce="{{ JS_NONCE }}">
+        /* Inline fallback styles for inactive rows */
+        .row-inactive {
+            opacity: 0.7 !important;
+            color: #999 !important;
+        }
+        .row-inactive td {
+            color: #999 !important;
+        }
+    </style>
+{% endblock %}
+
 {% block content %}
+    {{ dump('Template rendering started at: ' ~ "now"|date("Y-m-d H:i:s.u")) }}
+    <script nonce="{{ JS_NONCE }}">
+        console.log('Template rendering started at:', new Date().toISOString());
+        console.log('Template start - accounts count:', {{ accounts|length }});
+    </script>
+    <!-- DEBUG: Template start marker -->
     <div class="row">
         <div class="col-lg-12 col-md-12 col-sm-12">
             <div class="box">
@@ -23,6 +43,18 @@
                     </div>
                 </div>
                 <div class="box-body">
+                    <!-- Quick Toggle Controls -->
+                    <div class="row" style="margin-bottom: 15px;">
+                        <div class="col-md-12">
+                            <div class="checkbox">
+                                <label>
+                                    <input type="checkbox" id="showInactiveAccounts">
+                                    <i class="fa fa-eye"></i> Show inactive accounts
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <!-- Search and Filter Controls -->
                     <div class="row" style="margin-bottom: 20px;">
                         <div class="col-md-4">
@@ -34,8 +66,12 @@
                         <div class="col-md-2">
                             <select class="form-control" id="accountTypeFilter">
                                 <option value="">All Types</option>
-                                {% for typeKey, typeData in accountTypes %}
-                                    <option value="{{ typeKey }}">{{ typeData.title }}</option>
+                                {% set uniqueTypes = [] %}
+                                {% for account in accounts %}
+                                    {% if account.accountType.type not in uniqueTypes %}
+                                        {% set uniqueTypes = uniqueTypes|merge([account.accountType.type]) %}
+                                        <option value="{{ account.accountType.type }}">{{ account.accountType.type|title }}</option>
+                                    {% endif %}
                                 {% endfor %}
                             </select>
                         </div>
@@ -48,13 +84,21 @@
                         <div class="col-md-2">
                             <select class="form-control" id="statusFilter">
                                 <option value="">All Status</option>
-                                <option value="active">Active</option>
-                                <option value="inactive">Inactive</option>
+                                <option value="active">Active Only</option>
+                                <option value="inactive">Inactive Only</option>
                             </select>
                         </div>
-                        <div class="col-md-2">
+                        <div class="col-md-1">
+                            <select class="form-control" id="pageSizeSelector">
+                                <option value="50" {% if pageSize == 50 %}selected{% endif %}>50 per page</option>
+                                <option value="100" {% if pageSize == 100 %}selected{% endif %}>100 per page</option>
+                                <option value="200" {% if pageSize == 200 %}selected{% endif %}>200 per page</option>
+                                <option value="500" {% if pageSize == 500 %}selected{% endif %}>500 per page</option>
+                            </select>
+                        </div>
+                        <div class="col-md-1">
                             <button type="button" class="btn btn-default btn-block" id="clearFilters">
-                                <i class="fa fa-times"></i> Clear Filters
+                                <i class="fa fa-times"></i> Clear
                             </button>
                         </div>
                     </div>
@@ -63,88 +107,144 @@
                     <div class="row" style="margin-bottom: 15px;">
                         <div class="col-md-12">
                             <p class="text-muted">
-                                Showing <span id="visibleCount">0</span> of <span id="totalCount">0</span> accounts
+                                Showing <span id="visibleCount">{{ visibleAccounts }}</span> of <span id="totalCount">{{ totalAccounts }}</span> accounts
                             </p>
                         </div>
                     </div>
                     
                     <!-- Accounts Table -->
                     <div class="table-responsive">
-                        <table class="table sortable table-striped table-hover" id="accounts-table">
+                        <table class="table table-striped table-hover" id="accounts-table">
                             <thead>
                                 <tr>
-                                    <th data-defaultsign="az">Type</th>
-                                    <th data-defaultsign="az">Institution</th>
-                                    <th data-defaultsign="az">Account Holder</th>
-                                    <th data-defaultsign="az">Product Name</th>
-                                    <th data-defaultsign="az">Account Number</th>
-                                    <th data-defaultsign="_19">Beneficiaries</th>
-                                    <th data-defaultsign="_19">Balance</th>
-                                    <th data-defaultsign="az">Active</th>
-                                    <th data-defaultsort="disabled">Actions</th>
+                                    <th data-defaultsign="institution" data-column="institution" class="sortable-header">
+                                        {% if sortColumn == 'institution' %}
+                                            <i class="fa fa-sort-{{ sortDirection == 'asc' ? 'asc' : 'desc' }}"></i>
+                                        {% else %}
+                                            <i class="fa fa-sort sort-inactive"></i>
+                                        {% endif %}
+                                        {{ trans('firefly.institution') }}
+                                    </th>
+                                    <th data-defaultsign="account_type" data-column="account_type" class="sortable-header">
+                                        {% if sortColumn == 'account_type' %}
+                                            <i class="fa fa-sort-{{ sortDirection == 'asc' ? 'asc' : 'desc' }}"></i>
+                                        {% else %}
+                                            <i class="fa fa-sort sort-inactive"></i>
+                                        {% endif %}
+                                        {{ trans('list.account_type') }}
+                                    </th>
+                                    <th data-defaultsign="account_holders" data-column="account_holders" class="sortable-header">
+                                        {% if sortColumn == 'account_holders' %}
+                                            <i class="fa fa-sort-{{ sortDirection == 'asc' ? 'asc' : 'desc' }}"></i>
+                                        {% else %}
+                                            <i class="fa fa-sort sort-inactive"></i>
+                                        {% endif %}
+                                        {{ trans('firefly.account_holders') }}
+                                    </th>
+                                    <th data-defaultsign="name" data-column="name" class="sortable-header">
+                                        {% if sortColumn == 'name' %}
+                                            <i class="fa fa-sort-{{ sortDirection == 'asc' ? 'asc' : 'desc' }}"></i>
+                                        {% else %}
+                                            <i class="fa fa-sort sort-inactive"></i>
+                                        {% endif %}
+                                        {{ trans('firefly.product_name') }}
+                                    </th>
+                                    <th data-defaultsign="account_number" data-column="account_number" class="sortable-header">
+                                        {% if sortColumn == 'account_number' %}
+                                            <i class="fa fa-sort-{{ sortDirection == 'asc' ? 'asc' : 'desc' }}"></i>
+                                        {% else %}
+                                            <i class="fa fa-sort sort-inactive"></i>
+                                        {% endif %}
+                                        {{ trans('firefly.account_number') }}
+                                    </th>
+                                    <th data-defaultsign="beneficiaries" data-column="beneficiaries" class="sortable-header">
+                                        {% if sortColumn == 'beneficiaries' %}
+                                            <i class="fa fa-sort-{{ sortDirection == 'asc' ? 'asc' : 'desc' }}"></i>
+                                        {% else %}
+                                            <i class="fa fa-sort sort-inactive"></i>
+                                        {% endif %}
+                                        {{ trans('firefly.beneficiaries') }}
+                                    </th>
+                                    <th data-defaultsign="balance" data-column="balance" class="sortable-header">
+                                        {% if sortColumn == 'balance' %}
+                                            <i class="fa fa-sort-{{ sortDirection == 'asc' ? 'asc' : 'desc' }}"></i>
+                                        {% else %}
+                                            <i class="fa fa-sort sort-inactive"></i>
+                                        {% endif %}
+                                        {{ trans('firefly.balance') }}
+                                    </th>
+                                    <th data-defaultsign="active" data-column="active" class="sortable-header">
+                                        {% if sortColumn == 'active' %}
+                                            <i class="fa fa-sort-{{ sortDirection == 'asc' ? 'asc' : 'desc' }}"></i>
+                                        {% else %}
+                                            <i class="fa fa-sort sort-inactive"></i>
+                                        {% endif %}
+                                        {{ trans('firefly.active') }}
+                                    </th>
+                                    <th data-defaultsort="disabled">{{ trans('list.actions') }}</th>
                                 </tr>
                             </thead>
                             <tbody id="accountsTableBody">
-                                {% for typeKey, typeData in accountTypes %}
-                                    {% for account in typeData.accounts %}
-                                        <tr data-account-type="{{ typeKey }}" 
-                                            data-institution="{% set institution = accountGetMetaField(account, 'institution') %}{% if institution %}{{ institution|lower }}{% endif %}"
-                                            data-status="{% if account.active %}active{% else %}inactive{% endif %}">
-                                            <td data-value="{% set accountType = accountGetMetaField(account, 'account_type') %}{% if accountType %}{{ accountType|lower }}{% else %}{{ account.accountType.type|lower }}{% endif %}">
-                                                {% if accountType %}
-                                                    {{ accountType }}
+                                {% for account in accounts %}
+                                        {% set data = accountData[account.id] %}
+                                        <tr data-account-type="{{ account.accountType.type }}" 
+                                            data-institution="{{ data.institution_lower }}"
+                                            data-status="{{ data.status }}"
+                                            class="{{ data.active_class }}">
+                                            <td data-value="{{ data.institution_lower }}">
+                                                {% if data.institution %}
+                                                    {% if account.institutionEntity %}
+                                                        <a href="{{ route('financial-entities.show', account.institutionEntity.id) }}" class="text-primary">
+                                                            {{ data.institution }}
+                                                        </a>
+                                                    {% else %}
+                                                        {{ data.institution }}
+                                                    {% endif %}
+                                                {% else %}
+                                                    <span class="text-muted">-</span>
+                                                {% endif %}
+                                            </td>
+                                            <td data-value="{{ data.account_type_lower }}">
+                                                {% if data.account_type %}
+                                                    {{ data.account_type }}
                                                 {% else %}
                                                     {{ account.accountType.type }}
                                                 {% endif %}
                                             </td>
-                                            <td data-value="{% set institution = accountGetMetaField(account, 'institution') %}{% if institution %}{{ institution|lower }}{% else %}{% endif %}">
-                                                {% if institution %}
-                                                    {% if account.institutionEntity %}
-                                                        <a href="{{ route('financial-entities.show', account.institutionEntity.id) }}" class="text-primary">
-                                                            {{ institution }}
+                                            <td data-value="{{ data.holders_lower }}">
+                                                {% if data.holders|length > 0 %}
+                                                    {% for holder in data.holders %}
+                                                        {% if holder.id %}
+                                                            <a href="{{ route('financial-entities.show', holder.id) }}" class="text-primary">
+                                                                {{ holder.name }}
                                                         </a>
-                                                    {% else %}
-                                                        {{ institution }}
-                                                    {% endif %}
-                                                {% else %}
-                                                    <span class="text-muted">-</span>
-                                                {% endif %}
-                                            </td>
-                                            <td data-value="{% set owner = accountGetMetaField(account, 'account_holder') %}{% if owner %}{{ owner|lower }}{% else %}{% endif %}">
-                                                {% if owner %}
-                                                    {% if account.accountHolder %}
-                                                        <a href="{{ route('financial-entities.show', account.accountHolder.id) }}" class="text-primary">
-                                                            {{ owner }}
-                                                        </a>
-                                                    {% else %}
-                                                        {{ owner }}
-                                                    {% endif %}
-                                                {% else %}
-                                                    <span class="text-muted">-</span>
-                                                {% endif %}
-                                            </td>
-                                            <td data-value="{% set productName = accountGetMetaField(account, 'product_name') %}{% if productName %}{{ productName|lower }}{% else %}{% endif %}">
-                                                {% if productName %}
-                                                    {{ productName }}
-                                                {% else %}
-                                                    <span class="text-muted">-</span>
-                                                {% endif %}
-                                            </td>
-                                            <td data-value="{% if account.account_number %}{{ account.account_number|lower }}{% else %}{% endif %}">
-                                                {% if account.account_number %}
-                                                    {{ account.account_number }}
-                                                {% else %}
-                                                    <span class="text-muted">-</span>
-                                                {% endif %}
-                                            </td>
-                                            <td data-value="{% set beneficiaries = accountGetBeneficiaries(account) %}{% if beneficiaries %}{% set totalBeneficiaries = 0 %}{% for priority, beneficiaryList in beneficiaries %}{% set totalBeneficiaries = totalBeneficiaries + beneficiaryList|length %}{% endfor %}{{ totalBeneficiaries }}{% else %}0{% endif %}">
-                                                {% if beneficiaries %}
-                                                    {% set totalBeneficiaries = 0 %}
-                                                    {% for priority, beneficiaryList in beneficiaries %}
-                                                        {% set totalBeneficiaries = totalBeneficiaries + beneficiaryList|length %}
+                                                        {% else %}
+                                                            {{ holder.name }}
+                                                        {% endif %}
+                                                        {% if not loop.last %}, {% endif %}
                                                     {% endfor %}
+                                                {% else %}
+                                                    <span class="text-muted">-</span>
+                                                {% endif %}
+                                            </td>
+                                            <td data-value="{{ data.product_name_lower }}">
+                                                {% if data.product_name %}
+                                                    {{ data.product_name }}
+                                                {% else %}
+                                                    <span class="text-muted">-</span>
+                                                {% endif %}
+                                            </td>
+                                            <td data-value="{{ data.account_number_lower }}">
+                                                {% if data.account_number %}
+                                                    {{ data.account_number }}
+                                                {% else %}
+                                                    <span class="text-muted">-</span>
+                                                {% endif %}
+                                            </td>
+                                            <td data-value="{{ data.beneficiaries_count }}">
+                                                {% if data.beneficiaries_count > 0 %}
                                                     <span class="label label-info" title="View details for beneficiary information">
-                                                        <i class="fa fa-users"></i> {{ totalBeneficiaries }} beneficiary{{ totalBeneficiaries != 1 ? 'ies' : '' }}
+                                                        <i class="fa fa-users"></i> {{ data.beneficiaries_count }} beneficiary{{ data.beneficiaries_count != 1 ? 'ies' : '' }}
                                                     </span>
                                                 {% else %}
                                                     <span class="text-muted">-</span>
@@ -167,12 +267,8 @@
                                                     <span class="text-muted">-</span>
                                                 {% endif %}
                                             </td>
-                                            <td data-value="{% if account.active %}active{% else %}inactive{% endif %}">
-                                                {% if account.active %}
-                                                    <span class="label label-success">Active</span>
-                                                {% else %}
-                                                    <span class="label label-default">Inactive</span>
-                                                {% endif %}
+                                            <td class="text-center" data-value="{% if account.active %}active{% else %}inactive{% endif %}">
+                                                <input type="checkbox" class="account-active" data-account-id="{{ account.id }}" {% if account.active %}checked{% endif %}>
                                             </td>
                                             <td>
                                                 <div class="btn-group btn-group-xs">
@@ -194,8 +290,10 @@
                                                 </div>
                                             </td>
                                         </tr>
-                                    {% endfor %}
                                 {% endfor %}
+                                <script nonce="{{ JS_NONCE }}">
+                                    console.log('Account loop completed at:', new Date().toISOString());
+                                </script>
                             </tbody>
                         </table>
                     </div>
@@ -206,13 +304,23 @@
 
     <!-- Account Edit Modal Container -->
     <div id="editModalContainer"></div>
-
+    <script nonce="{{ JS_NONCE }}">console.log('Template rendering completed at:', new Date().toISOString());</script>
+    <!-- DEBUG: Template end marker -->
 
 {% endblock %}
 
 {% block scripts %}
+    
     <script type="text/javascript" nonce="{{ JS_NONCE }}">
+        console.log('JavaScript execution started at:', new Date().toISOString());
         $(document).ready(function() {
+            console.log('jQuery document ready fired at:', new Date().toISOString());
+            
+            // Debug table sorting (temporarily disabled)
+            // $('.table th[data-defaultsign]').on('click', function() {
+            //     const column = $(this).attr('data-defaultsign');
+            //     console.log('Sorting by column:', column);
+            // });
             // Initialize filtering system
             initializeAccountFiltering();
             
@@ -499,7 +607,135 @@
             document.getElementById('accountTypeFilter').value = '';
             document.getElementById('institutionFilter').value = '';
             document.getElementById('statusFilter').value = '';
+            
+            // Reset checkbox to hide inactive accounts by default
+            document.getElementById('showInactiveAccounts').checked = false;
+            
             filterAccounts();
+        }
+        
+        // Checkbox handler
+        document.getElementById('showInactiveAccounts').addEventListener('change', function() {
+            if (this.checked) {
+                // Show all accounts (clear status filter)
+                document.getElementById('statusFilter').value = '';
+            } else {
+                // Show only active accounts
+                document.getElementById('statusFilter').value = 'active';
+            }
+            filterAccounts();
+        });
+        
+        // Sync checkbox with dropdown changes
+        document.getElementById('statusFilter').addEventListener('change', function() {
+            // Update checkbox based on dropdown selection
+            if (this.value === 'active') {
+                document.getElementById('showInactiveAccounts').checked = false;
+            } else {
+                document.getElementById('showInactiveAccounts').checked = true;
+            }
+        });
+        
+        // Handle account active status checkbox changes
+        document.addEventListener('change', function(e) {
+            if (e.target.classList.contains('account-active')) {
+                var accountId = e.target.getAttribute('data-account-id');
+                var row = e.target.closest('tr');
+                var isActive = e.target.checked;
+                
+                // Update row classes
+                if (isActive) {
+                    row.classList.remove('row-inactive');
+                    row.classList.add('row-active');
+                    row.setAttribute('data-status', 'active');
+                } else {
+                    row.classList.remove('row-active');
+                    row.classList.add('row-inactive');
+                    row.setAttribute('data-status', 'inactive');
+                }
+                
+                // Mark row as changed for saving
+                row.setAttribute('data-changed', 'true');
+                
+                // Show save button if not already visible
+                showSaveButton();
+            }
+        });
+        
+        // Show save button when changes are made
+        function showSaveButton() {
+            var saveButton = document.getElementById('saveAccountChanges');
+            if (!saveButton) {
+                // Create save button
+                var buttonHtml = '<button type="button" class="btn btn-success btn-sm" id="saveAccountChanges" style="margin-left: 10px;">' +
+                                '<i class="fa fa-save"></i> Save Changes' +
+                                '</button>';
+                document.querySelector('.box-tools.pull-right').insertAdjacentHTML('beforeend', buttonHtml);
+                
+                // Add click handler
+                document.getElementById('saveAccountChanges').addEventListener('click', saveAccountChanges);
+            }
+        }
+        
+        // Save account changes
+        function saveAccountChanges() {
+            var changedRows = document.querySelectorAll('tr[data-changed="true"]');
+            var changes = [];
+            
+            changedRows.forEach(function(row) {
+                var accountId = row.querySelector('.account-active').getAttribute('data-account-id');
+                var isActive = row.querySelector('.account-active').checked;
+                changes.push({
+                    id: accountId,
+                    active: isActive
+                });
+            });
+            
+            if (changes.length === 0) {
+                return;
+            }
+            
+            // Show loading state
+            var saveButton = document.getElementById('saveAccountChanges');
+            var originalText = saveButton.innerHTML;
+            saveButton.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Saving...';
+            saveButton.disabled = true;
+            
+            // Send AJAX request
+            fetch('/api/v1/accounts/bulk-update-status', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({ changes: changes })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Remove changed markers
+                    changedRows.forEach(function(row) {
+                        row.removeAttribute('data-changed');
+                    });
+                    
+                    // Remove save button
+                    saveButton.remove();
+                    
+                    // Show success message
+                    showSuccessAlert('Account statuses updated successfully!');
+                } else {
+                    throw new Error(data.message || 'Failed to update account statuses');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showErrorAlert('Failed to update account statuses: ' + error.message);
+                
+                // Restore button state
+                saveButton.innerHTML = originalText;
+                saveButton.disabled = false;
+            });
         }
         
         function updateAccountCounts() {
@@ -509,10 +745,112 @@
             document.getElementById('totalCount').textContent = totalRows;
             document.getElementById('visibleCount').textContent = visibleRows;
         }
+        
+        // Initialize page with default settings
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🔧 [DEBUG] DOMContentLoaded - Starting initialization');
+            
+            // Set default state: hide inactive accounts
+            document.getElementById('showInactiveAccounts').checked = false;
+            document.getElementById('statusFilter').value = 'active';
+            console.log('🔧 [DEBUG] Set default filter state: hide inactive accounts');
+            
+            // Apply initial filter
+            filterAccounts();
+            console.log('🔧 [DEBUG] Applied initial filter');
+            
+            // Check initial table state
+            var table = document.getElementById('accounts-table');
+            var rows = table.querySelectorAll('tbody tr');
+            console.log('🔧 [DEBUG] Initial table state:', {
+                totalRows: rows.length,
+                firstInstitution: rows[0] ? rows[0].querySelector('td').textContent.trim() : 'none',
+                lastInstitution: rows[rows.length-1] ? rows[rows.length-1].querySelector('td').textContent.trim() : 'none'
+            });
+            
+            // Server should now send data in correct A-Z order
+            console.log('🔧 [DEBUG] Server should send data in correct A-Z order - no client-side sorting needed');
+        });
     </script>
     
     <!-- Table Sorting Assets -->
-    <link rel="stylesheet" href="{{ asset('css/table-sorting.css') }}" type="text/css" media="all" nonce="{{ JS_NONCE }}">
-    <script src="{{ asset('v1/js/lib/bootstrap-sortable.js') }}" nonce="{{ JS_NONCE }}"></script>
     <script src="{{ asset('js/table-sorting.js') }}" nonce="{{ JS_NONCE }}"></script>
+    
+    <!-- Server-side sorting using shared system -->
+    <script nonce="{{ JS_NONCE }}">
+        $(document).ready(function() {
+            // Wait for TableSorting to be available
+            function initServerSideSorting() {
+                if (typeof TableSorting !== 'undefined') {
+                    // Initialize server-side sorting using the shared system
+                    TableSorting.initServerSideSorting('#accounts-table', {
+                        url: window.location.pathname,
+                        method: 'GET',
+                        ajax: true
+                    });
+                } else {
+                    // Retry after a short delay
+                    setTimeout(initServerSideSorting, 100);
+                }
+            }
+            
+            initServerSideSorting();
+            
+            // Handle page size changes
+            $('#pageSizeSelector').on('change', function() {
+                const newPageSize = $(this).val();
+                
+                // Show loading state
+                $('#accounts-table').addClass('loading');
+                
+                // Make AJAX request with new page size
+                $.ajax({
+                    url: window.location.pathname,
+                    method: 'GET',
+                    data: {
+                        sort: '{{ sortColumn }}',
+                        direction: '{{ sortDirection }}',
+                        page: 1, // Reset to first page
+                        pageSize: newPageSize
+                    },
+                    success: function(response) {
+                        const $newTable = $(response).find('#accounts-table');
+                        const $newTbody = $newTable.find('tbody');
+                        const $newThead = $newTable.find('thead');
+                        
+                        $('#accounts-table tbody').html($newTbody.html());
+                        $('#accounts-table thead').html($newThead.html());
+                        
+                        // Re-initialize server-side sorting
+                        if (typeof TableSorting !== 'undefined') {
+                            TableSorting.initServerSideSorting('#accounts-table', {
+                                url: window.location.pathname,
+                                method: 'GET',
+                                ajax: true
+                            });
+                        }
+                        
+                        // Update URL
+                        const url = new URL(window.location);
+                        url.searchParams.set('pageSize', newPageSize);
+                        url.searchParams.delete('page'); // Reset to page 1
+                        window.history.pushState({}, '', url);
+                        
+                        console.log('🔧 [DEBUG] Page size changed:', {
+                            newPageSize: newPageSize,
+                            rows_returned: $newTbody.find('tr').length
+                        });
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Page size change failed:', error);
+                        alert('Failed to change page size. Please try again.');
+                    },
+                    complete: function() {
+                        $('#accounts-table').removeClass('loading');
+                    }
+                });
+            });
+            console.log('jQuery document ready completed at:', new Date().toISOString());
+        });
+    </script>
 {% endblock %}

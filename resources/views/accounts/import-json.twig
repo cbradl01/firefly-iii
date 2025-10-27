@@ -3,7 +3,7 @@
 {% block breadcrumbs %}
     <ol class="breadcrumb">
         <li><a href="{{ route('index') }}"><span class="fa fa-home"></span></a></li>
-        <li><a href="{{ route('accounts.index', objectType) }}">{{ objectType|title }} Accounts</a></li>
+        <li><a href="{{ route('accounts.all') }}">All Accounts</a></li>
         <li class="active">Import Accounts from JSON</li>
     </ol>
 {% endblock %}
@@ -167,7 +167,7 @@
                                     <button type="submit" class="btn btn-success" id="import-button">
                                         <span class="fa fa-upload fa-fw"></span> Import accounts
                                     </button>
-                                    <a href="{{ route('accounts.index', objectType) }}" class="btn btn-default">
+                                    <a href="{{ route('accounts.all') }}" class="btn btn-default">
                                         <span class="fa fa-arrow-left fa-fw"></span> Back to accounts
                                     </a>
                                 </div>
@@ -287,7 +287,7 @@
                     
                     // Redirect after a delay
                     setTimeout(() => {
-                        window.location.href = '{{ route("accounts.index", objectType) }}';
+                        window.location.href = '{{ route("accounts.all") }}';
                     }, 3000);
                     
                 } else {

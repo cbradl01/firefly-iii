@@ -588,7 +588,7 @@ function populateFieldsTable() {
         }
         
         // Determine row class based on active status
-        var rowClass = isActive ? 'field-row-active' : 'field-row-inactive';
+        var rowClass = isActive ? 'row-active' : 'row-inactive';
         
         tableRowsHtml += '<tr class="' + rowClass + '" data-field="' + field.field_name + '" data-category="' + field.category + '">';
         
@@ -687,14 +687,14 @@ function addFieldEventListeners() {
                     default: ''
                 };
                 // Update row class to active
-                row.classList.remove('field-row-inactive');
-                row.classList.add('field-row-active');
+                row.classList.remove('row-inactive');
+                row.classList.add('row-active');
             } else {
                 // Remove field from configured fields
                 delete configuredFields[fieldName];
                 // Update row class to inactive
-                row.classList.remove('field-row-active');
-                row.classList.add('field-row-inactive');
+                row.classList.remove('row-active');
+                row.classList.add('row-inactive');
             }
             updateButtonStates();
         });
@@ -839,37 +839,6 @@ function saveTemplate() {
     transition: all 0.2s ease;
 }
 
-/* Field row styling - work with Bootstrap striping */
-.field-row-inactive {
-    color: #999 !important;
-    opacity: 0.7;
-}
-
-.field-row-inactive td {
-    color: #999 !important;
-}
-
-.field-row-inactive strong {
-    color: #666 !important;
-}
-
-/* Keep Bootstrap striping for active rows */
-.field-row-active {
-    /* Let Bootstrap handle the striping */
-}
-
-/* When inactive row becomes active, restore normal colors */
-.field-row-inactive.field-row-active {
-    color: inherit !important;
-    opacity: 1;
-}
-
-.field-row-inactive.field-row-active td {
-    color: inherit !important;
-}
-
-.field-row-inactive.field-row-active strong {
-    color: inherit !important;
-}
+/* Field row styling is now centralized in /public/css/table-sorting.css */
 </style>
 {% endblock %}

@@ -99,3 +99,16 @@
     <script src="{{ asset('js/table-sorting.js') }}" nonce="{{ JS_NONCE }}"></script>
     {% set tableSortingIncluded = true %}
 {% endif %}
+
+{# Initialize server-side sorting if enabled #}
+{% if serverSideSorting|default(false) %}
+    <script nonce="{{ JS_NONCE }}">
+        $(document).ready(function() {
+            TableSorting.initServerSideSorting('#{{ tableId }}', {
+                url: '{{ serverSideUrl|default(window.location.href) }}',
+                method: '{{ serverSideMethod|default('GET') }}',
+                ajax: {{ serverSideAjax|default(true) ? 'true' : 'false' }}
+            });
+        });
+    </script>
+{% endif %}
