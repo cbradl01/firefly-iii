@@ -37,8 +37,11 @@ trait TransferValidation
         $accountName = array_key_exists('name', $array) ? $array['name'] : null;
         $accountIban = array_key_exists('iban', $array) ? $array['iban'] : null;
         app('log')->debug('Now in validateTransferDestination', $array);
-        // source can be any of the following types.
-        $validTypes  = $this->combinations[$this->transactionType][$this->source->accountType->type] ?? [];
+        // Check if source account type's category allows transfers
+        $sourceCategoryId = $this->source?->accountType?->category_id ?? null;
+        $canTransfer = $sourceCategoryId && !in_array($sourceCategoryId, [3, 4], true); // 3=Expense, 4=Revenue
+        
+        $validTypes = $canTransfer ? ['Asset account', 'Loan', 'Debt', 'Mortgage', 'Initial balance account'] : [];
         if (null === $accountId && null === $accountName && null === $accountIban && false === $this->canCreateTypes($validTypes)) {
             // if both values are NULL we return false,
             // because the destination of a transfer can't be created.

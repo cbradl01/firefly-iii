@@ -260,40 +260,46 @@ class AccountValidator
 
         // find by ID
         if (null !== $accountId && $accountId > 0) {
-            $first       = $this->accountRepository->find($accountId);
-            $accountType = $first instanceof Account ? $first->accountType->type : 'invalid';
-            $check       = in_array($accountType, $validTypes, true);
-            $check       = $inverse ? !$check : $check; // reverse the validation check if necessary.
-            if (($first instanceof Account) && $check) {
-                Log::debug(sprintf('ID: Found %s account #%d ("%s", IBAN "%s")', $first->accountType->type, $first->id, $first->name, $first->iban ?? 'no iban'));
+            $first = $this->accountRepository->find($accountId);
+            if ($first instanceof Account) {
+                $accountCategoryId = $first->accountType?->category_id ?? null;
+                $isValidCategory = $accountCategoryId && !in_array($accountCategoryId, [3, 4], true); // 3=Expense, 4=Revenue
+                $check = $inverse ? !$isValidCategory : $isValidCategory; // reverse the validation check if necessary.
+                if ($check) {
+                    Log::debug(sprintf('ID: Found %s account #%d ("%s", IBAN "%s") - Category ID: %d', $first->accountType->name, $first->id, $first->name, $first->iban ?? 'no iban', $accountCategoryId));
 
-                return $first;
+                    return $first;
+                }
             }
         }
 
         // find by iban
         if (null !== $accountIban && '' !== (string) $accountIban) {
-            $first       = $this->accountRepository->findByIbanNull($accountIban, $validTypes);
-            $accountType = $first instanceof Account ? $first->accountType->type : 'invalid';
-            $check       = in_array($accountType, $validTypes, true);
-            $check       = $inverse ? !$check : $check; // reverse the validation check if necessary.
-            if (($first instanceof Account) && $check) {
-                Log::debug(sprintf('Iban: Found %s account #%d ("%s", IBAN "%s")', $first->accountType->type, $first->id, $first->name, $first->iban ?? 'no iban'));
+            $first = $this->accountRepository->findByIbanNull($accountIban, $validTypes);
+            if ($first instanceof Account) {
+                $accountCategoryId = $first->accountType?->category_id ?? null;
+                $isValidCategory = $accountCategoryId && !in_array($accountCategoryId, [3, 4], true); // 3=Expense, 4=Revenue
+                $check = $inverse ? !$isValidCategory : $isValidCategory; // reverse the validation check if necessary.
+                if ($check) {
+                    Log::debug(sprintf('Iban: Found %s account #%d ("%s", IBAN "%s") - Category ID: %d', $first->accountType->name, $first->id, $first->name, $first->iban ?? 'no iban', $accountCategoryId));
 
-                return $first;
+                    return $first;
+                }
             }
         }
 
         // find by number
         if (null !== $accountNumber && '' !== (string) $accountNumber) {
-            $first       = $this->accountRepository->findByAccountNumber($accountNumber, $validTypes);
-            $accountType = $first instanceof Account ? $first->accountType->type : 'invalid';
-            $check       = in_array($accountType, $validTypes, true);
-            $check       = $inverse ? !$check : $check; // reverse the validation check if necessary.
-            if (($first instanceof Account) && $check) {
-                Log::debug(sprintf('Number: Found %s account #%d ("%s", IBAN "%s")', $first->accountType->type, $first->id, $first->name, $first->iban ?? 'no iban'));
+            $first = $this->accountRepository->findByAccountNumber($accountNumber, $validTypes);
+            if ($first instanceof Account) {
+                $accountCategoryId = $first->accountType?->category_id ?? null;
+                $isValidCategory = $accountCategoryId && !in_array($accountCategoryId, [3, 4], true); // 3=Expense, 4=Revenue
+                $check = $inverse ? !$isValidCategory : $isValidCategory; // reverse the validation check if necessary.
+                if ($check) {
+                    Log::debug(sprintf('Number: Found %s account #%d ("%s", IBAN "%s") - Category ID: %d', $first->accountType->name, $first->id, $first->name, $first->iban ?? 'no iban', $accountCategoryId));
 
-                return $first;
+                    return $first;
+                }
             }
         }
 
@@ -301,9 +307,14 @@ class AccountValidator
         if ('' !== (string) $accountName) {
             $first = $this->accountRepository->findByName($accountName, $validTypes);
             if ($first instanceof Account) {
-                Log::debug(sprintf('Name: Found %s account #%d ("%s", IBAN "%s")', $first->accountType->type, $first->id, $first->name, $first->iban ?? 'no iban'));
+                $accountCategoryId = $first->accountType?->category_id ?? null;
+                $isValidCategory = $accountCategoryId && !in_array($accountCategoryId, [3, 4], true); // 3=Expense, 4=Revenue
+                $check = $inverse ? !$isValidCategory : $isValidCategory; // reverse the validation check if necessary.
+                if ($check) {
+                    Log::debug(sprintf('Name: Found %s account #%d ("%s", IBAN "%s") - Category ID: %d', $first->accountType->name, $first->id, $first->name, $first->iban ?? 'no iban', $accountCategoryId));
 
-                return $first;
+                    return $first;
+                }
             }
         }
         Log::debug('Found nothing in findExistingAccount()');

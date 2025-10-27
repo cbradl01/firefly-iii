@@ -43,8 +43,11 @@ trait DepositValidation
 
         Log::debug('Now in validateDepositDestination', $array);
 
-        // source can be any of the following types.
-        $validTypes  = $this->combinations[$this->transactionType][$this->source->accountType->type] ?? [];
+        // Check if source account type's category allows deposits
+        $sourceCategoryId = $this->source?->accountType?->category_id ?? null;
+        $canDeposit = $sourceCategoryId && !in_array($sourceCategoryId, [3, 4], true); // 3=Expense, 4=Revenue
+        
+        $validTypes = $canDeposit ? ['Asset account', 'Loan', 'Debt', 'Mortgage', 'Initial balance account'] : [];
         if (null === $accountId && null === $accountName && null === $accountIban && false === $this->canCreateTypes($validTypes)) {
             // if both values are NULL we return false,
             // because the destination of a deposit can't be created.

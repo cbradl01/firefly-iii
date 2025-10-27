@@ -75,8 +75,11 @@ trait WithdrawalValidation
         $accountIban   = array_key_exists('iban', $array) ? $array['iban'] : null;
         $accountNumber = array_key_exists('number', $array) ? $array['number'] : null;
         Log::debug('Now in validateWithdrawalDestination()', $array);
-        // source can be any of the following types.
-        $validTypes    = $this->combinations[$this->transactionType][$this->source->accountType->type] ?? [];
+        // Check if source account type's category allows withdrawals
+        $sourceCategoryId = $this->source?->accountType?->category_id ?? null;
+        $canWithdraw = $sourceCategoryId && !in_array($sourceCategoryId, [3, 4], true); // 3=Expense, 4=Revenue
+        
+        $validTypes = $canWithdraw ? ['Asset account', 'Loan', 'Debt', 'Mortgage', 'Initial balance account'] : [];
         Log::debug('Source type can be: ', $validTypes);
         if (null === $accountId && null === $accountName && null === $accountIban && null === $accountNumber && false === $this->canCreateTypes($validTypes)) {
             // if both values are NULL return false,
