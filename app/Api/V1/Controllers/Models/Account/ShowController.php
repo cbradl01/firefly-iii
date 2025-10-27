@@ -78,7 +78,6 @@ class ShowController extends Controller
         $types       = $this->mapAccountTypes($params['type']);
 
         // get list of accounts. Count it and split it.
-        $this->repository->resetAccountOrder();
         $collection  = $this->repository->getAccountsByType($types, $params['sort']);
         $count       = $collection->count();
 
@@ -126,7 +125,6 @@ class ShowController extends Controller
     public function show(ShowRequest $request, Account $account): JsonResponse
     {
         // get list of accounts. Count it and split it.
-        $this->repository->resetAccountOrder();
         $account->refresh();
         $manager     = $this->getManager();
 

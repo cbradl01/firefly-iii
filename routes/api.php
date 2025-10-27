@@ -304,6 +304,9 @@ Route::group(
         Route::get('{account}/piggy-banks', ['uses' => 'ListController@piggyBanks', 'as' => 'piggy-banks']);
         Route::get('{account}/transactions', ['uses' => 'ListController@transactions', 'as' => 'transactions']);
         Route::get('{account}/attachments', ['uses' => 'ListController@attachments', 'as' => 'attachments']);
+        
+        // Bulk operations
+        Route::post('bulk-update-status', ['uses' => 'BulkUpdateController@updateStatus', 'as' => 'bulk-update-status']);
     }
 );
 
@@ -323,6 +326,7 @@ Route::group(
         Route::post('match-transactions', ['uses' => 'PfinanceController@matchTransactions', 'as' => 'match-transactions']);
         Route::post('import-firefly-transactions', ['uses' => 'PfinanceController@importFireflyTransactions', 'as' => 'import-firefly-transactions']);
         Route::post('import-accounts', ['uses' => 'PfinanceController@importAccounts', 'as' => 'import-accounts']);
+        Route::post('import-entities', ['uses' => 'PfinanceController@importEntities', 'as' => 'import-entities']);
         Route::post('push-to-google', ['uses' => 'PfinanceController@pushToGoogle', 'as' => 'push-to-google']);
         Route::post('get-google-transactions', ['uses' => 'PfinanceController@getGoogleTransactions', 'as' => 'get-google-transactions']);
         Route::post('reset-db', ['uses' => 'PfinanceController@resetDb', 'as' => 'reset-db']);

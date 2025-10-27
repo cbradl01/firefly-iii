@@ -211,7 +211,7 @@ Route::group(
         Route::post('import/csv/{objectType}', ['uses' => 'Account\ImportController@processCsv', 'as' => 'import.csv.process'])->where('objectType', 'revenue|asset|expense|liabilities');
         
         // import from json
-        Route::get('import/json/{objectType}', ['uses' => 'Account\ImportController@importJson', 'as' => 'import.json'])->where('objectType', 'revenue|asset|expense|liabilities');
+        Route::get('import/json', ['uses' => 'Account\ImportController@importJson', 'as' => 'import.json']);
 
         // template routes
         Route::get('templates', ['uses' => 'Account\TemplateController@index', 'as' => 'templates.index']);
@@ -271,6 +271,9 @@ Route::group(
         Route::get('all-fields', ['uses' => 'FinancialEntityController@getAllEntityFields', 'as' => 'all-fields']);
         Route::get('{id}/data', ['uses' => 'FinancialEntityController@getEntityData', 'as' => 'data']);
         Route::get('beneficiary-entities', ['uses' => 'FinancialEntityController@getBeneficiaryEntities', 'as' => 'beneficiary-entities']);
+        
+        // Import from JSON
+        Route::get('import/json', ['uses' => 'FinancialEntityController@importJson', 'as' => 'import.json']);
         
         // Wildcard routes - these must come last to avoid conflicts
         Route::get('{financialEntity}/relationships', ['uses' => 'FinancialEntityController@relationships', 'as' => 'relationships']);
