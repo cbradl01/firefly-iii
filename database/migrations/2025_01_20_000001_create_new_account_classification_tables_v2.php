@@ -165,6 +165,14 @@ return new class extends Migration
             'Brokerage account' => ['category' => $assetCategoryId, 'behavior' => $containerBehaviorId, 'firefly_mapping' => 'Brokerage account'],
             'Credit card' => ['category' => $liabilityCategoryId, 'behavior' => $simpleBehaviorId, 'firefly_mapping' => 'Credit card'],
             'Stock market account' => ['category' => $assetCategoryId, 'behavior' => $containerBehaviorId, 'firefly_mapping' => 'Stock market account'],
+            'Education Account' => ['category' => $assetCategoryId, 'behavior' => $containerBehaviorId, 'firefly_mapping' => 'Asset account'],
+            'Health Account' => ['category' => $assetCategoryId, 'behavior' => $containerBehaviorId, 'firefly_mapping' => 'Asset account'],
+            'Private Equity' => ['category' => $assetCategoryId, 'behavior' => $containerBehaviorId, 'firefly_mapping' => 'Asset account'],
+            // Investment-focused account types
+            'Venture Capital Account' => ['category' => $assetCategoryId, 'behavior' => $containerBehaviorId, 'firefly_mapping' => 'Asset account'],
+            'Private Equity Account' => ['category' => $assetCategoryId, 'behavior' => $containerBehaviorId, 'firefly_mapping' => 'Asset account'],
+            'Alternative Investment Account' => ['category' => $assetCategoryId, 'behavior' => $containerBehaviorId, 'firefly_mapping' => 'Asset account'],
+            'E-commerce Account' => ['category' => $assetCategoryId, 'behavior' => $simpleBehaviorId, 'firefly_mapping' => 'Asset account'],
         ];
 
         // 13. Insert new account types based on existing data
@@ -188,6 +196,36 @@ return new class extends Migration
             ]);
             
             $newTypeIds[$existingType->id] = $newId;
+        }
+
+        // 13.5. Create new account types that don't exist in existing data
+        $newAccountTypes = [
+            'Education Account' => 'Education-related accounts (Coverdell, 529, UTMA/UGMA)',
+            'Health Account' => 'Health-related accounts (HSA, FSA, HRA)',
+            'Private Equity' => 'Private equity investments and funds',
+            // Investment-focused account types
+            'Venture Capital Account' => 'Fund-based private investments (rolling funds, venture funds, syndicates)',
+            'Private Equity Account' => 'Direct private company investments (SAFEs, direct equity)',
+            'Alternative Investment Account' => 'Mixed alternative investments (venture capital, private equity, real estate)',
+            'E-commerce Account' => 'Online storefronts and e-commerce platforms (Facebook shops, Etsy, Shopify, etc.)',
+        ];
+
+        foreach ($newAccountTypes as $typeName => $description) {
+            // Check if this account type already exists
+            $existingType = DB::table('account_types')->where('name', $typeName)->first();
+            if (!$existingType) {
+                $mapping = $typeMapping[$typeName];
+                DB::table('account_types')->insert([
+                    'name' => $typeName,
+                    'category_id' => $mapping['category'],
+                    'behavior_id' => $mapping['behavior'],
+                    'description' => $description,
+                    'firefly_mapping' => $mapping['firefly_mapping'],
+                    'active' => true,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
         }
 
         // 14. Update accounts table to use new account_type_ids
